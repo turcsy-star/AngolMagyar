@@ -13,8 +13,8 @@
     <string name="log_empty">No entries yet.</string>
     <string name="log_clear">Clear log</string>
     <string name="meeting_status_large">Large/custom Hungarian model ready</string>
-    <string name="meeting_status_small">Small Hungarian model ready (large/custom recommended)</string>
-    <string name="meeting_status_none">No Hungarian model – download it or install from a ZIP</string>
+    <string name="meeting_status_small">Hungarian recognizer: Android built-in (offline)</string>
+    <string name="meeting_status_none">No Hungarian recognizer – set it up on the Models screen</string>
     <string name="profile_film">Movie / Netflix</string>
     <string name="profile_conference">Conference</string>
     <string name="profile_conversation">Conversation</string>

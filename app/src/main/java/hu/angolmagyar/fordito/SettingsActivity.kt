@@ -124,18 +124,11 @@ class SettingsActivity : AppCompatActivity() {
 
         // ---------------------------------------------------------------- modell
         val modelCard = Ui.card(this)
-        modelCard.addView(Ui.title(this, "Felismerő modell", 17f))
-        val radios = RadioGroup(this)
-        ModelManager.ALL.forEach { spec ->
-            radios.addView(RadioButton(this).apply {
-                id = View.generateViewId()
-                text = spec.label
-                isChecked = spec.id == prefs.modelId
-                setOnClickListener { prefs.modelId = spec.id }
-            })
-        }
-        modelCard.addView(radios)
-        modelCard.addView(Ui.small(this, "Módosítás után a főképernyőn töltsd le a modellt, ha hiányzik."))
+        modelCard.addView(Ui.title(this, "Felismerő modellek", 17f))
+        modelCard.addView(Ui.small(this, "Letöltés, választás és törlés egy helyen; készülék szerinti javaslattal."))
+        modelCard.addView(Ui.button(this, "Modellek kezelése…", true) {
+            startActivity(Intent(this, ModelsActivity::class.java))
+        })
         modelCard.addView(switchRow("Takarékos mód (kis modell, ritkább részfordítás)", prefs.eco) { prefs.eco = it })
         modelCard.addView(Ui.small(this, "Kevesebb melegedés és akkumulátor-fogyasztás, kicsit lassabban frissülő felirat."))
         modelCard.addView(switchRow("Automatikus takarékos mód (melegedés / alacsony akku)", prefs.adaptiveEco) { prefs.adaptiveEco = it })
@@ -146,8 +139,8 @@ class SettingsActivity : AppCompatActivity() {
         val huCard = Ui.card(this)
         huCard.addView(Ui.title(this, "Magyar modellek (tárgyalás)", 17f))
         huCard.addView(Ui.small(this, MeetingMode.statusText(this)))
-        huCard.addView(Ui.button(this, "Magyar small letöltése", true) {
-            downloadHu(ModelManager.HU_SMALL)
+        huCard.addView(Ui.button(this, "Magyar felismerő beállítása…", true) {
+            startActivity(Intent(this, ModelsActivity::class.java))
         })
         huCard.addView(Ui.button(this, "Magyar nagy/egyedi ZIP telepítése…", false) {
             zipLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
@@ -280,9 +273,8 @@ class SettingsActivity : AppCompatActivity() {
         }
         langCard.addView(tgtGroup)
         langCard.addView(Ui.small(this, "Natív felismeréshez töltsd le a forrásnyelv Vosk modelljét. Fordítás: ML Kit (első használatkor). WakeLock: lezárt képernyő OK."))
-        langCard.addView(Ui.button(this, "Forrásnyelv modell letöltése", true) {
-            val spec = ModelManager.forSourceLang(prefs.sourceLang, preferLargeEn = false, this)
-            downloadHu(spec) // ugyanaz a downloader
+        langCard.addView(Ui.button(this, "Modellek kezelése…", true) {
+            startActivity(Intent(this, ModelsActivity::class.java))
         })
         column.addView(langCard)
 

@@ -13,8 +13,8 @@
     <string name="log_empty">Még nincs bejegyzés.</string>
     <string name="log_clear">Napló törlése</string>
     <string name="meeting_status_large">Magyar nagy/egyedi modell kész</string>
-    <string name="meeting_status_small">Magyar small modell kész (nagy/egyedi ajánlott)</string>
-    <string name="meeting_status_none">Nincs magyar modell – töltsd le vagy telepíts ZIP-ből</string>
+    <string name="meeting_status_small">Magyar felismerő: Android beépített (offline)</string>
+    <string name="meeting_status_none">Nincs magyar felismerő – állítsd be a Modellek képernyőn</string>
     <string name="profile_film">Film / Netflix</string>
     <string name="profile_conference">Konferencia</string>
     <string name="profile_conversation">Beszélgetés</string>

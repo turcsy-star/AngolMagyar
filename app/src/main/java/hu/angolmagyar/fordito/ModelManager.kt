@@ -30,11 +30,6 @@ object ModelManager {
         "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22-lgraph.zip",
         "vosk-model-en-us-0.22-lgraph", "en"
     )
-    val HU_SMALL = Spec(
-        "hu_small", "Magyar small",
-        "https://alphacephei.com/vosk/models/vosk-model-small-hu-0.15.zip",
-        "vosk-model-small-hu-0.15", "hu", optional = true
-    )
     val HU_LARGE = Spec(
         "hu_large", "Magyar nagy/egyedi (ZIP)",
         "", "vosk-model-hu-large", "hu", optional = true
@@ -66,17 +61,14 @@ object ModelManager {
     )
 
     val ALL = listOf(
-        SMALL, LARGE, HU_SMALL, HU_LARGE,
+        SMALL, LARGE, HU_LARGE,
         DE_SMALL, FR_SMALL, ES_SMALL, IT_SMALL, UK_SMALL
     )
 
     /** Nyelvenként ajánlott (small) modell. */
     fun forSourceLang(lang: String, preferLargeEn: Boolean = false, ctx: Context? = null): Spec {
         return when (lang) {
-            "hu" -> {
-                if (ctx != null && isInstalled(ctx, HU_LARGE)) HU_LARGE
-                else HU_SMALL
-            }
+            "hu" -> HU_LARGE
             "de" -> DE_SMALL
             "fr" -> FR_SMALL
             "es" -> ES_SMALL

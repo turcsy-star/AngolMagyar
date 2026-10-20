@@ -41,6 +41,7 @@ import org.vosk.LogLevel
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.File
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
 
@@ -97,6 +98,8 @@ class TranslateService : Service(), Overlay.Callbacks {
     @Volatile private var maxLevel = 0f
     @Volatile private var pttActive = false  // push-to-talk: csak true esetén dolgozunk
     @Volatile private var conversationHuToEn = false  // beszélgetés módban váltott irány
+    @Volatile private var autoDual = false  // tolmács/auto: mindkét nyelv felismerője hallgat
+    private val asrExec = Executors.newSingleThreadExecutor()
     private val delayQueue = ArrayDeque<Triple<Long, String, String>>()  // showAt, en, hu
     private var sentenceBuf: SentenceBuffer? = null
     private val delayRunnable = object : Runnable {
@@ -258,7 +261,9 @@ class TranslateService : Service(), Overlay.Callbacks {
         paused = false
         val usePtt = mode == MODE_PTT || (mode == MODE_MIC && prefs.pushToTalk)
         pttActive = !usePtt  // ha PTT, induláskor nem hallgat
-        conversationHuToEn = prefs.isHuToEn()
+        val sidesNow = Engines.sides(prefs)
+        conversationHuToEn = sidesNow.hu && !prefs.isConversation()
+        autoDual = prefs.isConversation() && prefs.autoLangSwitch
         acquireWakeLock()
         AppState.running = true
         AppState.paused = false
@@ -280,7 +285,7 @@ class TranslateService : Service(), Overlay.Callbacks {
             main.post {
                 if (!active || paused) return@post
                 // Beszélgetés mód: ML Kit Language ID + heurisztika (async)
-                if (isFinal && prefs.isConversation() && prefs.autoLangSwitch) {
+                if (isFinal && prefs.isConversation() && prefs.autoLangSwitch && !autoDual) {
                     val snapHu = conversationHuToEn
                     val suggest: (String, Boolean, (Boolean?) -> Unit) -> Unit =
                         if (prefs.useMlLangId) LanguageIdHelper::suggestConversationHuToEnAsync
@@ -504,6 +509,44 @@ class TranslateService : Service(), Overlay.Callbacks {
 
     // ------------------------------------------------------------- felirat-állapot
 
+    /** Egy felismerő végleges szövege. isHu: melyik nyelvi oldal felismerőjétől jött. */
+    private fun asrFinal(isHu: Boolean, text: String) {
+        if (!autoDual) {
+            onFinal(text)
+            return
+        }
+        // Tolmács/auto: mindkét felismerő hallgat; a szöveg nyelve dönti el, melyik számít.
+        try { asrExec.execute {
+            val l = if (prefs.useMlLangId) LanguageIdHelper.identifyBlocking(text) else null
+            val huText: Boolean? = when {
+                l == "hu" -> true
+                l != null -> false
+                else -> LanguageHint.suggestConversationHuToEn(text, conversationHuToEn)
+            }
+            val accept = if (huText == null) isHu == conversationHuToEn else huText == isHu
+            if (!accept) return@execute
+            main.post {
+                if (!active) return@post
+                if (isHu != conversationHuToEn) {
+                    conversationHuToEn = isHu
+                    reinitTranslatorForConversation()
+                    showMessage(if (isHu) "Auto: Magyar → Angol" else "Auto: Angol → Magyar", 1800)
+                    try {
+                        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                            .notify(NOTIFICATION_ID, buildNotification())
+                    } catch (_: Exception) {
+                    }
+                }
+                onFinal(text)
+            }
+        } } catch (_: Exception) {}
+    }
+
+    private fun asrPartial(isHu: Boolean, text: String) {
+        if (autoDual && isHu != conversationHuToEn) return
+        onPartial(text)
+    }
+
     private fun onPartial(raw: String) {
         main.post {
             if (!active || paused) return@post
@@ -681,21 +724,47 @@ class TranslateService : Service(), Overlay.Callbacks {
 
     private fun startWorker(mode: String, modelPath: String?) {
         worker = Thread({
-            var model: Model? = null
-            var recognizer: Recognizer? = null
+            var modelOther: Model? = null
+            var recOther: Recognizer? = null
+            var modelHu: Model? = null
+            var recHu: Recognizer? = null
+            var sys: LiveSystemAsr? = null
             var audio: AudioRecord? = null
             try {
                 LibVosk.setLogLevel(LogLevel.WARNINGS)
-                if (modelPath == null || !File(modelPath).isDirectory) {
-                    throw AppFailure(
-                        AppState.ERR_NO_MODEL,
-                        "Hiányzik a felismerő modell. Töltsd le a főképernyőn."
-                    )
+                val sides = Engines.sides(prefs)
+                if (sides.other) {
+                    if (modelPath == null || !File(modelPath).isDirectory) {
+                        throw AppFailure(
+                            AppState.ERR_NO_MODEL,
+                            "Hiányzik a felismerő modell. Töltsd le a Modellek képernyőn."
+                        )
+                    }
+                    val mdl = Model(modelPath)
+                    modelOther = mdl
+                    recOther = Recognizer(mdl, 16000f)
                 }
-                val mdl = Model(modelPath)
-                model = mdl
-                val rec = Recognizer(mdl, 16000f)
-                recognizer = rec
+                if (sides.hu) {
+                    val hs = Engines.voskSpecFor(this@TranslateService, prefs, "hu")
+                    if (hs != null) {
+                        val mdl = Model(ModelManager.dir(this@TranslateService, hs).absolutePath)
+                        modelHu = mdl
+                        recHu = Recognizer(mdl, 16000f)
+                    } else {
+                        val s2 = LiveSystemAsr(
+                            this@TranslateService, "hu-HU", prefs.allowOnlineAsr,
+                            object : LiveSystemAsr.Callback {
+                                override fun onPartial(text: String) = asrPartial(true, text)
+                                override fun onFinal(text: String) = asrFinal(true, text)
+                                override fun onFatal(message: String) {
+                                    main.post { if (active) fail(AppState.ERR_NO_MODEL, message) }
+                                }
+                            }
+                        )
+                        sys = s2
+                        s2.start()
+                    }
+                }
                 val aud = createAudioRecord(mode)
                 audio = aud
                 aud.startRecording()
@@ -711,7 +780,8 @@ class TranslateService : Service(), Overlay.Callbacks {
                 val out = ShortArray(1700)
                 var sum = 0
                 var cnt = 0
-                var lastPartial = ""
+                var lastPartialO = ""
+                var lastPartialH = ""
                 var smooth = 0f
                 var ema = 0.5f
                 var overSince = 0L
@@ -792,31 +862,59 @@ class TranslateService : Service(), Overlay.Callbacks {
                         wasPaused = true
                         continue
                     }
+                    // a rendszer-felismerőnek a csendet is átadjuk (mondathatár-érzékelés)
+                    val huNow = conversationHuToEn
+                    val feedHu = sides.hu && (huNow || autoDual)
+                    val feedOther = sides.other && (!huNow || autoDual)
+                    if (feedHu) sys?.feed(data, len)
                     if (!voiceLikely) {
                         // hangszint frissült, de nincs beszéd – ne rontsa a partialt
                         continue
                     }
                     if (wasPaused) {
-                        rec.reset()
-                        lastPartial = ""
+                        recOther?.reset()
+                        recHu?.reset()
+                        lastPartialO = ""
+                        lastPartialH = ""
                         wasPaused = false
                     }
 
                     // --- felismerés ---
                     val t0 = System.nanoTime()
-                    if (rec.acceptWaveForm(data, len)) {
-                        val parsed = RecognitionHelper.parseResult(rec.result)
-                        lastPartial = ""
-                        if (parsed.text.isNotBlank() &&
-                            RecognitionHelper.passes(parsed.confidence, prefs.confidenceMin)
-                        ) {
-                            onFinal(parsed.text)
+                    val ro = recOther
+                    if (feedOther && ro != null) {
+                        if (ro.acceptWaveForm(data, len)) {
+                            val parsed = RecognitionHelper.parseResult(ro.result)
+                            lastPartialO = ""
+                            if (parsed.text.isNotBlank() &&
+                                RecognitionHelper.passes(parsed.confidence, prefs.confidenceMin)
+                            ) {
+                                asrFinal(false, parsed.text)
+                            }
+                        } else {
+                            val p = RecognitionHelper.parsePartial(ro.partialResult)
+                            if (p.isNotBlank() && p != lastPartialO) {
+                                lastPartialO = p
+                                asrPartial(false, p)
+                            }
                         }
-                    } else {
-                        val p = RecognitionHelper.parsePartial(rec.partialResult)
-                        if (p.isNotBlank() && p != lastPartial) {
-                            lastPartial = p
-                            onPartial(p)
+                    }
+                    val rh = recHu
+                    if (feedHu && rh != null) {
+                        if (rh.acceptWaveForm(data, len)) {
+                            val parsed = RecognitionHelper.parseResult(rh.result)
+                            lastPartialH = ""
+                            if (parsed.text.isNotBlank() &&
+                                RecognitionHelper.passes(parsed.confidence, prefs.confidenceMin)
+                            ) {
+                                asrFinal(true, parsed.text)
+                            }
+                        } else {
+                            val p = RecognitionHelper.parsePartial(rh.partialResult)
+                            if (p.isNotBlank() && p != lastPartialH) {
+                                lastPartialH = p
+                                asrPartial(true, p)
+                            }
                         }
                     }
 
@@ -855,8 +953,11 @@ class TranslateService : Service(), Overlay.Callbacks {
                 } catch (_: Exception) {
                 }
                 audio?.release()
-                recognizer?.close()
-                model?.close()
+                sys?.stop()
+                recOther?.close()
+                modelOther?.close()
+                recHu?.close()
+                modelHu?.close()
             }
         }, "recognizer")
         worker?.start()
@@ -951,6 +1052,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         delayQueue.clear()
         sentenceBuf?.reset()
         sentenceBuf = null
+        try { asrExec.shutdownNow() } catch (_: Exception) {}
         overlay?.remove()
         overlay = null
         translator?.close()

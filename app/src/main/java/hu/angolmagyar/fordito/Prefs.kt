@@ -42,6 +42,11 @@ class Prefs(ctx: Context) {
         const val STYLE_HC = 4
     }
 
+    /** Magyar felismerés online (Google felhő) tartalékként – a hang a Google szervereire kerül. */
+    var allowOnlineAsr: Boolean
+        get() = p.getBoolean("allowOnlineAsr", false)
+        set(v) { p.edit().putBoolean("allowOnlineAsr", v).apply() }
+
     var modelId: String
         get() = p.getString("model", "small") ?: "small"
         set(v) { p.edit().putString("model", v).apply() }
@@ -270,19 +275,20 @@ class Prefs(ctx: Context) {
 
     fun spec(): ModelManager.Spec = ModelManager.byId(modelId)
 
+    /**
+     * A Vosk-modell, amit az élő mód a "másik" (nem magyar) oldalon használ.
+     * A kiválasztott angol modell (small/large) számít; takarékos módban a kicsi.
+     */
     fun effectiveSpec(ctx: Context): ModelManager.Spec {
         if (meetingMode) {
-            return MeetingMode.preferredSpec(ctx)
+            return Engines.voskSpecFor(ctx, this, "hu") ?: ModelManager.HU_LARGE
         }
-        // Natív felismerés a forrásnyelv szerint
-        val langSpec = ModelManager.forSourceLang(sourceLang, preferLargeEn = modelId == "large", ctx)
+        val lang = Engines.sides(this).otherLang
         val useEco = eco || forcedEco
-        if (useEco && sourceLang == "en" && ModelManager.isInstalled(ctx, ModelManager.SMALL)) {
+        if (useEco && lang == "en" && ModelManager.isInstalled(ctx, ModelManager.SMALL)) {
             return ModelManager.SMALL
         }
-        if (ModelManager.isInstalled(ctx, langSpec)) return langSpec
-        // fallback: user modelId
-        return if (ModelManager.isInstalled(ctx, spec())) spec() else langSpec
+        return Engines.voskSpecFor(ctx, this, lang) ?: ModelManager.SMALL
     }
 
     fun isEnToHu(): Boolean = translateDir == DIR_EN_HU || translateDir == DIR_CONVERSATION

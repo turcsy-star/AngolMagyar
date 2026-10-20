@@ -100,7 +100,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun hasOverlay() = Settings.canDrawOverlays(this)
 
-    private fun voskReady() = ModelManager.isInstalled(this, prefs.effectiveSpec(this))
+    private fun voskReady() = Engines.missingForLive(this, prefs) == null
 
     private fun batteryOk(): Boolean = try {
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
@@ -275,7 +275,13 @@ class MainActivity : AppCompatActivity() {
             prefs.needsTranslation() -> "${prefs.sourceLang.uppercase()} → ${prefs.targetLang.uppercase()}"
             else -> getString(R.string.m_dir_none)
         }
-        val modelLabel = prefs.effectiveSpec(this).label.substringBefore("(").trim()
+        val sidesNow = Engines.sides(prefs)
+        val modelLabel = when {
+            sidesNow.hu && !sidesNow.other -> "Magyar (Android)"
+            sidesNow.hu && sidesNow.other ->
+                prefs.effectiveSpec(this).label.substringBefore("(").trim() + " + magyar"
+            else -> prefs.effectiveSpec(this).label.substringBefore("(").trim()
+        }
         val extras = buildList {
             if (prefs.ttsEnabled) add("TTS")
             if (prefs.eco) add("eco")
@@ -604,51 +610,9 @@ class MainActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------- letöltés
 
+    /** A modellek letöltése a külön Modellek képernyőn történik. */
     private fun startDownload() {
-        if (downloading) return
-        val spec = prefs.effectiveSpec(this)
-        downloading = true
-        downloadPct = 0
-        downloadMsg = getString(R.string.m_dl_starting)
-        AppState.lastError = null
-        rebuild(false)
-
-        Thread {
-            try {
-                if (!ModelManager.isInstalled(this, spec)) {
-                    ModelManager.download(this, spec) { p, msg ->
-                        runOnUiThread {
-                            downloadPct = p
-                            downloadMsg = msg
-                            rebuildSoon()
-                        }
-                    }
-                }
-                runOnUiThread {
-                    downloadPct = 0
-                    downloadMsg = getString(R.string.m_dl_translator)
-                    rebuildSoon()
-                }
-                val translator = Translation.getClient(
-                    TranslatorOptions.Builder()
-                        .setSourceLanguage(TranslateLanguage.ENGLISH)
-                        .setTargetLanguage(TranslateLanguage.HUNGARIAN)
-                        .build()
-                )
-                translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                    .addOnSuccessListener {
-                        translator.close()
-                        translatorReady = true
-                        finishDownload(getString(R.string.m_dl_done))
-                    }
-                    .addOnFailureListener { e ->
-                        translator.close()
-                        finishDownload(getString(R.string.m_dl_translator_fail, e.message ?: ""))
-                    }
-            } catch (e: Exception) {
-                finishDownload(getString(R.string.m_dl_error, e.message ?: ""))
-            }
-        }.start()
+        startActivity(Intent(this, ModelsActivity::class.java))
     }
 
     private var rebuildPosted = false

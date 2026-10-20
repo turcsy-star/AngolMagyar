@@ -11,7 +11,8 @@ Offline élő fordítás: Vosk + ML Kit + ONNX speaker + Wear.
 ./gradlew :wear:assembleDebug
 ```
 
-## v2.9
+## v2.9 (javítás: a Beállítások és más képernyők kártyái láthatatlanok voltak – Ui.card alpha=0)
+
 **Fontos:** ezt a csomagot nem sikerült valódi Gradle-lel buildelni (nem volt SDK/Maven-hozzáférés); csak Kotlin-fordítási ellenőrzés futott android-33 jar + stubok ellen. Az első build Android Studióban/`./gradlew` paranccsal történjen, és a hibákat jelezd.
 
 Új: témaválasztó (rendszer/világos/sötét), utolsó munkamenet folytatása, hang mentése + lejátszás soronként, tanuló szótár, beszélők átnevezése, összegzés, keresés ékezetfüggetlenül, törlés visszavonással, kedvencek, exportok (TXT/MD/VTT/SRT/DOCX/PDF), tárgyalás mód, érintésátengedő overlay, QuickTile, szint-mérő.

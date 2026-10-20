@@ -265,18 +265,30 @@ class FileSubtitleActivity : AppCompatActivity() {
         val sourceLang = if (dir == Prefs.DIR_HU_EN || prefs.meetingMode) "hu" else "en"
         val needTranslate = dir != Prefs.DIR_NONE && !prefs.meetingMode
 
+        var frToClose: FileRecognizer? = null
         Thread {
             try {
-                val modelSpec = if (sourceLang == "hu" || prefs.meetingMode) {
-                    MeetingMode.preferredSpec(this)
-                } else {
-                    prefs.effectiveSpec(this)
-                }
-                if (!ModelManager.isInstalled(this, modelSpec)) {
+                // Vosk modell (angol stb., vagy saját magyar ZIP); null = Android beépített (magyar)
+                val modelSpec: ModelManager.Spec? = Engines.voskSpecFor(this, prefs, sourceLang)
+                if (modelSpec != null && !ModelManager.isInstalled(this, modelSpec)) {
                     throw IllegalStateException(
-                        "Nincs telepítve a ${modelSpec.label} modell. Töltsd le a főképernyőn / beállításokban."
+                        "Nincs telepítve a ${modelSpec.label} modell. Töltsd le a Modellek képernyőn."
                     )
                 }
+                if (modelSpec == null) {
+                    if (!SystemAsrSupport.audioSourceSupported()) {
+                        throw IllegalStateException("A magyar felismeréshez Android 13 vagy újabb kell.")
+                    }
+                    if (!SystemAsrSupport.onDeviceAvailable(this) &&
+                        !(prefs.allowOnlineAsr && SystemAsrSupport.anyAvailable(this))
+                    ) {
+                        throw IllegalStateException(
+                            "Nincs magyar felismerő. Nyisd meg a Modellek képernyőt, és telepítsd a Google magyar offline csomagját."
+                        )
+                    }
+                }
+                val fr = FileRecognizer(this, prefs, cancel)
+                frToClose = fr
 
                 main.post { status.text = "Hang kinyerése…" }
                 val pcmFile = extractPcm(uri)
@@ -312,7 +324,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                             val shifted = segs.map {
                                 it.copy(startMs = it.startMs + offsetMs, endMs = it.endMs + offsetMs)
                             }
-                            recognizeSlice(slice, modelSpec, needTranslate, dir, shifted, offsetMs)
+                            fr.recognize(slice, sourceLang, modelSpec, needTranslate, dir, offsetMs, { t -> speakerAt(shifted, t) }, null)
                         },
                         onProgress = { prog ->
                             main.post {
@@ -343,9 +355,19 @@ class FileSubtitleActivity : AppCompatActivity() {
                             "Felismerés… (${segments.size} szegmens)"
                         else "Felismerés…"
                     }
-                    cues = recognize(pcmFile, modelSpec, needTranslate, dir, segments)
+                    cues = fr.recognize(
+                        shorts, sourceLang, modelSpec, needTranslate, dir, 0L,
+                        { t -> speakerAt(segments, t) }
+                    ) { pct, msg ->
+                        main.post {
+                            progress.isIndeterminate = false
+                            progress.progress = pct
+                            status.text = msg
+                        }
+                    }
                 }
                 pcmFile.delete()
+                fr.close()
 
                 if (cancel.get()) throw InterruptedException("Megszakítva")
 
@@ -372,12 +394,14 @@ class FileSubtitleActivity : AppCompatActivity() {
                     saveSrtLauncher.launch(name)
                 }
             } catch (e: InterruptedException) {
+                frToClose?.close()
                 main.post {
                     working = false
                     progress.visibility = View.GONE
                     status.text = "Megszakítva."
                 }
             } catch (e: Exception) {
+                frToClose?.close()
                 main.post {
                     working = false
                     progress.visibility = View.GONE
@@ -409,238 +433,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             throw IllegalStateException("Nem sikerült dekódolni a hangot. Próbálj WAV/MP3 fájlt.")
         }
         return pcm
-    }
-
-    private fun recognize(
-        pcmFile: File,
-        modelSpec: ModelManager.Spec,
-        needTranslate: Boolean,
-        dir: String,
-        segments: List<SpeakerDiarizer.Segment> = emptyList()
-    ): List<SrtExporter.Cue> {
-        LibVosk.setLogLevel(LogLevel.WARNINGS)
-        val model = Model(ModelManager.dir(this, modelSpec).absolutePath)
-        val recognizer = Recognizer(model, 16000f)
-
-        var translator: Translator? = null
-        if (needTranslate) {
-            val (src, tgt) = if (dir == Prefs.DIR_HU_EN) {
-                TranslateLanguage.HUNGARIAN to TranslateLanguage.ENGLISH
-            } else {
-                TranslateLanguage.ENGLISH to TranslateLanguage.HUNGARIAN
-            }
-            translator = Translation.getClient(
-                TranslatorOptions.Builder()
-                    .setSourceLanguage(src)
-                    .setTargetLanguage(tgt)
-                    .build()
-            )
-            val latch = CountDownLatch(1)
-            var ok = false
-            translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                .addOnSuccessListener { ok = true; latch.countDown() }
-                .addOnFailureListener { latch.countDown() }
-            latch.await(60, TimeUnit.SECONDS)
-            if (!ok) {
-                translator.close()
-                translator = null
-            }
-        }
-
-        val enRules = Fixes.parse(prefs.enFixes)
-        val huRules = Fixes.parse(prefs.huFixes)
-        val cues = mutableListOf<SrtExporter.Cue>()
-        val bytes = pcmFile.readBytes()
-        // 16-bit mono feltételezés
-        val sampleRate = 16000
-        val bytesPerSec = sampleRate * 2
-        val chunkBytes = bytesPerSec / 2 // 0.5 mp
-        var offset = 0
-        var timeMs = 0L
-        var lastPartial = ""
-        val recognizeStartedAt = System.currentTimeMillis()
-
-        while (offset < bytes.size && !cancel.get()) {
-            val end = (offset + chunkBytes).coerceAtMost(bytes.size)
-            val chunk = bytes.copyOfRange(offset, end)
-            // short array
-            val shorts = ShortArray(chunk.size / 2)
-            for (i in shorts.indices) {
-                val lo = chunk[i * 2].toInt() and 0xff
-                val hi = chunk[i * 2 + 1].toInt()
-                shorts[i] = ((hi shl 8) or lo).toShort()
-            }
-            if (recognizer.acceptWaveForm(shorts, shorts.size)) {
-                val json = recognizer.result
-                val text = JSONObject(json).optString("text", "").trim()
-                if (text.isNotBlank()) {
-                    var fixedSrc = if (modelSpec.lang == "en") {
-                        Fixes.apply(text, enRules)
-                    } else {
-                        Fixes.apply(text, huRules)
-                    }
-                    if (TextPolish.isNoise(fixedSrc)) continue
-                    fixedSrc = if (modelSpec.lang == "en") TextPolish.polishEnglish(fixedSrc)
-                    else TextPolish.polishHungarian(fixedSrc)
-                    var target = ""
-                    if (translator != null) {
-                        val latch = CountDownLatch(1)
-                        translator.translate(fixedSrc)
-                            .addOnSuccessListener { t ->
-                                target = if (dir == Prefs.DIR_HU_EN) {
-                                    TextPolish.polishEnglish(Fixes.apply(t, enRules))
-                                } else {
-                                    TextPolish.polishHungarian(Fixes.apply(t, huRules))
-                                }
-                                latch.countDown()
-                            }
-                            .addOnFailureListener { latch.countDown() }
-                        latch.await(15, TimeUnit.SECONDS)
-                    }
-                    val start = timeMs
-                    val dur = ((end - offset).toLong() * 1000 / bytesPerSec).coerceAtLeast(800)
-                    val spk = speakerAt(segments, start)
-                    cues.add(SrtExporter.Cue(start, start + dur, fixedSrc, target, spk))
-                    timeMs += dur
-                    lastPartial = ""
-                }
-            } else {
-                val p = JSONObject(recognizer.partialResult).optString("partial", "")
-                lastPartial = p
-            }
-            offset = end
-            val pct = (offset * 100 / bytes.size.coerceAtLeast(1))
-            val elapsed = System.currentTimeMillis() - recognizeStartedAt
-            val etaSec = if (pct > 2 && elapsed > 500) {
-                val totalEst = elapsed * 100.0 / pct
-                ((totalEst - elapsed) / 1000.0).toInt().coerceAtLeast(0)
-            } else -1
-            val etaStr = if (etaSec >= 0) {
-                val m = etaSec / 60
-                val s = etaSec % 60
-                if (m > 0) " · ~${m}p ${s}mp" else " · ~${s} mp"
-            } else ""
-            main.post {
-                progress.isIndeterminate = false
-                progress.progress = pct
-                status.text = "Felismerés… $pct%$etaStr"
-            }
-        }
-
-        // utolsó
-        val finalJson = recognizer.finalResult
-        val finalText = JSONObject(finalJson).optString("text", "").trim()
-        if (finalText.isNotBlank()) {
-            val fixedSrc = if (modelSpec.lang == "en") {
-                Fixes.apply(finalText, enRules)
-            } else {
-                Fixes.apply(finalText, huRules)
-            }
-            var target = ""
-            if (translator != null) {
-                val latch = CountDownLatch(1)
-                translator.translate(fixedSrc)
-                    .addOnSuccessListener { t ->
-                        target = if (dir == Prefs.DIR_HU_EN) {
-                                    TextPolish.polishEnglish(Fixes.apply(t, enRules))
-                                } else {
-                                    TextPolish.polishHungarian(Fixes.apply(t, huRules))
-                                }
-                        latch.countDown()
-                    }
-                    .addOnFailureListener { latch.countDown() }
-                latch.await(15, TimeUnit.SECONDS)
-            }
-            val spk = speakerAt(segments, timeMs)
-            cues.add(SrtExporter.Cue(timeMs, timeMs + 2000, fixedSrc, target, spk))
-        }
-
-        recognizer.close()
-        model.close()
-        translator?.close()
-        return cues
-    }
-
-
-    /** Egy PCM chunk felismerése (chunkolt hosszú felvételekhez). */
-    private fun recognizeSlice(
-        pcm: ShortArray,
-        modelSpec: ModelManager.Spec,
-        needTranslate: Boolean,
-        dir: String,
-        segments: List<SpeakerDiarizer.Segment>,
-        offsetMs: Long
-    ): List<SrtExporter.Cue> {
-        if (pcm.isEmpty()) return emptyList()
-        LibVosk.setLogLevel(LogLevel.WARNINGS)
-        val model = Model(ModelManager.dir(this, modelSpec).absolutePath)
-        val recognizer = Recognizer(model, 16000f)
-        var translator: Translator? = null
-        if (needTranslate) {
-            val (src, tgt) = if (dir == Prefs.DIR_HU_EN) {
-                TranslateLanguage.HUNGARIAN to TranslateLanguage.ENGLISH
-            } else {
-                TranslateLanguage.ENGLISH to TranslateLanguage.HUNGARIAN
-            }
-            translator = Translation.getClient(
-                TranslatorOptions.Builder()
-                    .setSourceLanguage(src)
-                    .setTargetLanguage(tgt)
-                    .build()
-            )
-            val latch = CountDownLatch(1)
-            var ok = false
-            translator.downloadModelIfNeeded(DownloadConditions.Builder().build())
-                .addOnSuccessListener { ok = true; latch.countDown() }
-                .addOnFailureListener { latch.countDown() }
-            latch.await(30, TimeUnit.SECONDS)
-            if (!ok) { translator.close(); translator = null }
-        }
-        val enRules = Fixes.parse(prefs.enFixes)
-        val huRules = Fixes.parse(prefs.huFixes)
-        val cues = mutableListOf<SrtExporter.Cue>()
-        val chunkSamples = 16000 / 2 // 0.5s
-        var offset = 0
-        var timeMs = offsetMs
-        while (offset < pcm.size && !cancel.get()) {
-            val end = (offset + chunkSamples).coerceAtMost(pcm.size)
-            val slice = pcm.copyOfRange(offset, end)
-            if (recognizer.acceptWaveForm(slice, slice.size)) {
-                val text = JSONObject(recognizer.result).optString("text", "").trim()
-                if (text.isNotBlank() && !TextPolish.isNoise(text)) {
-                    var fixedSrc = if (modelSpec.lang == "en") Fixes.apply(text, enRules) else Fixes.apply(text, huRules)
-                    fixedSrc = if (modelSpec.lang == "en") TextPolish.polishEnglish(fixedSrc) else TextPolish.polishHungarian(fixedSrc)
-                    var target = ""
-                    if (translator != null) {
-                        val latch = CountDownLatch(1)
-                        translator.translate(fixedSrc)
-                            .addOnSuccessListener { t ->
-                                target = if (dir == Prefs.DIR_HU_EN) TextPolish.polishEnglish(Fixes.apply(t, enRules))
-                                else TextPolish.polishHungarian(Fixes.apply(t, huRules))
-                                latch.countDown()
-                            }
-                            .addOnFailureListener { latch.countDown() }
-                        latch.await(15, TimeUnit.SECONDS)
-                    }
-                    val dur = ((end - offset).toLong() * 1000 / 16000).coerceAtLeast(800)
-                    val spk = speakerAt(segments, timeMs)
-                    cues.add(SrtExporter.Cue(timeMs, timeMs + dur, fixedSrc, target, spk))
-                    timeMs += dur
-                }
-            }
-            offset = end
-        }
-        val finalText = JSONObject(recognizer.finalResult).optString("text", "").trim()
-        if (finalText.isNotBlank() && !TextPolish.isNoise(finalText)) {
-            var fixedSrc = if (modelSpec.lang == "en") Fixes.apply(finalText, enRules) else Fixes.apply(finalText, huRules)
-            fixedSrc = if (modelSpec.lang == "en") TextPolish.polishEnglish(fixedSrc) else TextPolish.polishHungarian(fixedSrc)
-            val spk = speakerAt(segments, timeMs)
-            cues.add(SrtExporter.Cue(timeMs, timeMs + 2000, fixedSrc, "", spk))
-        }
-        recognizer.close()
-        model.close()
-        translator?.close()
-        return cues
     }
 
     private fun speakerAt(segments: List<SpeakerDiarizer.Segment>, timeMs: Long): String {

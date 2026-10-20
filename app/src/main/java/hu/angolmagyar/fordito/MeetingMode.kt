@@ -41,7 +41,7 @@ object MeetingMode {
         prefs.saveTranscript = true
         prefs.showEnglish = false
         // magyar modell preferencia
-        prefs.modelId = "hu_large" // ha nincs telepítve, a runtime HU_SMALL-ra esik
+        prefs.modelId = "hu_large" // a magyar felismerőt az Engines választja (saját Vosk ZIP vagy rendszer)
         prefs.meetingSafeMode = true
         prefs.meetingChunkMinutes = 12
         prefs.meetingMode = true
@@ -74,18 +74,18 @@ object MeetingMode {
 
     fun isReady(ctx: Context): Boolean {
         return ModelManager.isInstalled(ctx, ModelManager.HU_LARGE) ||
-            ModelManager.isInstalled(ctx, ModelManager.HU_SMALL)
+            SystemAsrSupport.onDeviceAvailable(ctx)
     }
 
-    fun preferredSpec(ctx: Context): ModelManager.Spec =
-        ModelManager.forLang("hu", preferLarge = true, ctx)
+    /** A saját magyar Vosk modell, ha van; különben null (a rendszer-felismerő dolgozik). */
+    fun preferredSpec(ctx: Context): ModelManager.Spec? =
+        if (ModelManager.isInstalled(ctx, ModelManager.HU_LARGE)) ModelManager.HU_LARGE else null
 
     fun statusText(ctx: Context): String {
         val large = ModelManager.isInstalled(ctx, ModelManager.HU_LARGE)
-        val small = ModelManager.isInstalled(ctx, ModelManager.HU_SMALL)
         return when {
             large -> ctx.getString(R.string.meeting_status_large)
-            small -> ctx.getString(R.string.meeting_status_small)
+            SystemAsrSupport.onDeviceAvailable(ctx) -> ctx.getString(R.string.meeting_status_small)
             else -> ctx.getString(R.string.meeting_status_none)
         }
     }

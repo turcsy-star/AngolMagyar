@@ -77,7 +77,6 @@ object Ui {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(ctx, 12) }
-            // belépő animációhoz
         }
 
     fun text(
@@ -262,7 +261,9 @@ object Ui {
         var d = 0L
         for (i in 0 until parent.childCount) {
             val v = parent.getChildAt(i)
-            v.alpha = 0f; v.translationY = dp(parent.context, 16).toFloat()
+            // kezdőállapot: csak itt, az animáció indításakor lesz átlátszó
+            v.alpha = 0f
+            v.translationY = dp(parent.context, 16).toFloat()
             v.animate()
                 .alpha(1f)
                 .translationY(0f)
