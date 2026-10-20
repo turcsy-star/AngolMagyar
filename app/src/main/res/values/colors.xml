@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Világos paletta (alapértelmezett); a sötét a values-night/colors.xml-ben -->
+    <color name="bg">#F5F6FA</color>
+    <color name="bgElevated">#FFFFFF</color>
+    <color name="card">#FFFFFF</color>
+    <color name="stroke">#D5DAE6</color>
+    <color name="primary">#4F46E5</color>
+    <color name="primaryDim">#4338CA</color>
+    <color name="onPrimary">#FFFFFF</color>
+    <color name="textPrimary">#0F172A</color>
+    <color name="textSecondary">#475569</color>
+    <color name="ok">#047857</color>
+    <color name="warn">#B45309</color>
+    <color name="err">#DC2626</color>
+    <color name="accentGlow">#6366F1</color>
+    <color name="ic_launcher_bg">#312E81</color>
+    <color name="overlayScrim">#CC000000</color>
+    <color name="chipBg">#33FFFFFF</color>
+</resources>

@@ -1,0 +1,14 @@
+*.iml
+.gradle/
+local.properties
+.idea/
+build/
+app/build/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+.ssh/
+id_ed25519*
+id_rsa*
