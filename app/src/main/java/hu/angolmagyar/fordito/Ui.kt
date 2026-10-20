@@ -78,8 +78,6 @@ object Ui {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(ctx, 12) }
             // belépő animációhoz
-            alpha = 0f
-            translationY = dp(ctx, 16).toFloat()
         }
 
     fun text(
@@ -176,8 +174,6 @@ object Ui {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(ctx, 10) }
-            alpha = 0f
-            translationY = dp(ctx, 20).toFloat()
             addView(ImageView(ctx).apply {
                 setImageResource(iconRes)
                 setColorFilter(if (highlighted) Color.WHITE else color(ctx, R.color.primary))
@@ -266,7 +262,7 @@ object Ui {
         var d = 0L
         for (i in 0 until parent.childCount) {
             val v = parent.getChildAt(i)
-            if (v.alpha >= 0.99f && v.translationY == 0f) continue
+            v.alpha = 0f; v.translationY = dp(parent.context, 16).toFloat()
             v.animate()
                 .alpha(1f)
                 .translationY(0f)
