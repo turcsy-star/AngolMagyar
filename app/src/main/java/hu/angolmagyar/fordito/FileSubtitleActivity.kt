@@ -57,6 +57,21 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     private var autoStart = false
+    private var fromWizard = false
+    private val tick = object : Runnable {
+        override fun run() {
+            if (!working) return
+            val now = System.currentTimeMillis()
+            val elapsed = now - processStartMs
+            val stepElapsed = now - stepStartMs
+            if (::timeLabel.isInitialized) {
+                timeLabel.text = "Eltelt: ${fmtDur(elapsed)} (lépés: ${fmtDur(stepElapsed)})" +
+                    (if (lastEtaMs > 0) " · becsült hátralévő: ${fmtDur(lastEtaMs)}" else "")
+            }
+            main.postDelayed(this, 1000)
+        }
+    }
+    private var lastEtaMs = 0L
     private lateinit var srcGroup: RadioGroup
     private lateinit var translateSwitch: SwitchCompat
 
@@ -155,6 +170,7 @@ class FileSubtitleActivity : AppCompatActivity() {
 
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         autoStart = intent.getBooleanExtra(EXTRA_AUTOSTART, false)
+        fromWizard = intent.hasExtra(EXTRA_OUTPUT) && intent.hasExtra(EXTRA_SRC)
         val titleText = intent.getStringExtra(EXTRA_TITLE)
         column.addView(Ui.title(this, if (meeting) "Tárgyalás – magyar átirat" else (titleText ?: "Felirat fájlból (SRT)")))
         if (meeting) {
@@ -191,34 +207,27 @@ class FileSubtitleActivity : AppCompatActivity() {
         status = Ui.body(this, "Nincs fájl kiválasztva.")
         column.addView(status)
 
-        // Mód
-        val modeCard = Ui.card(this)
-        modeCard.addView(Ui.title(this, "Kimenet", 16f))
+        // Mód + nyelv: varázslóból jövet összefoglaló, különben teljes választó
         modeGroup = RadioGroup(this)
+        val outIdx = intent.getIntExtra(EXTRA_OUTPUT, 2)
         modeGroup.addView(RadioButton(this).apply {
             id = View.generateViewId()
             text = "Csak forrásnyelvű átirat (EN vagy HU)"
-            isChecked = intent.getIntExtra(EXTRA_OUTPUT, 2) == 0
+            isChecked = outIdx == 0
         })
         modeGroup.addView(RadioButton(this).apply {
             id = View.generateViewId()
             text = "Csak fordítás (célnyelv)"
-            isChecked = intent.getIntExtra(EXTRA_OUTPUT, 2) == 1
+            isChecked = outIdx == 1
         })
         modeGroup.addView(RadioButton(this).apply {
             id = View.generateViewId()
             text = "Forrás + fordítás (mindkettő)"
-            isChecked = intent.getIntExtra(EXTRA_OUTPUT, 2) == 2
+            isChecked = outIdx == 2
         })
-        modeCard.addView(modeGroup)
-        column.addView(modeCard)
-
-        // Nyelv
+        val presetSrc = intent.getStringExtra(EXTRA_SRC)
+            ?: if (prefs.translateDir == Prefs.DIR_HU_EN) "hu" else "en"
         if (!meeting) {
-            val langCard = Ui.card(this)
-            langCard.addView(Ui.title(this, "A hang nyelve", 16f))
-            val presetSrc = intent.getStringExtra(EXTRA_SRC)
-                ?: if (prefs.translateDir == Prefs.DIR_HU_EN) "hu" else "en"
             srcGroup = RadioGroup(this)
             srcGroup.addView(RadioButton(this).apply {
                 id = View.generateViewId(); text = "Angol"; isChecked = presetSrc != "hu"
@@ -226,15 +235,40 @@ class FileSubtitleActivity : AppCompatActivity() {
             srcGroup.addView(RadioButton(this).apply {
                 id = View.generateViewId(); text = "Magyar"; isChecked = presetSrc == "hu"
             })
-            langCard.addView(srcGroup)
             translateSwitch = SwitchCompat(this).apply {
                 text = "Fordítás a másik nyelvre (angol ⇄ magyar)"
                 minHeight = dp(52)
                 isChecked = if (intent.hasExtra(EXTRA_TRANSLATE)) intent.getBooleanExtra(EXTRA_TRANSLATE, true)
                 else prefs.translateDir != Prefs.DIR_NONE
             }
-            langCard.addView(translateSwitch)
-            column.addView(langCard)
+        }
+        if (fromWizard && !meeting) {
+            val summary = when (outIdx) {
+                0 -> if (presetSrc == "hu") "Magyar átirat (fordítás nélkül)" else "Angol átirat (fordítás nélkül)"
+                1 -> if (presetSrc == "hu") "Magyar videó → angol felirat" else "Angol videó → magyar felirat"
+                else -> if (presetSrc == "hu") "Magyar + angol felirat" else "Angol + magyar felirat"
+            }
+            val card = Ui.card(this)
+            card.addView(Ui.title(this, "Felirat", 16f))
+            card.addView(Ui.body(this, summary))
+            card.addView(Ui.small(this, "Válaszd ki a fájlt, majd indítsd az SRT készítést."))
+            column.addView(card)
+            // Rejtett, de a selectedMode/selectedSrc olvassa
+            modeGroup.visibility = View.GONE
+            if (::srcGroup.isInitialized) srcGroup.visibility = View.GONE
+            if (::translateSwitch.isInitialized) translateSwitch.visibility = View.GONE
+        } else {
+            val modeCard = Ui.card(this)
+            modeCard.addView(Ui.title(this, "Kimenet", 16f))
+            modeCard.addView(modeGroup)
+            column.addView(modeCard)
+            if (!meeting) {
+                val langCard = Ui.card(this)
+                langCard.addView(Ui.title(this, "A hang nyelve", 16f))
+                langCard.addView(srcGroup)
+                langCard.addView(translateSwitch)
+                column.addView(langCard)
+            }
         }
 
         // --- Folyamatpanel (varázsló-szerű lépések + idő + progress) ---
@@ -334,14 +368,15 @@ class FileSubtitleActivity : AppCompatActivity() {
             val now = System.currentTimeMillis()
             val elapsed = now - processStartMs
             val stepElapsed = now - stepStartMs
-            val etaStr = when {
-                etaMs != null && etaMs > 0 -> " · becsült hátralévő: ${fmtDur(etaMs)}"
+            lastEtaMs = when {
+                etaMs != null && etaMs > 0 -> etaMs
                 overallPct in 1..99 -> {
                     val totalEst = (elapsed * 100.0 / overallPct).toLong()
-                    " · becsült hátralévő: ${fmtDur((totalEst - elapsed).coerceAtLeast(0))}"
+                    (totalEst - elapsed).coerceAtLeast(0)
                 }
-                else -> ""
+                else -> 0L
             }
+            val etaStr = if (lastEtaMs > 0) " · becsült hátralévő: ${fmtDur(lastEtaMs)}" else ""
             timeLabel.text = "Eltelt: ${fmtDur(elapsed)} (lépés: ${fmtDur(stepElapsed)})$etaStr"
             stepList.text = stepsLog.joinToString("\n")
             status.text = stepMsg
@@ -387,6 +422,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             startBtn.isEnabled = false
             progressPanel.visibility = View.VISIBLE
             status.setTextColor(Ui.color(this, R.color.textPrimary))
+            main.removeCallbacks(tick)
+            main.post(tick)
         }
         beginStep("Előkészítés")
 
@@ -526,7 +563,11 @@ class FileSubtitleActivity : AppCompatActivity() {
 
                 main.post {
                     working = false
-                    progress.visibility = View.GONE
+                    startBtn.isEnabled = true
+                    main.removeCallbacks(tick)
+                    finishStep()
+                    stepsLog.add("✓ SRT kész – ${cues.size} feliratblokk")
+                    updateProgressUi(100, 100, "Kész – ${cues.size} feliratblokk", 0)
                     status.text = "✓ Kész – ${cues.size} feliratblokk\n${out.name}"
                     status.setTextColor(Ui.color(this, R.color.ok))
                     Toast.makeText(this, "SRT kész", Toast.LENGTH_SHORT).show()
@@ -538,6 +579,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 main.post {
                     working = false
                     startBtn.isEnabled = true
+                    main.removeCallbacks(tick)
                     stepsLog.add("⏸ Megszakítva")
                     stepList.text = stepsLog.joinToString("\n")
                     status.text = "Megszakítva."
@@ -548,6 +590,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 main.post {
                     working = false
                     startBtn.isEnabled = true
+                    main.removeCallbacks(tick)
                     stepsLog.add("✗ Hiba: ${e.message}")
                     stepList.text = stepsLog.joinToString("\n")
                     status.text = "Hiba: ${e.message}"
@@ -564,20 +607,47 @@ class FileSubtitleActivity : AppCompatActivity() {
      * WAV/raw esetén közvetlenül használja.
      */
     private fun extractPcm(uri: Uri): File {
+        main.post {
+            status.text = "Fájl másolása…"
+            updateProgressUi(2, 5, "Fájl másolása a gyorsítótárba…", null)
+        }
         val cache = File(cacheDir, "input_${System.currentTimeMillis()}")
         contentResolver.openInputStream(uri)?.use { input ->
             cache.outputStream().use { input.copyTo(it) }
         } ?: throw IllegalStateException("Nem olvasható a fájl.")
+        if (cancel.get()) throw InterruptedException("Megszakítva")
 
+        main.post {
+            updateProgressUi(5, 15, "Hang dekódolása (PCM 16 kHz)…", null)
+        }
         val pcm = File(cacheDir, "pcm_${System.currentTimeMillis()}.raw")
         try {
-            AudioHelper.decodeToPcm16kMono(cache, pcm) { cancel.get() }
+            // periodikus UI frissítés, amíg a dekódolás tart
+            val pulse = AtomicBoolean(true)
+            Thread {
+                var p = 15
+                while (pulse.get() && !cancel.get()) {
+                    try { Thread.sleep(800) } catch (_: InterruptedException) { break }
+                    if (!pulse.get()) break
+                    p = (p + 3).coerceAtMost(40)
+                    val sec = (System.currentTimeMillis() - stepStartMs) / 1000
+                    main.post {
+                        if (working) updateProgressUi(p / 2, p, "Hang dekódolása… ${sec}s", null)
+                    }
+                }
+            }.start()
+            try {
+                AudioHelper.decodeToPcm16kMono(cache, pcm) { cancel.get() }
+            } finally {
+                pulse.set(false)
+            }
         } finally {
             cache.delete()
         }
         if (!pcm.exists() || pcm.length() < 1000) {
             throw IllegalStateException("Nem sikerült dekódolni a hangot. Próbálj WAV/MP3 fájlt.")
         }
+        main.post { updateProgressUi(20, 100, "Hang kinyerése kész", null) }
         return pcm
     }
 

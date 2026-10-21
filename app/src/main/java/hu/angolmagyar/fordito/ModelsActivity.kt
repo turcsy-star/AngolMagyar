@@ -70,6 +70,7 @@ class ModelsActivity : AppCompatActivity() {
     private var ctl = ModelManager.DlControl()
     private var progPct = 0
     private var progMsg = ""
+    private var dlListener: ((Int, String, Boolean, Boolean) -> Unit)? = null
 
     private fun dp(v: Int) = Ui.dp(this, v)
 
@@ -100,6 +101,14 @@ class ModelsActivity : AppCompatActivity() {
         }
         build()
         refreshStatuses()
+        attachDlListener()
+        if (ModelDownloadService.running) {
+            downloading = true
+            paused = ModelDownloadService.paused
+            progPct = ModelDownloadService.pct
+            progMsg = ModelDownloadService.message
+            build()
+        }
         if (intent.getBooleanExtra(EXTRA_AUTO, false) && savedInstanceState == null) {
             main.postDelayed({ if (!downloading && !isDestroyed) onOk() }, 700)
         }
@@ -110,8 +119,9 @@ class ModelsActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        // az ablak elhagyásakor a letöltés szünetel (a félbehagyott rész megmarad, folytatható)
-        if (downloading && !paused) ctl.pause()
+        // Letöltés a ModelDownloadService-ben fut – képernyőzár nem szakítja meg.
+        dlListener?.let { ModelDownloadService.removeListener(it) }
+        dlListener = null
         super.onDestroy()
     }
 
@@ -422,10 +432,56 @@ class ModelsActivity : AppCompatActivity() {
         downloading = true
         cancelled = false
         pausing = false
+        paused = false
         progPct = -1
-        progMsg = "Indítás…"
+        progMsg = "Indítás… (előtérben, képernyőzár után is folytatódik)"
         build()
-        runQueue()
+        attachDlListener()
+        ModelDownloadService.start(this, queue)
+    }
+
+    private fun attachDlListener() {
+        dlListener?.let { ModelDownloadService.removeListener(it) }
+        val listener: (Int, String, Boolean, Boolean) -> Unit = { p, msg, isPaused, finished ->
+            main.post {
+                if (isDestroyed) return@post
+                progPct = p
+                progMsg = msg
+                paused = isPaused
+                pausing = false
+                progressBar?.apply {
+                    isIndeterminate = p < 0
+                    if (p >= 0) progress = p.coerceIn(0, 100)
+                }
+                progressText?.text = msg
+                updatePauseUi()
+                if (finished) {
+                    downloading = false
+                    val fail = ModelDownloadService.failedMsg
+                    if (fail != null) {
+                        AlertDialog.Builder(this@ModelsActivity)
+                            .setTitle("Letöltési hiba")
+                            .setMessage(fail + "\n\nNyomd meg újra az OK-t a folytatáshoz.")
+                            .setPositiveButton("OK", null)
+                            .show()
+                    } else {
+                        Toast.makeText(this@ModelsActivity, msg, Toast.LENGTH_LONG).show()
+                    }
+                    selected.clear()
+                    queue = emptyList()
+                    build()
+                    refreshStatuses()
+                }
+            }
+        }
+        dlListener = listener
+        ModelDownloadService.addListener(listener)
+        if (ModelDownloadService.running) {
+            downloading = true
+            paused = ModelDownloadService.paused
+            progPct = ModelDownloadService.pct
+            progMsg = ModelDownloadService.message
+        }
     }
 
     private val MB = 1024L * 1024L
@@ -558,23 +614,25 @@ class ModelsActivity : AppCompatActivity() {
                 Toast.makeText(this, "Nincs internetkapcsolat.", Toast.LENGTH_LONG).show()
                 return
             }
-            runQueue()
+            pausing = false
+            ModelDownloadService.resume(this)
+            updatePauseUi()
         } else if (!pausing) {
             pausing = true
-            ctl.pause()
+            ModelDownloadService.pause(this)
             updatePauseUi()
         }
     }
 
     private fun onCancel() {
         cancelled = true
-        if (paused) {
-            onQueueStopped(emptyList())
-        } else {
-            pausing = true
-            ctl.pause()
-            updatePauseUi()
-        }
+        ModelDownloadService.cancel(this)
+        downloading = false
+        paused = false
+        queue = emptyList()
+        Toast.makeText(this, "Megszakítva. A félbehagyott rész megmarad, később folytatható.", Toast.LENGTH_LONG).show()
+        build()
+        refreshStatuses()
     }
 
     private fun post(pct: Int, msg: String) {

@@ -259,46 +259,125 @@ class TaskSetupActivity : AppCompatActivity() {
 
     private fun buildSubtitle() {
         column.addView(Ui.title(this, "Felirat videóhoz"))
-        val how = Ui.card(this)
-        how.addView(Ui.title(this, "Így megy", 16f))
-        how.addView(Ui.body(this,
-            "1. Válaszd ki, mi legyen a feliratban (lent).\n" +
-                "2. Nyomd meg az indítást, és válaszd ki a videót vagy hangfájlt.\n" +
-                "3. Az app felismeri a beszédet és lefordítja – ez hosszú filmnél sokáig tart, töltőn, Wi-Fin érdemes.\n" +
-                "4. Mentsd el a .srt fájlt a videó mellé, a videóval azonos néven: a lejátszó (VLC, MX Player) magától betölti."))
-        column.addView(how)
+        column.addView(Ui.small(this,
+            "1. Válaszd ki a videó nyelvét.\n" +
+                "2. Mit írjon a felirat.\n" +
+                "3. Ha kell, töltsd le a modellt.\n" +
+                "4. Válaszd ki a fájlt és készítsd el az SRT-t."
+        ))
 
-        val c1 = Ui.card(this)
-        c1.addView(Ui.title(this, "Mi kerüljön a feliratba?", 16f))
-        val g = radios(
+        // --- 1. Videó nyelve ---
+        val cLang = Ui.card(this)
+        cLang.addView(Ui.title(this, "A videó nyelve", 16f))
+        val gLang = radios(listOf("Angol", "Magyar"), 0)
+        cLang.addView(gLang)
+        column.addView(cLang)
+
+        // --- 2. Mit írjon a felirat ---
+        val cOut = Ui.card(this)
+        cOut.addView(Ui.title(this, "Mit írjon a felirat?", 16f))
+        val gOut = radios(
             listOf(
-                "Angol videó → magyar felirat",
-                "Angol videó → angol + magyar (két sor)",
-                "Magyar videó → angol felirat",
-                "Magyar videó → magyar felirat (fordítás nélkül)"
+                "Csak fordítás (célnyelv) – ajánlott",
+                "Forrás + fordítás (két sor)",
+                "Csak eredeti szöveg (fordítás nélkül)"
             ), 0
         )
-        c1.addView(g)
-        column.addView(c1)
+        cOut.addView(gOut)
+        column.addView(cOut)
 
-        column.addView(Ui.button(this, "Videó kiválasztása és indítás", true) {
-            // src, translate, output (0 = eredeti, 1 = fordítás, 2 = mindkettő)
-            val (src, tr, out) = when (g.index()) {
-                0 -> Triple("en", true, 1)
-                1 -> Triple("en", true, 2)
-                2 -> Triple("hu", true, 1)
-                else -> Triple("hu", false, 0)
+        // --- 3. Modell állapot ---
+        val modelCard = Ui.card(this)
+        modelCard.addView(Ui.title(this, "Szükséges modell", 16f))
+        val modelStatus = Ui.body(this, "Ellenőrzés…")
+        modelCard.addView(modelStatus)
+        val modelBtn = Ui.button(this, "Modell letöltése…", true) {
+            startActivity(Intent(this, ModelsActivity::class.java))
+        }
+        modelBtn.visibility = android.view.View.GONE
+        modelCard.addView(modelBtn)
+        column.addView(modelCard)
+
+        fun refreshModelStatus() {
+            val src = if (gLang.index() == 0) "en" else "hu"
+            val needTranslate = gOut.index() != 2
+            val lines = ArrayList<String>()
+            var missing = false
+            if (src == "en") {
+                val large = ModelManager.isInstalled(this, ModelManager.LARGE)
+                val small = ModelManager.isInstalled(this, ModelManager.SMALL)
+                when {
+                    large -> lines.add("✓ Angol felismerő (nagy) telepítve")
+                    small -> lines.add("✓ Angol felismerő (kicsi) telepítve")
+                    else -> {
+                        lines.add("✗ Nincs angol felismerő modell")
+                        missing = true
+                    }
+                }
+            } else {
+                // Magyar: rendszer ASR
+                val ok = try {
+                    SystemAsrSupport.onDeviceAvailable(this) ||
+                        (Prefs(this).allowOnlineAsr && SystemAsrSupport.anyAvailable(this))
+                } catch (_: Exception) { false }
+                if (ok) lines.add("✓ Magyar felismerő elérhető")
+                else {
+                    lines.add("✗ Magyar offline felismerő nem elérhető ezen a telefonon")
+                    lines.add("  (Beállítások → Modellek → magyar csomag / online engedély)")
+                    missing = true
+                }
             }
-            startActivity(
-                Intent(this, FileSubtitleActivity::class.java)
-                    .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Felirat videóhoz")
-                    .putExtra(FileSubtitleActivity.EXTRA_SRC, src)
-                    .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, tr)
-                    .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, out)
-                    .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, false)
-                    .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true)
-            )
-            finish()
+            if (needTranslate) {
+                // ML Kit – ModelsActivity ellenőrzi; itt csak emlékeztető
+                lines.add("Fordításhoz ML Kit modell kell (Modellek képernyő)")
+            }
+            modelStatus.text = lines.joinToString("\n")
+            modelBtn.visibility = if (missing || needTranslate) android.view.View.VISIBLE else android.view.View.GONE
+            modelBtn.text = if (missing) "Hiányzó modell letöltése…" else "Modellek kezelése…"
+        }
+        gLang.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
+        gOut.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
+        refreshModelStatus()
+
+        column.addView(Ui.button(this, "Tovább: fájl kiválasztása", true) {
+            val src = if (gLang.index() == 0) "en" else "hu"
+            val (tr, out) = when (gOut.index()) {
+                0 -> true to 1   // csak fordítás
+                1 -> true to 2   // mindkettő
+                else -> false to 0 // csak forrás
+            }
+            // Angol forrásnál modell nélkül is elengedjük – a FileSubtitle majd jelez
+            if (src == "en") {
+                val has = ModelManager.isInstalled(this, ModelManager.LARGE) ||
+                    ModelManager.isInstalled(this, ModelManager.SMALL)
+                if (!has) {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Hiányzik az angol modell")
+                        .setMessage("A felismeréshez töltsd le az angol Vosk modellt (Modellek). Wi-Fin, töltőn ajánlott.")
+                        .setPositiveButton("Modellek") { _, _ ->
+                            startActivity(Intent(this, ModelsActivity::class.java))
+                        }
+                        .setNegativeButton("Mégis tovább") { _, _ ->
+                            openFileSubtitle(src, tr, out)
+                        }
+                        .show()
+                    return@button
+                }
+            }
+            openFileSubtitle(src, tr, out)
         })
+    }
+
+    private fun openFileSubtitle(src: String, translate: Boolean, output: Int) {
+        startActivity(
+            Intent(this, FileSubtitleActivity::class.java)
+                .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Felirat videóhoz")
+                .putExtra(FileSubtitleActivity.EXTRA_SRC, src)
+                .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, translate)
+                .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, output)
+                .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, false)
+                .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true)
+        )
+        finish()
     }
 }
