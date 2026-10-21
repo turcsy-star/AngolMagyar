@@ -54,12 +54,14 @@ class FileSubtitleActivity : AppCompatActivity() {
         const val EXTRA_OUTPUT = "output"      // 0 = forrás, 1 = fordítás, 2 = mindkettő
         const val EXTRA_DIARIZE = "diarize"
         const val EXTRA_AUTOSTART = "autostart" // fájlválasztó azonnal, feldolgozás a választás után
+        const val EXTRA_TGT = "tgt" // célnyelv: hu/en/de/…
     }
 
     private var autoStart = false
     private var fromWizard = false
     /** Varázslóból jövő forrásnyelv (en/de/fr/…); ha üres, a UI választó érvényes. */
     private var wizardSrc: String? = null
+    private var wizardTgt: String = "hu"
     private val tick = object : Runnable {
         override fun run() {
             if (!working) return
@@ -74,6 +76,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
     }
     private var lastEtaMs = 0L
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
     private lateinit var srcGroup: RadioGroup
     private lateinit var translateSwitch: SwitchCompat
 
@@ -174,6 +177,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         autoStart = intent.getBooleanExtra(EXTRA_AUTOSTART, false)
         fromWizard = intent.hasExtra(EXTRA_OUTPUT) && intent.hasExtra(EXTRA_SRC)
         wizardSrc = intent.getStringExtra(EXTRA_SRC)
+        wizardTgt = intent.getStringExtra(EXTRA_TGT) ?: "hu"
         val titleText = intent.getStringExtra(EXTRA_TITLE)
         column.addView(Ui.title(this, if (meeting) "Tárgyalás – magyar átirat" else (titleText ?: "Felirat fájlból (SRT)")))
         if (meeting) {
@@ -251,10 +255,13 @@ class FileSubtitleActivity : AppCompatActivity() {
                 "es" -> "Spanyol"; "it" -> "Olasz"; "uk" -> "Ukrán"
                 else -> "Angol"
             }
+            val tgtName = when (wizardTgt) {
+                "en" -> "angol"; "de" -> "német"; "fr" -> "francia"; "es" -> "spanyol"; else -> "magyar"
+            }
             val summary = when (outIdx) {
                 0 -> "$langName átirat (fordítás nélkül)"
-                1 -> if (presetSrc == "hu") "Magyar videó → angol felirat" else "$langName videó → magyar felirat"
-                else -> if (presetSrc == "hu") "Magyar + angol felirat" else "$langName + magyar felirat"
+                1 -> "$langName videó → $tgtName felirat"
+                else -> "$langName + $tgtName felirat"
             }
             val card = Ui.card(this)
             card.addView(Ui.title(this, "Felirat", 16f))
@@ -341,16 +348,28 @@ class FileSubtitleActivity : AppCompatActivity() {
 
     private fun fmtDur(ms: Long): String {
         val sec = (ms / 1000).coerceAtLeast(0)
-        val m = sec / 60
+        val h = sec / 3600
+        val m = (sec % 3600) / 60
         val s = sec % 60
-        return if (m > 0) "%d:%02d".format(m, s) else "%d s".format(s)
+        return when {
+            h > 0 -> "%d ó %d p".format(h, m)
+            m > 0 -> "%d p %02d mp".format(m, s)
+            else -> "%d mp".format(s)
+        }
+    }
+
+    private fun fmtClock(atMs: Long): String {
+        val cal = java.util.Calendar.getInstance()
+        cal.timeInMillis = atMs
+        return "%02d:%02d".format(cal.get(java.util.Calendar.HOUR_OF_DAY), cal.get(java.util.Calendar.MINUTE))
     }
 
     private fun beginStep(name: String) {
         currentStepName = name
         stepStartMs = System.currentTimeMillis()
         stepsLog.add("▶ $name")
-        updateProgressUi(0, 0, name, null)
+        // overallPct = -1: ne nullázza a teljes folyamat sávot
+        updateProgressUi(-1, 0, name, null)
     }
 
     private fun finishStep(extra: String = "") {
@@ -370,8 +389,10 @@ class FileSubtitleActivity : AppCompatActivity() {
                 progress.progress = overallPct.coerceIn(0, 100)
                 overallLabel.text = "Teljes folyamat: $overallPct%"
             }
-            stepProgress.isIndeterminate = stepPct <= 0
-            stepProgress.progress = stepPct.coerceIn(0, 100)
+            if (stepPct >= 0) {
+                stepProgress.isIndeterminate = stepPct == 0 && overallPct < 100
+                stepProgress.progress = stepPct.coerceIn(0, 100)
+            }
             stepLabel.text = "Aktuális: $stepMsg" + if (stepPct > 0) " ($stepPct%)" else ""
             val now = System.currentTimeMillis()
             val elapsed = now - processStartMs
@@ -384,11 +405,54 @@ class FileSubtitleActivity : AppCompatActivity() {
                 }
                 else -> 0L
             }
-            val etaStr = if (lastEtaMs > 0) " · becsült hátralévő: ${fmtDur(lastEtaMs)}" else ""
-            timeLabel.text = "Eltelt: ${fmtDur(elapsed)} (lépés: ${fmtDur(stepElapsed)})$etaStr"
-            stepList.text = stepsLog.joinToString("\n")
+            val etaPart = if (lastEtaMs > 0) {
+                "Hátralévő: ${fmtDur(lastEtaMs)} · kész kb. ${fmtClock(now + lastEtaMs)}"
+            } else "Hátralévő: számítás…"
+            timeLabel.text = "Eltelt: ${fmtDur(elapsed)} · lépés: ${fmtDur(stepElapsed)}" + "\n" + etaPart
+            stepList.text = stepsLog.joinToString("
+")
             status.text = stepMsg
+            val pctShow = if (overallPct >= 0) overallPct else progress.progress
+            postSrtNotif(stepMsg, pctShow, working)
         }
+    }
+
+    private fun ensureSrtNotifChannel() {
+        if (android.os.Build.VERSION.SDK_INT < 26) return
+        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+        if (nm.getNotificationChannel(SRT_CH) == null) {
+            nm.createNotificationChannel(
+                android.app.NotificationChannel(
+                    SRT_CH, "SRT készítés", android.app.NotificationManager.IMPORTANCE_LOW
+                ).apply { setShowBadge(false) }
+            )
+        }
+    }
+
+    private fun postSrtNotif(msg: String, pct: Int, ongoing: Boolean) {
+        try {
+            val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val open = android.app.PendingIntent.getActivity(
+                this, 0,
+                android.content.Intent(this, FileSubtitleActivity::class.java)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            val b = androidx.core.app.NotificationCompat.Builder(this, SRT_CH)
+                .setSmallIcon(R.drawable.ic_subtitles)
+                .setContentTitle(if (ongoing) "SRT készül… $pct%" else "SRT kész")
+                .setContentText(msg.take(90))
+                .setContentIntent(open)
+                .setOnlyAlertOnce(true)
+                .setOngoing(ongoing)
+                .setSilent(true)
+            if (ongoing) b.setProgress(100, pct.coerceIn(0, 100), pct <= 0)
+            else b.setProgress(0, 0, false)
+            nm.notify(SRT_NOTIF, b.build())
+            if (!ongoing) {
+                main.postDelayed({ try { nm.cancel(SRT_NOTIF) } catch (_: Exception) {} }, 8_000)
+            }
+        } catch (_: Exception) {}
     }
 
     private fun selectedMode(): SrtExporter.Mode {
@@ -415,7 +479,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         else intent.getBooleanExtra(EXTRA_TRANSLATE, true)
         if (!wantTr) return Prefs.DIR_NONE
         val src = selectedSrc()
-        return if (src == "hu") Prefs.DIR_HU_EN else "${src}_hu"
+        val tgt = wizardTgt.ifBlank { "hu" }
+        return if (src == tgt) Prefs.DIR_NONE else "${src}_${tgt}"
     }
 
     private fun startProcess() {
@@ -429,12 +494,27 @@ class FileSubtitleActivity : AppCompatActivity() {
         cancel.set(false)
         processStartMs = System.currentTimeMillis()
         stepsLog.clear()
+        try {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            wakeLock = pm.newWakeLock(
+                android.os.PowerManager.PARTIAL_WAKE_LOCK,
+                "AngolMagyar:SrtProcess"
+            ).also {
+                it.setReferenceCounted(false)
+                it.acquire(6 * 60 * 60 * 1000L) // max 6 óra
+            }
+        } catch (_: Exception) {}
         main.post {
             startBtn.isEnabled = false
             progressPanel.visibility = View.VISIBLE
             status.setTextColor(Ui.color(this, R.color.textPrimary))
-            main.removeCallbacks(tick)
+                        main.removeCallbacks(tick)
             main.post(tick)
+            // Lépésterv a panel tetején
+            stepsLog.clear()
+            stepsLog.add("Terv: 1) hang  2) felismerés (chunk X/Y)  3) fordítás  4) SRT")
+            postSrtNotif("SRT készítés indult…", 0, true)
+            postSrtNotif("SRT készítés indult…", 0, true)
         }
         beginStep("Előkészítés")
 
@@ -491,42 +571,65 @@ class FileSubtitleActivity : AppCompatActivity() {
 
                 val cues: List<SrtExporter.Cue>
                 if (useChunked) {
-                    beginStep("Chunkolt felismerés (%.0f perc)".format(durationMin))
+                    beginStep("Felismerés + fordítás (%.0f perc hang)".format(durationMin))
                     val chunker = ChunkedTranscriber(this, prefs)
                     val chunkMs = prefs.meetingChunkMinutes * 60 * 1000
+                    // Becsült chunk-szám a progresshez (a valós érték onProgress-ből jön)
+                    var totalChunksEst = maxOf(1, ((shorts.size.toLong() * 1000 / 16000) / chunkMs).toInt() + 1)
+                    var chunkStartMs = System.currentTimeMillis()
                     val result = chunker.run(
                         pcm16kMono = shorts,
                         chunkMs = chunkMs,
                         overlapMs = 8_000,
                         pauseBetweenMs = if (prefs.meetingSafeMode) 10_000L else 5_000L,
                         processChunk = { slice, offsetMs, idx, isFirst, isLast ->
+                            chunkStartMs = System.currentTimeMillis()
                             val diarizer = DiarizerFactory.create(this, preferOnnx = prefs.preferOnnx)
                             val segs = if (useDiarization || prefs.meetingMode)
                                 diarizer.diarize(slice, 16000) else emptyList()
                             val shifted = segs.map {
                                 it.copy(startMs = it.startMs + offsetMs, endMs = it.endMs + offsetMs)
                             }
-                            // Fontos: onProgress átadása, különben a chunk alatt „megáll” a UI
                             fr.recognize(
                                 slice, sourceLang, modelSpec, needTranslate, dir, offsetMs,
                                 { t -> speakerAt(shifted, t) }
                             ) { pct, msg ->
-                                updateProgressUi(-1, pct, "Chunk ${idx + 1}: $msg", null)
+                                val tc = totalChunksEst.coerceAtLeast(1)
+                                // Teljes folyamat: kész chunkok + aktuális chunk %-a
+                                val overall = ((idx * 100) + pct.coerceIn(0, 100)) / tc
+                                val elapsedChunk = System.currentTimeMillis() - chunkStartMs
+                                val etaChunk = if (pct in 1..99)
+                                    ((elapsedChunk * 100.0 / pct) - elapsedChunk).toLong().coerceAtLeast(0)
+                                else null
+                                val etaAll = if (overall in 1..99) {
+                                    val el = System.currentTimeMillis() - processStartMs
+                                    ((el * 100.0 / overall) - el).toLong().coerceAtLeast(0)
+                                } else etaChunk
+                                val etaTxt = if (etaChunk != null && etaChunk > 0)
+                                    " · hátra e chunk: ${fmtDur(etaChunk)}" else ""
+                                updateProgressUi(
+                                    overall.coerceIn(0, 99),
+                                    pct,
+                                    "Chunk ${idx + 1}/$tc · $msg$etaTxt",
+                                    etaAll
+                                )
                             }
                         },
                         onProgress = { prog ->
+                            totalChunksEst = prog.totalChunks.coerceAtLeast(1)
                             val overall = prog.pctOverall.coerceIn(0, 100)
                             val eta = if (overall in 1..99) {
                                 val elapsed = System.currentTimeMillis() - processStartMs
                                 ((elapsed * 100.0 / overall) - elapsed).toLong().coerceAtLeast(0)
                             } else null
-                            val msg = prog.message + if (prog.pausedForCooling) " ⏸" else ""
+                            val msg = prog.message + if (prog.pausedForCooling) " ⏸ hűtés" else ""
                             if (prog.pausedForCooling) {
                                 main.post { status.setTextColor(Ui.color(this, R.color.warn)) }
                             } else {
                                 main.post { status.setTextColor(Ui.color(this, R.color.textPrimary)) }
                             }
-                            updateProgressUi(overall, 0, msg, eta)
+                            // Ne nullázza a lépés-progresszt chunk-határon
+                            updateProgressUi(overall, if (prog.pausedForCooling) 0 else -1, msg, eta)
                         }
                     )
                     cues = result.cues
@@ -576,7 +679,9 @@ class FileSubtitleActivity : AppCompatActivity() {
                     working = false
                     startBtn.isEnabled = true
                     main.removeCallbacks(tick)
-                    finishStep()
+                    try { wakeLock?.release() } catch (_: Exception) {}
+                    wakeLock = null
+                                        finishStep()
                     stepsLog.add("✓ SRT kész – ${cues.size} feliratblokk")
                     updateProgressUi(100, 100, "Kész – ${cues.size} feliratblokk", 0)
                     status.text = "✓ Kész – ${cues.size} feliratblokk\n${out.name}"
@@ -591,8 +696,11 @@ class FileSubtitleActivity : AppCompatActivity() {
                     working = false
                     startBtn.isEnabled = true
                     main.removeCallbacks(tick)
-                    stepsLog.add("⏸ Megszakítva")
-                    stepList.text = stepsLog.joinToString("\n")
+                    try { wakeLock?.release() } catch (_: Exception) {}
+                    wakeLock = null
+                                        stepsLog.add("⏸ Megszakítva")
+                    stepList.text = stepsLog.joinToString("
+")
                     status.text = "Megszakítva."
                     status.setTextColor(Ui.color(this, R.color.warn))
                 }
@@ -602,8 +710,11 @@ class FileSubtitleActivity : AppCompatActivity() {
                     working = false
                     startBtn.isEnabled = true
                     main.removeCallbacks(tick)
-                    stepsLog.add("✗ Hiba: ${e.message}")
-                    stepList.text = stepsLog.joinToString("\n")
+                    try { wakeLock?.release() } catch (_: Exception) {}
+                    wakeLock = null
+                                        stepsLog.add("✗ Hiba: ${e.message}")
+                    stepList.text = stepsLog.joinToString("
+")
                     status.text = "Hiba: ${e.message}"
                     status.setTextColor(Ui.color(this, R.color.warn))
                     Toast.makeText(this, "Hiba: ${e.message}", Toast.LENGTH_LONG).show()

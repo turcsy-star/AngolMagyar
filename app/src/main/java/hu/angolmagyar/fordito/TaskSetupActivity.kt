@@ -296,13 +296,22 @@ class TaskSetupActivity : AppCompatActivity() {
         cOut.addView(Ui.title(this, "Mit írjon a felirat?", 16f))
         val gOut = radios(
             listOf(
-                "Csak fordítás magyarra – ajánlott",
-                "Eredeti + magyar (két sor)",
+                "Csak fordítás (célnyelv) – ajánlott",
+                "Eredeti + fordítás (két sor)",
                 "Csak eredeti szöveg (fordítás nélkül)"
             ), 0
         )
         cOut.addView(gOut)
         column.addView(cOut)
+
+        val cTgt = Ui.card(this)
+        cTgt.addView(Ui.title(this, "Célnyelv (fordítás)", 16f))
+        val gTgt = radios(
+            listOf("Magyar", "Angol", "Német", "Francia", "Spanyol"), 0
+        )
+        cTgt.addView(gTgt)
+        column.addView(cTgt)
+        val tgtCodes = listOf("hu", "en", "de", "fr", "es")
 
         val modelCard = Ui.card(this)
         modelCard.addView(Ui.title(this, "Szükséges modell", 16f))
@@ -379,6 +388,8 @@ class TaskSetupActivity : AppCompatActivity() {
                 1 -> true to 2
                 else -> false to 0
             }
+            val tgt = tgtCodes[gTgt.index().coerceIn(0, tgtCodes.lastIndex)]
+            fun go() = openFileSubtitle(lang.code, tr, out, tgt)
             if (lang.code != "hu") {
                 val spec = ModelManager.forSourceLang(lang.code, true, this)
                 val has = ModelManager.isInstalled(this, spec) ||
@@ -392,26 +403,21 @@ class TaskSetupActivity : AppCompatActivity() {
                         .setPositiveButton("Letöltés") { _, _ ->
                             startActivity(Intent(this, ModelsActivity::class.java))
                         }
-                        .setNegativeButton("Mégis tovább") { _, _ ->
-                            openFileSubtitle(lang.code, tr, out)
-                        }
+                        .setNegativeButton("Mégis tovább") { _, _ -> go() }
                         .show()
-                } else {
-                    openFileSubtitle(lang.code, tr, out)
-                }
-            } else {
-                openFileSubtitle(lang.code, tr, out)
-            }
+                } else go()
+            } else go()
         })
     }
 
-    private fun openFileSubtitle(src: String, translate: Boolean, output: Int) {
+    private fun openFileSubtitle(src: String, translate: Boolean, output: Int, tgt: String = "hu") {
         startActivity(
             Intent(this, FileSubtitleActivity::class.java)
                 .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Felirat videóhoz")
                 .putExtra(FileSubtitleActivity.EXTRA_SRC, src)
                 .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, translate)
                 .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, output)
+                .putExtra(FileSubtitleActivity.EXTRA_TGT, tgt)
                 .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, false)
                 .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true)
         )
