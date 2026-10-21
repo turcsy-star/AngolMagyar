@@ -105,44 +105,123 @@ object ModelManager {
 
     fun installedSpecs(ctx: Context): List<Spec> = ALL.filter { isInstalled(ctx, it) }
 
+    /** Szüneteltetés / megszakítás jelzése a letöltő szálnak. */
+    class DlControl {
+        @Volatile var paused = false
+        @Volatile var conn: HttpURLConnection? = null
+
+        fun pause() {
+            paused = true
+            val c = conn
+            if (c != null) Thread { try { c.disconnect() } catch (_: Exception) {} }.start()
+        }
+    }
+
+    class PausedException : Exception("szüneteltetve")
+
+    private fun partFile(ctx: Context, spec: Spec): File {
+        val d = File(ctx.filesDir, "dl")
+        d.mkdirs()
+        return File(d, "${spec.dirName}.zip.part")
+    }
+
+    /** Félbehagyott (folytatható) letöltés mérete bájtban. */
+    fun partialBytes(ctx: Context, spec: Spec): Long = partFile(ctx, spec).let { if (it.exists()) it.length() else 0L }
+
+    /** Egyszerű változat (Beállítások): folyamat 0–100%. */
     fun download(ctx: Context, spec: Spec, onProgress: (Int, String) -> Unit) {
+        download(ctx, spec, DlControl(), { done, total ->
+            val mb = done / (1024 * 1024)
+            onProgress(if (total > 0) (done * 80 / total).toInt() else 0, "${spec.label}: $mb MB")
+        }, { onProgress(80, it) })
+        onProgress(100, "Kész: ${spec.label}")
+    }
+
+    /**
+     * Folytatható letöltés (HTTP Range): a félbehagyott fájl a "dl" mappában marad,
+     * újraindításkor onnan megy tovább. Kapcsolat-megszakadásnál magától újrapróbál.
+     */
+    fun download(
+        ctx: Context, spec: Spec, ctl: DlControl,
+        onBytes: (done: Long, total: Long) -> Unit, onStage: (String) -> Unit
+    ) {
         if (spec.url.isBlank()) {
-            throw IllegalStateException(
-                "Nincs közvetlen URL. Telepítsd ZIP-ből (Beállítások)."
-            )
+            throw IllegalStateException("Nincs közvetlen URL. Telepítsd ZIP-ből (Beállítások).")
         }
         File(ctx.filesDir, "models").mkdirs()
-        val zipFile = File(ctx.cacheDir, "${spec.dirName}.zip")
-        val conn = URL(spec.url).openConnection() as HttpURLConnection
-        conn.connectTimeout = 20_000
-        conn.readTimeout = 180_000
-        conn.connect()
-        if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-            throw IllegalStateException("HTTP ${conn.responseCode}: ${spec.label}")
+        val part = partFile(ctx, spec)
+        var attempt = 0
+        while (true) {
+            try {
+                fetchPart(spec, part, ctl, onBytes)
+                break
+            } catch (e: PausedException) {
+                throw e
+            } catch (e: java.io.IOException) {
+                if (ctl.paused) throw PausedException()
+                attempt++
+                if (attempt >= 4) throw e
+                onStage("Megszakadt a kapcsolat, újrapróbálom ($attempt/3)…")
+                try { Thread.sleep(2000L * attempt) } catch (_: InterruptedException) {}
+            }
         }
-        val total = conn.contentLengthLong
-        conn.inputStream.use { input ->
-            zipFile.outputStream().use { out ->
-                val buf = ByteArray(64 * 1024)
-                var done = 0L
-                var lastPct = -1
-                while (true) {
-                    val n = input.read(buf)
-                    if (n < 0) break
-                    out.write(buf, 0, n)
-                    done += n
-                    val mb = done / (1024 * 1024)
-                    val pct = if (total > 0) (done * 80 / total).toInt() else 0
-                    if (pct != lastPct) {
-                        lastPct = pct
-                        onProgress(pct, "${spec.label}: $mb MB")
+        onStage("Kicsomagolás…")
+        try {
+            installFromZip(ctx, spec, part) { _, m -> onStage(m) }
+        } catch (e: Exception) {
+            part.delete() // sérült letöltés: következőre tiszta lappal indul
+            throw e
+        }
+        part.delete()
+    }
+
+    private fun fetchPart(spec: Spec, part: File, ctl: DlControl, onBytes: (Long, Long) -> Unit) {
+        var have = if (part.exists()) part.length() else 0L
+        val conn = URL(spec.url).openConnection() as HttpURLConnection
+        ctl.conn = conn
+        conn.connectTimeout = 20_000
+        conn.readTimeout = 30_000
+        if (have > 0) conn.setRequestProperty("Range", "bytes=$have-")
+        try {
+            if (ctl.paused) throw PausedException()
+            conn.connect()
+            val code = conn.responseCode
+            if (code == 416) { // már teljes
+                onBytes(have, have)
+                return
+            }
+            if (code != HttpURLConnection.HTTP_OK && code != HttpURLConnection.HTTP_PARTIAL) {
+                throw IllegalStateException("HTTP $code: ${spec.label}")
+            }
+            val append = code == HttpURLConnection.HTTP_PARTIAL
+            if (!append) have = 0
+            val len = conn.contentLengthLong
+            val total = if (len > 0) have + len else -1L
+            var done = have
+            conn.inputStream.use { input ->
+                java.io.FileOutputStream(part, append).use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    var last = 0L
+                    while (true) {
+                        if (ctl.paused) throw PausedException()
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        done += n
+                        val now = System.nanoTime()
+                        if (now - last > 250_000_000L) {
+                            last = now
+                            onBytes(done, total)
+                        }
                     }
                 }
             }
+            if (total > 0 && done < total) throw java.io.IOException("hiányos letöltés")
+            onBytes(done, total)
+        } finally {
+            try { conn.disconnect() } catch (_: Exception) {}
+            ctl.conn = null
         }
-        installFromZip(ctx, spec, zipFile, onProgress)
-        zipFile.delete()
-        onProgress(100, "Kész: ${spec.label}")
     }
 
     fun installFromZip(ctx: Context, spec: Spec, zipFile: File, onProgress: (Int, String) -> Unit) {

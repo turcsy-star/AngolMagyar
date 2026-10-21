@@ -11,6 +11,13 @@ Offline élő fordítás: Vosk + ML Kit + ONNX speaker + Wear.
 ./gradlew :wear:assembleDebug
 ```
 
+## v2.9.4 (egyszerűbb indulás és letöltés)
+- Első indítás: egy képernyő = egy engedély (Engedélyezés / Tovább), görgetés nélkül; végén egykoppintásos ajánlott modell-letöltés.
+- A főképernyő csempéi mindig látszanak; modellek nélkül szürkék, koppintásra a letöltéshez visznek, fölöttük „Első lépés: modellek" kártya.
+- Letöltés: szünet / folytatás (HTTP Range, a félbehagyott rész megmarad), Mégse hibaüzenet nélkül, várható idő (ETA) és sebesség, több modell egymás után, kapcsolatmegszakadásnál 3 automatikus újrapróbálás.
+- Modellek képernyő: nincs készülékleírás, a nagy angol modell csak jelölt ajánlás; a többi nyelv összecsukva.
+- „Felirat videóhoz": lépésről lépésre leírás és négy kész választás (angol videó → magyar felirat stb.).
+
 ## v2.9.3 (3. kör: használhatóság, adatvédelem, tesztek)
 - Önellenőrzés / „Előkészítés ellenőrzése" képernyő (modellek, magyar felismerő, fordító, overlay, mikrofon, értesítés, akkumulátor, eszköz) gombokkal; első indításkor automatikusan megnyílik.
 - Adatvédelem és mentés: online felismerés kapcsoló, beállítások + átiratok exportja/importja zipben, összes átirat törlése.

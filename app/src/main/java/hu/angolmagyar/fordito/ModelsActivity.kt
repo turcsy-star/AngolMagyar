@@ -11,6 +11,7 @@ import android.speech.RecognitionSupportCallback
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.view.View
+import android.view.WindowManager
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -53,6 +54,22 @@ class ModelsActivity : AppCompatActivity() {
     private var downloading = false
     private var progressBar: ProgressBar? = null
     private var progressText: TextView? = null
+    private var pauseBtn: android.widget.Button? = null
+    private var cancelBtn: android.widget.Button? = null
+    private var showMoreLangs = false
+
+    // letöltési sor
+    private var paused = false
+    private var pausing = false
+    private var cancelled = false
+    @Volatile private var queue: List<String> = emptyList()
+    @Volatile private var queueTotal = 0
+    @Volatile private var completedBytes = 0L
+    @Volatile private var totalEstBytes = 0L
+    @Volatile private var currentIsMl = false
+    private var ctl = ModelManager.DlControl()
+    private var progPct = 0
+    private var progMsg = ""
 
     private fun dp(v: Int) = Ui.dp(this, v)
 
@@ -83,6 +100,19 @@ class ModelsActivity : AppCompatActivity() {
         }
         build()
         refreshStatuses()
+        if (intent.getBooleanExtra(EXTRA_AUTO, false) && savedInstanceState == null) {
+            main.postDelayed({ if (!downloading && !isDestroyed) onOk() }, 700)
+        }
+    }
+
+    companion object {
+        const val EXTRA_AUTO = "auto_download"
+    }
+
+    override fun onDestroy() {
+        // az ablak elhagyásakor a letöltés szünetel (a félbehagyott rész megmarad, folytatható)
+        if (downloading && !paused) ctl.pause()
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -204,37 +234,24 @@ class ModelsActivity : AppCompatActivity() {
         root.addView(Ui.button(this, "← Vissza", false) { finish() })
         root.addView(Ui.title(this, "Modellek"))
 
-        // --- ajánlás
-        val recCard = Ui.card(this)
-        recCard.addView(Ui.title(this, "Ajánlás ehhez a telefonhoz", 17f))
-        recCard.addView(Ui.small(this, dev.summary))
-        val big = if (dev.canRunLarge)
-            "Ez a telefon bőven elbírja a nagy angol modellt (pontosabb felirat). Takarékos módban az app magától a kicsire vált."
-        else
-            "Ehhez a telefonhoz a kis angol modell ajánlott (gyors, kevésbé melegít)."
-        recCard.addView(Ui.body(this, big))
-        recCard.addView(Ui.button(this, "Ajánlott kijelölése", false) {
-            selected.clear()
-            for (id in rec) {
-                if (id == "mlkit") { if (!mlInstalled) selected.add(id) }
-                else if (!ModelManager.isInstalled(this, ModelManager.byId(id))) selected.add(id)
-            }
-            build()
-        })
-        root.addView(recCard)
-
         // --- Vosk felismerők
         val vCard = Ui.card(this)
         vCard.addView(Ui.title(this, "Felismerők (offline)", 17f))
         vCard.addView(Ui.small(this, "Jelöld be, amit használni szeretnél, majd nyomj az OK gombra."))
-        for (it in items) {
+        val dev2 = dev
+        for ((idx, it) in items.withIndex()) {
+            if (idx >= 2 && !showMoreLangs) continue
             val installed = ModelManager.isInstalled(this, it.spec)
+            val part = if (installed) 0L else ModelManager.partialBytes(this, it.spec)
             val cb = CheckBox(this).apply {
                 val name = it.spec.label.substringBefore("(").trim()
+                val note = if (it.spec.id == ModelManager.LARGE.id && dev2.canRunLarge)
+                    "pontosabb, ajánlott ennek a telefonnak" else it.note
                 text = buildString {
                     append(name).append(" (~").append(it.mb).append(" MB)")
-                    if (it.note.isNotBlank()) append(" – ").append(it.note)
+                    if (note.isNotBlank()) append(" – ").append(note)
                     if (installed) append("  ✓ telepítve")
+                    else if (part > 0) append("  ⏸ félbehagyva, folytatható")
                 }
                 minHeight = dp(48)
                 isChecked = installed || selected.contains(it.spec.id)
@@ -246,6 +263,10 @@ class ModelsActivity : AppCompatActivity() {
             }
             vCard.addView(cb)
         }
+        vCard.addView(Ui.button(this, if (showMoreLangs) "Kevesebb nyelv" else "További nyelvek (német, francia, spanyol…)", false) {
+            showMoreLangs = !showMoreLangs
+            build()
+        })
         // használt angol modell
         val enInstalledSmall = ModelManager.isInstalled(this, ModelManager.SMALL)
         val enInstalledLarge = ModelManager.isInstalled(this, ModelManager.LARGE)
@@ -315,20 +336,39 @@ class ModelsActivity : AppCompatActivity() {
 
         // --- letöltés
         val dCard = Ui.card(this)
-        val unmetered = Engines.onUnmeteredNetwork(this)
-        dCard.addView(Ui.small(this,
-            if (unmetered) "Wi-Fi kapcsolat: a letöltés egyből indulhat."
-            else if (Engines.online(this)) "Nincs Wi-Fi (mobilnet) – letöltés előtt rákérdezek."
-            else "Nincs internet."))
+        if (!downloading) {
+            val unmetered = Engines.onUnmeteredNetwork(this)
+            dCard.addView(Ui.small(this,
+                if (unmetered) "Wi-Fi: a letöltés egyből indul."
+                else if (Engines.online(this)) "Nincs Wi-Fi (mobilnet) – letöltés előtt rákérdezek, és bármikor szüneteltethető."
+                else "Nincs internet."))
+        }
         val (bar, label) = Ui.progressRow(this)
         progressBar = bar
         progressText = label
-        bar.visibility = View.GONE
-        label.visibility = View.GONE
+        if (downloading) {
+            bar.isIndeterminate = progPct < 0
+            if (progPct >= 0) bar.progress = progPct
+            label.text = progMsg
+        } else {
+            bar.visibility = View.GONE
+            label.visibility = View.GONE
+        }
         dCard.addView(bar)
         dCard.addView(label)
-        okButton = Ui.button(this, okLabel(), true) { onOk() }
-        dCard.addView(okButton!!)
+        if (downloading) {
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pauseBtn = Ui.button(this, "", true) { onPauseResume() }
+            cancelBtn = Ui.button(this, "Mégse", false) { onCancel() }
+            row.addView(pauseBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(6) })
+            row.addView(cancelBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = dp(6) })
+            dCard.addView(row)
+            updatePauseUi()
+            okButton = null
+        } else {
+            okButton = Ui.button(this, okLabel(), true) { onOk() }
+            dCard.addView(okButton!!)
+        }
         root.addView(dCard)
     }
 
@@ -375,51 +415,178 @@ class ModelsActivity : AppCompatActivity() {
     }
 
     private fun startDownload(ids: List<String>) {
+        queue = ids.sortedBy { if (it == "mlkit") 1 else 0 }
+        queueTotal = queue.size
+        completedBytes = 0L
+        totalEstBytes = totalMb(queue) * MB
         downloading = true
+        cancelled = false
+        pausing = false
+        progPct = -1
+        progMsg = "Indítás…"
         build()
-        progressBar?.visibility = View.VISIBLE
-        progressText?.visibility = View.VISIBLE
-        okButton?.isEnabled = false
+        runQueue()
+    }
+
+    private val MB = 1024L * 1024L
+
+    private fun estBytes(id: String): Long =
+        (if (id == "mlkit") 60 else items.firstOrNull { it.spec.id == id }?.mb ?: 0) * MB
+
+    private fun shortName(id: String): String =
+        if (id == "mlkit") "Fordítómodell"
+        else ModelManager.byId(id).label.substringBefore("(").trim()
+
+    private fun fmtEta(sec: Long): String = when {
+        sec < 60 -> "kb. $sec mp"
+        sec < 3600 -> "kb. ${(sec + 59) / 60} perc"
+        else -> "kb. ${sec / 3600} ó ${(sec % 3600 + 59) / 60} p"
+    }
+
+    private fun friendly(e: Exception): String {
+        val m = e.message ?: return "ismeretlen hiba"
+        return when {
+            m.contains("abort", true) || m.contains("reset", true) || m.contains("timed out", true) ||
+                m.contains("hiányos", true) || m.contains("Unable to resolve", true) ->
+                "megszakadt a kapcsolat – nyomd meg újra az OK-t, onnan folytatja"
+            else -> m
+        }
+    }
+
+    private fun runQueue() {
+        paused = false
+        pausing = false
+        ctl = ModelManager.DlControl()
+        val c = ctl
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        updatePauseUi()
         val app = applicationContext
         Thread {
             val failed = ArrayList<String>()
-            for ((idx, id) in ids.withIndex()) {
+            var lastT = 0L
+            var lastB = 0L
+            var speed = 0.0
+            while (true) {
+                val id = queue.firstOrNull() ?: break
+                val est = estBytes(id)
+                currentIsMl = id == "mlkit"
+                main.post { updatePauseUi() }
+                val idx = queueTotal - queue.size + 1
                 try {
                     if (id == "mlkit") {
-                        post(idx, ids.size, 0, "Fordítómodell letöltése…")
+                        post(-1, "($idx/$queueTotal) Fordítómodell letöltése… (nem szüneteltethető)")
                         downloadTranslator()
                     } else {
                         val spec = ModelManager.byId(id)
-                        ModelManager.download(app, spec) { pct, msg -> post(idx, ids.size, pct, msg) }
+                        ModelManager.download(app, spec, c, { done, total ->
+                            val now = System.currentTimeMillis()
+                            if (lastT == 0L) {
+                                lastT = now; lastB = done
+                            } else if (now - lastT >= 1000) {
+                                val inst = (done - lastB) * 1000.0 / (now - lastT)
+                                speed = if (speed == 0.0) inst else speed * 0.7 + inst * 0.3
+                                lastT = now; lastB = done
+                            }
+                            val cur = if (total > 0) total else est
+                            val overall = completedBytes + done
+                            val overallTotal = (totalEstBytes - est + cur).coerceAtLeast(1L)
+                            val pct = (overall * 100 / overallTotal).toInt()
+                            val sp = if (speed > 0) String.format(java.util.Locale.US, "%.1f MB/s", speed / MB) else "…"
+                            val eta = if (speed > 50_000) " · " + fmtEta(((overallTotal - overall) / speed).toLong().coerceAtLeast(1)) else ""
+                            post(pct, "($idx/$queueTotal) ${shortName(id)} · ${done / MB} / ${cur / MB} MB · $sp$eta")
+                        }, { stage -> post(-1, "($idx/$queueTotal) ${shortName(id)}: $stage") })
                         if (id == ModelManager.LARGE.id) prefs.modelId = "large"
                     }
+                    completedBytes += est
+                    queue = queue.drop(1)
+                } catch (e: ModelManager.PausedException) {
+                    break
                 } catch (e: Exception) {
-                    failed.add("$id: ${e.message}")
+                    failed.add("${shortName(id)}: ${friendly(e)}")
+                    completedBytes += est
+                    queue = queue.drop(1)
                 }
             }
-            main.post {
-                downloading = false
-                selected.clear()
-                if (failed.isEmpty()) {
-                    Toast.makeText(this, "Kész, minden letöltődött.", Toast.LENGTH_LONG).show()
-                } else {
-                    AlertDialog.Builder(this)
-                        .setTitle("Letöltési hiba")
-                        .setMessage(failed.joinToString("\n"))
-                        .setPositiveButton("OK", null)
-                        .show()
-                }
-                build()
-                refreshStatuses()
-            }
+            main.post { onQueueStopped(failed) }
         }.start()
     }
 
-    private fun post(idx: Int, total: Int, pct: Int, msg: String) {
+    private fun onQueueStopped(failed: List<String>) {
+        if (isDestroyed) return
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (cancelled) {
+            downloading = false
+            queue = emptyList()
+            Toast.makeText(this, "Megszakítva. A félbehagyott rész megmarad, később folytatható.", Toast.LENGTH_LONG).show()
+            build()
+            refreshStatuses()
+            return
+        }
+        if (queue.isNotEmpty() && ctl.paused) {
+            paused = true
+            pausing = false
+            progMsg = progMsg.substringBefore(" · ") + " · szüneteltetve"
+            progressText?.text = progMsg
+            updatePauseUi()
+            return
+        }
+        downloading = false
+        selected.clear()
+        if (failed.isEmpty()) {
+            Toast.makeText(this, "Kész, minden letöltődött.", Toast.LENGTH_LONG).show()
+        } else {
+            AlertDialog.Builder(this)
+                .setTitle("Letöltési hiba")
+                .setMessage(failed.joinToString("\n"))
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        build()
+        refreshStatuses()
+    }
+
+    private fun updatePauseUi() {
+        val pb = pauseBtn ?: return
+        pb.text = if (paused) "▶ Folytatás" else if (pausing) "Szünetel…" else "⏸ Szünet"
+        pb.isEnabled = paused || (!pausing && !currentIsMl)
+        cancelBtn?.isEnabled = paused || (!pausing && !currentIsMl)
+    }
+
+    private fun onPauseResume() {
+        if (paused) {
+            if (!Engines.online(this)) {
+                Toast.makeText(this, "Nincs internetkapcsolat.", Toast.LENGTH_LONG).show()
+                return
+            }
+            runQueue()
+        } else if (!pausing) {
+            pausing = true
+            ctl.pause()
+            updatePauseUi()
+        }
+    }
+
+    private fun onCancel() {
+        cancelled = true
+        if (paused) {
+            onQueueStopped(emptyList())
+        } else {
+            pausing = true
+            ctl.pause()
+            updatePauseUi()
+        }
+    }
+
+    private fun post(pct: Int, msg: String) {
+        progPct = pct
+        progMsg = msg
         main.post {
-            progressBar?.isIndeterminate = false
-            progressBar?.progress = pct.coerceIn(0, 100)
-            progressText?.text = "(${idx + 1}/$total) $msg"
+            if (isDestroyed) return@post
+            progressBar?.let {
+                if (pct < 0) it.isIndeterminate = true
+                else { it.isIndeterminate = false; it.progress = pct.coerceIn(0, 100) }
+            }
+            progressText?.text = msg
         }
     }
 

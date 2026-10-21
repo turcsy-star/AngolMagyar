@@ -258,39 +258,43 @@ class TaskSetupActivity : AppCompatActivity() {
     // ---------------------------------------------------------- film felirat
 
     private fun buildSubtitle() {
-        column.addView(Ui.title(this, "Felirat filmhez"))
-        column.addView(Ui.small(this, "Film- vagy hangfájlból .srt feliratfájl, a lejátszóba tölthető."))
+        column.addView(Ui.title(this, "Felirat videóhoz"))
+        val how = Ui.card(this)
+        how.addView(Ui.title(this, "Így megy", 16f))
+        how.addView(Ui.body(this,
+            "1. Válaszd ki, mi legyen a feliratban (lent).\n" +
+                "2. Nyomd meg az indítást, és válaszd ki a videót vagy hangfájlt.\n" +
+                "3. Az app felismeri a beszédet és lefordítja – ez hosszú filmnél sokáig tart, töltőn, Wi-Fin érdemes.\n" +
+                "4. Mentsd el a .srt fájlt a videó mellé, a videóval azonos néven: a lejátszó (VLC, MX Player) magától betölti."))
+        column.addView(how)
 
         val c1 = Ui.card(this)
-        c1.addView(Ui.title(this, "A film nyelve", 16f))
-        val gLang = radios(listOf("Angol", "Magyar"), 0)
-        c1.addView(gLang)
-        val tr = switchRow("Fordítás a másik nyelvre", true)
-        c1.addView(tr)
+        c1.addView(Ui.title(this, "Mi kerüljön a feliratba?", 16f))
+        val g = radios(
+            listOf(
+                "Angol videó → magyar felirat",
+                "Angol videó → angol + magyar (két sor)",
+                "Magyar videó → angol felirat",
+                "Magyar videó → magyar felirat (fordítás nélkül)"
+            ), 0
+        )
+        c1.addView(g)
         column.addView(c1)
 
-        val c2 = Ui.card(this)
-        c2.addView(Ui.title(this, "Mi kerüljön a feliratba?", 16f))
-        val gOut = radios(
-            listOf("Csak a fordítás", "Eredeti + fordítás (két sor)", "Csak az eredeti szöveg"), 0
-        )
-        c2.addView(gOut)
-        column.addView(c2)
-
-        column.addView(Ui.small(this, "Hosszú filmnél a feldolgozás sokáig tarthat; töltőn, Wi-Fin érdemes."))
-        column.addView(Ui.button(this, "Fájl kiválasztása és indítás", true) {
-            val hu = gLang.index() == 1
-            val out = when (gOut.index()) {
-                0 -> 1
-                1 -> 2
-                else -> 0
+        column.addView(Ui.button(this, "Videó kiválasztása és indítás", true) {
+            // src, translate, output (0 = eredeti, 1 = fordítás, 2 = mindkettő)
+            val (src, tr, out) = when (g.index()) {
+                0 -> Triple("en", true, 1)
+                1 -> Triple("en", true, 2)
+                2 -> Triple("hu", true, 1)
+                else -> Triple("hu", false, 0)
             }
             startActivity(
                 Intent(this, FileSubtitleActivity::class.java)
-                    .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Felirat filmhez")
-                    .putExtra(FileSubtitleActivity.EXTRA_SRC, if (hu) "hu" else "en")
-                    .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, tr.isChecked)
-                    .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, if (tr.isChecked) out else 0)
+                    .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Felirat videóhoz")
+                    .putExtra(FileSubtitleActivity.EXTRA_SRC, src)
+                    .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, tr)
+                    .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, out)
                     .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, false)
                     .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true)
             )

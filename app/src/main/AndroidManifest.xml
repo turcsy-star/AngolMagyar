@@ -38,6 +38,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".SetupWizardActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".PrivacyActivity"
             android:exported="false" />
 

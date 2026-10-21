@@ -129,7 +129,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (!prefs.onboarded && savedInstanceState == null && intent.getStringExtra(EXTRA_AUTO_START) == null) {
-            startActivity(Intent(this, DiagnosticsActivity::class.java))
+            startActivity(Intent(this, SetupWizardActivity::class.java))
         }
         handleAutoStart(intent)
     }
@@ -307,8 +307,6 @@ class MainActivity : AppCompatActivity() {
 
         if (AppState.running) {
             runningCard()
-        } else if (!allReady()) {
-            wizardCard()
         } else {
             readyCards()
         }
@@ -430,20 +428,46 @@ class MainActivity : AppCompatActivity() {
             addView(chipRow)
         })
 
-        // Mit szeretnél? – ikonos csempék, mindegyik saját varázslóval
-        fun open(task: String) = startActivity(
-            Intent(this, TaskSetupActivity::class.java).putExtra(TaskSetupActivity.EXTRA_TASK, task)
-        )
+        // Mit szeretnél? – ikonos csempék, mindegyik saját varázslóval.
+        // Modellek nélkül is látszanak, csak szürkék; koppintásra a letöltéshez visznek.
+        val modelsOk = voskReady() && translatorReady
+        fun open(task: String) {
+            val needsLive = task == TaskSetupActivity.TASK_LIVE || task == TaskSetupActivity.TASK_INTERPRETER
+            when {
+                !modelsOk -> {
+                    toast("Előbb töltsd le a modelleket.")
+                    startActivity(Intent(this, ModelsActivity::class.java))
+                }
+                needsLive && (!hasMic() || !hasOverlay()) ->
+                    startActivity(Intent(this, SetupWizardActivity::class.java))
+                else -> startActivity(
+                    Intent(this, TaskSetupActivity::class.java).putExtra(TaskSetupActivity.EXTRA_TASK, task)
+                )
+            }
+        }
+        if (!modelsOk) {
+            val card = Ui.card(this)
+            card.addView(Ui.title(this, "Első lépés: modellek", 18f))
+            card.addView(Ui.small(this,
+                if (Engines.device(this).canRunLarge)
+                    "Ajánlott: nagy angol felismerő + fordító (~190 MB)."
+                else "Ajánlott: kis angol felismerő + fordító (~100 MB)."))
+            card.addView(Ui.button(this, "Ajánlott letöltése", true) {
+                startActivity(Intent(this, ModelsActivity::class.java).putExtra(ModelsActivity.EXTRA_AUTO, true))
+            })
+            card.addView(Ui.button(this, "Modellek kiválasztása", false) { startDownload() })
+            column.addView(card)
+        }
         column.addView(Ui.small(this, "Mit szeretnél?").apply { setPadding(0, dp(14), 0, dp(2)) })
         column.addView(Ui.tileRow(
             this,
-            Ui.tile(this, R.drawable.ic_play, "Élő fordítás", "film, videó, előadás felirata") { open(TaskSetupActivity.TASK_LIVE) },
-            Ui.tile(this, R.drawable.ic_swap, "Tolmács", "magyar ⇄ angol beszélgetés") { open(TaskSetupActivity.TASK_INTERPRETER) }
+            Ui.tile(this, R.drawable.ic_play, "Élő fordítás", "film, videó, előadás felirata", modelsOk) { open(TaskSetupActivity.TASK_LIVE) },
+            Ui.tile(this, R.drawable.ic_swap, "Tolmács", "magyar ⇄ angol beszélgetés", modelsOk) { open(TaskSetupActivity.TASK_INTERPRETER) }
         ))
         column.addView(Ui.tileRow(
             this,
-            Ui.tile(this, R.drawable.ic_clipboard, "Átirat", "fájlból vagy felvételből") { open(TaskSetupActivity.TASK_TRANSCRIBE) },
-            Ui.tile(this, R.drawable.ic_subtitles, "Film felirat", ".srt fájl készítése") { open(TaskSetupActivity.TASK_SUBTITLE) }
+            Ui.tile(this, R.drawable.ic_clipboard, "Átirat", "fájlból vagy felvételből", modelsOk) { open(TaskSetupActivity.TASK_TRANSCRIBE) },
+            Ui.tile(this, R.drawable.ic_subtitles, "Film felirat", "angol videóból magyar .srt", modelsOk) { open(TaskSetupActivity.TASK_SUBTITLE) }
         ))
 
         // Gyors indítás: a legutóbbi beállításokkal

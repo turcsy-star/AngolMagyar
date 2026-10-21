@@ -200,7 +200,8 @@ object Ui {
 
     /** Négyzetes indító csempe: ikon + cím + rövid leírás. Két csempe fér egymás mellé. */
     fun tile(
-        ctx: Context, iconRes: Int, title: String, subtitle: String, onClick: () -> Unit
+        ctx: Context, iconRes: Int, title: String, subtitle: String,
+        enabled: Boolean = true, onClick: () -> Unit
     ): LinearLayout {
         val shape = GradientDrawable().apply {
             cornerRadius = dp(ctx, 18).toFloat()
@@ -215,7 +216,8 @@ object Ui {
             isClickable = true
             isFocusable = true
             minimumHeight = dp(ctx, 132)
-            contentDescription = "$title. $subtitle"
+            contentDescription = if (enabled) "$title. $subtitle" else "$title. $subtitle. Előbb töltsd le a modelleket."
+            if (!enabled) alpha = 0.45f
             setOnClickListener {
                 Haptics.click(ctx)
                 animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).withEndAction {
@@ -225,7 +227,7 @@ object Ui {
             }
             addView(ImageView(ctx).apply {
                 setImageResource(iconRes)
-                setColorFilter(color(ctx, R.color.primary))
+                setColorFilter(color(ctx, if (enabled) R.color.primary else R.color.textSecondary))
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 layoutParams = LinearLayout.LayoutParams(dp(ctx, 34), dp(ctx, 34)).apply {
                     bottomMargin = dp(ctx, 10)
