@@ -424,8 +424,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 "Hátralévő: ${fmtDur(lastEtaMs)} · kész kb. ${fmtClock(now + lastEtaMs)}"
             } else "Hátralévő: számítás…"
             timeLabel.text = "Eltelt: ${fmtDur(elapsed)} · lépés: ${fmtDur(stepElapsed)}" + "\n" + etaPart
-            stepList.text = stepsLog.joinToString("
-")
+            stepList.text = stepsLog.joinToString("\n")
             status.text = stepMsg
             val pctShow = if (overallPct >= 0) overallPct else progress.progress
             postSrtNotif(stepMsg, pctShow, working)
@@ -724,8 +723,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                     try { wakeLock?.release() } catch (_: Exception) {}
                     wakeLock = null
                                         stepsLog.add("⏸ Megszakítva")
-                    stepList.text = stepsLog.joinToString("
-")
+                    stepList.text = stepsLog.joinToString("\n")
                     status.text = "Megszakítva."
                     status.setTextColor(Ui.color(this, R.color.warn))
                 }
@@ -738,8 +736,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                     try { wakeLock?.release() } catch (_: Exception) {}
                     wakeLock = null
                                         stepsLog.add("✗ Hiba: ${e.message}")
-                    stepList.text = stepsLog.joinToString("
-")
+                    stepList.text = stepsLog.joinToString("\n")
                     status.text = "Hiba: ${e.message}"
                     status.setTextColor(Ui.color(this, R.color.warn))
                     Toast.makeText(this, "Hiba: ${e.message}", Toast.LENGTH_LONG).show()
