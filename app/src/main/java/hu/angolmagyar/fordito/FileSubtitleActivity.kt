@@ -55,6 +55,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         const val EXTRA_DIARIZE = "diarize"
         const val EXTRA_AUTOSTART = "autostart" // fájlválasztó azonnal, feldolgozás a választás után
         const val EXTRA_TGT = "tgt" // célnyelv: hu/en/de/…
+        private const val SRT_CH = "srt_process"
+        private const val SRT_NOTIF = 4402
     }
 
     private var autoStart = false
@@ -69,13 +71,18 @@ class FileSubtitleActivity : AppCompatActivity() {
             val elapsed = now - processStartMs
             val stepElapsed = now - stepStartMs
             if (::timeLabel.isInitialized) {
-                timeLabel.text = "Eltelt: ${fmtDur(elapsed)} (lépés: ${fmtDur(stepElapsed)})" +
-                    (if (lastEtaMs > 0) " · becsült hátralévő: ${fmtDur(lastEtaMs)}" else "")
+                val etaPart = if (lastEtaMs > 0)
+                    "Hátralévő: ${fmtDur(lastEtaMs)} · kész kb. ${fmtClock(now + lastEtaMs)}"
+                else "Hátralévő: számítás…"
+                val chunkPart = if (chunkTotal > 0) " · chunk $chunkCurrent/$chunkTotal" else ""
+                timeLabel.text = "Eltelt: ${fmtDur(elapsed)} · lépés: ${fmtDur(stepElapsed)}$chunkPart" + "\n" + etaPart
             }
             main.postDelayed(this, 1000)
         }
     }
     private var lastEtaMs = 0L
+    private var chunkCurrent = 0
+    private var chunkTotal = 0
     private var wakeLock: android.os.PowerManager.WakeLock? = null
     private lateinit var srcGroup: RadioGroup
     private lateinit var translateSwitch: SwitchCompat
@@ -288,7 +295,7 @@ class FileSubtitleActivity : AppCompatActivity() {
 
         // --- Folyamatpanel (varázsló-szerű lépések + idő + progress) ---
         progressPanel = Ui.card(this).apply { visibility = View.GONE }
-        stepTitle = Ui.title(this, "Folyamat", 16f)
+        stepTitle = Ui.title(this, "Folyamat (Whisper-szerű részletek)", 16f)
         progressPanel.addView(stepTitle)
         stepList = TextView(this).apply {
             textSize = 13f
@@ -296,7 +303,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             setLineSpacing(0f, 1.15f)
         }
         progressPanel.addView(stepList)
-        overallLabel = Ui.small(this, "Teljes folyamat")
+        overallLabel = Ui.small(this, "Teljes: 0% · chunk –/–")
         progressPanel.addView(overallLabel)
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
@@ -367,8 +374,12 @@ class FileSubtitleActivity : AppCompatActivity() {
     private fun beginStep(name: String) {
         currentStepName = name
         stepStartMs = System.currentTimeMillis()
+        // Előző aktív ▶ → ✓ ha még nem volt finishStep
+        val last = stepsLog.lastOrNull()
+        if (last != null && last.startsWith("▶ ")) {
+            stepsLog[stepsLog.size - 1] = "✓ " + last.removePrefix("▶ ")
+        }
         stepsLog.add("▶ $name")
-        // overallPct = -1: ne nullázza a teljes folyamat sávot
         updateProgressUi(-1, 0, name, null)
     }
 
@@ -387,7 +398,11 @@ class FileSubtitleActivity : AppCompatActivity() {
             if (overallPct >= 0) {
                 progress.isIndeterminate = overallPct <= 0 && stepPct <= 0
                 progress.progress = overallPct.coerceIn(0, 100)
-                overallLabel.text = "Teljes folyamat: $overallPct%"
+                val chunkPart = if (chunkTotal > 0)
+                    " · chunk $chunkCurrent/$chunkTotal" else ""
+                val finishPart = if (lastEtaMs > 0)
+                    " · kész kb. ${fmtClock(System.currentTimeMillis() + lastEtaMs)}" else ""
+                overallLabel.text = "Teljes: $overallPct%$chunkPart$finishPart"
             }
             if (stepPct >= 0) {
                 stepProgress.isIndeterminate = stepPct == 0 && overallPct < 100
@@ -512,8 +527,14 @@ class FileSubtitleActivity : AppCompatActivity() {
             main.post(tick)
             // Lépésterv a panel tetején
             stepsLog.clear()
-            stepsLog.add("Terv: 1) hang  2) felismerés (chunk X/Y)  3) fordítás  4) SRT")
-            postSrtNotif("SRT készítés indult…", 0, true)
+            stepsLog.clear()
+            stepsLog.add("— Részletes folyamat —")
+            stepsLog.add("1. Hang kinyerése a fájlból")
+            stepsLog.add("2. PCM betöltése")
+            stepsLog.add("3. Felismerés (chunk X/Y)")
+            stepsLog.add("4. Fordítás (ha kell)")
+            stepsLog.add("5. SRT mentés")
+            postSrtNotif("SRT / átirat készül…", 0, true)
             postSrtNotif("SRT készítés indult…", 0, true)
         }
         beginStep("Előkészítés")
@@ -595,6 +616,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                                 { t -> speakerAt(shifted, t) }
                             ) { pct, msg ->
                                 val tc = totalChunksEst.coerceAtLeast(1)
+                                chunkCurrent = idx + 1
+                                chunkTotal = tc
                                 // Teljes folyamat: kész chunkok + aktuális chunk %-a
                                 val overall = ((idx * 100) + pct.coerceIn(0, 100)) / tc
                                 val elapsedChunk = System.currentTimeMillis() - chunkStartMs
@@ -617,6 +640,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                         },
                         onProgress = { prog ->
                             totalChunksEst = prog.totalChunks.coerceAtLeast(1)
+                            chunkTotal = totalChunksEst
+                            chunkCurrent = prog.chunkIndex.coerceAtLeast(0)
                             val overall = prog.pctOverall.coerceIn(0, 100)
                             val eta = if (overall in 1..99) {
                                 val elapsed = System.currentTimeMillis() - processStartMs

@@ -193,70 +193,6 @@ class TaskSetupActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------- átirat
 
-    private fun buildTranscribe() {
-        column.addView(Ui.title(this, "Átirat"))
-        column.addView(Ui.small(this, "Beszédből szöveg: hang- vagy videófájlból, vagy élő felvételből."))
-
-        val c0 = Ui.card(this)
-        c0.addView(Ui.title(this, "Honnan?", 16f))
-        val gSrc = radios(listOf("Fájlból (hang vagy videó)", "Élő felvétel (mikrofon)"), 0)
-        c0.addView(gSrc)
-        column.addView(c0)
-
-        val c1 = Ui.card(this)
-        c1.addView(Ui.title(this, "A beszéd nyelve", 16f))
-        val gLang = radios(listOf("Magyar", "Angol"), 0)
-        c1.addView(gLang)
-        val tr = switchRow("Fordítás is a másik nyelvre", false)
-        c1.addView(tr)
-        column.addView(c1)
-
-        val c2 = Ui.card(this)
-        c2.addView(Ui.title(this, "Beszélők (ha tudod)", 16f))
-        val diar = switchRow("Beszélők megkülönböztetése (S1, S2…)", false)
-        c2.addView(diar)
-        c2.addView(Ui.small(this, "Nevek soronként, pl. S1=Anna. Üresen hagyhatod."))
-        val names = AppCompatEditText(this).apply {
-            setText(prefs.speakerNames)
-            hint = "S1=Anna\nS2=Péter"
-            minLines = 2
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-        }
-        c2.addView(names)
-        column.addView(c2)
-
-        column.addView(Ui.button(this, "Indítás", true) {
-            val hu = gLang.index() == 0
-            prefs.speakerNames = names.text?.toString() ?: ""
-            if (gSrc.index() == 0) {
-                startActivity(
-                    Intent(this, FileSubtitleActivity::class.java)
-                        .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Átirat fájlból")
-                        .putExtra(FileSubtitleActivity.EXTRA_SRC, if (hu) "hu" else "en")
-                        .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, tr.isChecked)
-                        .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, if (tr.isChecked) 2 else 0)
-                        .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, diar.isChecked)
-                        .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true)
-                )
-                finish()
-            } else {
-                // élő felvétel: csak átirat (vagy fordítással), mentéssel
-                prefs.saveTranscript = true
-                if (tr.isChecked) {
-                    prefs.translateDir = if (hu) Prefs.DIR_HU_EN else Prefs.DIR_EN_HU
-                    if (!hu) prefs.sourceLang = Prefs.LANG_EN
-                    prefs.targetLang = if (hu) Prefs.LANG_EN else Prefs.LANG_HU
-                } else {
-                    prefs.translateDir = Prefs.DIR_NONE
-                    prefs.sourceLang = if (hu) Prefs.LANG_HU else Prefs.LANG_EN
-                }
-                startLive(TranslateService.MODE_MIC)
-            }
-        })
-    }
-
-    // ---------------------------------------------------------- film felirat
-
     private data class LangOpt(val code: String, val label: String)
 
     private val subtitleLangs = listOf(
@@ -268,6 +204,193 @@ class TaskSetupActivity : AppCompatActivity() {
         LangOpt("uk", "Ukrán"),
         LangOpt("hu", "Magyar")
     )
+
+    private fun buildTranscribe() {
+        column.addView(Ui.title(this, "Átirat"))
+        column.addView(Ui.small(this,
+            "1. Honnan jön a hang.\n" +
+                "2. Milyen nyelvű a beszéd.\n" +
+                "3. Kell-e fordítás / beszélők.\n" +
+                "4. Fájl vagy élő felvétel → részletes folyamat (chunk, ETA)."
+        ))
+
+        val c0 = Ui.card(this)
+        c0.addView(Ui.title(this, "Honnan?", 16f))
+        val gSrc = radios(listOf("Fájlból (hang vagy videó)", "Élő felvétel (mikrofon)"), 0)
+        c0.addView(gSrc)
+        column.addView(c0)
+
+        // Nyelvek – ugyanaz a lista, mint a film-feliratnál
+        val cLang = Ui.card(this)
+        cLang.addView(Ui.title(this, "A beszéd nyelve", 16f))
+        val checks = ArrayList<androidx.appcompat.widget.AppCompatCheckBox>()
+        subtitleLangs.forEachIndexed { i, opt ->
+            val cb = androidx.appcompat.widget.AppCompatCheckBox(this).apply {
+                text = opt.label
+                isChecked = opt.code == "hu" // átiratnál magyar az alap
+                minHeight = dp(48)
+            }
+            checks.add(cb)
+            cLang.addView(cb)
+        }
+        column.addView(cLang)
+
+        fun selectedLang(): LangOpt {
+            val i = checks.indexOfFirst { it.isChecked }.coerceAtLeast(0)
+            return subtitleLangs[i]
+        }
+
+        val cOut = Ui.card(this)
+        cOut.addView(Ui.title(this, "Kimenet", 16f))
+        val tr = switchRow("Fordítás is (célnyelv)", false)
+        cOut.addView(tr)
+        val gTgt = radios(
+            listOf("Magyar", "Angol", "Német", "Francia", "Spanyol"), 1 // angol cél ha magyar forrás
+        )
+        cOut.addView(Ui.small(this, "Célnyelv (ha fordítasz):"))
+        cOut.addView(gTgt)
+        val tgtCodes = listOf("hu", "en", "de", "fr", "es")
+        column.addView(cOut)
+
+        val c2 = Ui.card(this)
+        c2.addView(Ui.title(this, "Beszélők (opcionális)", 16f))
+        val diar = switchRow("Beszélők megkülönböztetése (S1, S2…)", false)
+        c2.addView(diar)
+        c2.addView(Ui.small(this, "Nevek soronként, pl. S1=Anna. Üresen hagyható."))
+        val names = AppCompatEditText(this).apply {
+            setText(prefs.speakerNames)
+            hint = "S1=Anna\nS2=Péter"
+            minLines = 2
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+        }
+        c2.addView(names)
+        column.addView(c2)
+
+        // Modell státusz
+        val modelCard = Ui.card(this)
+        modelCard.addView(Ui.title(this, "Szükséges modell", 16f))
+        val modelStatus = Ui.body(this, "Ellenőrzés…")
+        modelCard.addView(modelStatus)
+        val modelBtn = Ui.button(this, "Hiányzó modell letöltése…", true) {
+            startActivity(Intent(this, ModelsActivity::class.java))
+        }
+        modelBtn.visibility = android.view.View.GONE
+        modelCard.addView(modelBtn)
+        column.addView(modelCard)
+
+        fun refreshModelStatus() {
+            val lang = selectedLang()
+            val lines = ArrayList<String>()
+            var missing = false
+            if (lang.code == "hu") {
+                val ok = try {
+                    SystemAsrSupport.onDeviceAvailable(this) ||
+                        (Prefs(this).allowOnlineAsr && SystemAsrSupport.anyAvailable(this)) ||
+                        ModelManager.isInstalled(this, ModelManager.HU_LARGE)
+                } catch (_: Exception) { false }
+                if (ok) lines.add("✓ Magyar felismerő elérhető")
+                else {
+                    lines.add("✗ Magyar offline felismerő nem elérhető")
+                    missing = true
+                }
+            } else {
+                val spec = ModelManager.forSourceLang(lang.code, lang.code == "en", this)
+                val has = ModelManager.isInstalled(this, spec) ||
+                    (lang.code == "en" && (
+                        ModelManager.isInstalled(this, ModelManager.LARGE) ||
+                            ModelManager.isInstalled(this, ModelManager.SMALL)))
+                if (has) lines.add("✓ ${lang.label} felismerő telepítve")
+                else {
+                    lines.add("✗ Nincs ${lang.label} felismerő")
+                    lines.add("  Ajánlott: ${spec.label}")
+                    missing = true
+                }
+            }
+            if (tr.isChecked) lines.add("Fordítás: ML Kit → ${tgtCodes[gTgt.index().coerceIn(0, tgtCodes.lastIndex)]}")
+            modelStatus.text = lines.joinToString("\n")
+            modelBtn.visibility = if (missing) android.view.View.VISIBLE else android.view.View.GONE
+        }
+
+        checks.forEach { cb ->
+            cb.setOnCheckedChangeListener { button, checked ->
+                if (checked) {
+                    checks.forEach { if (it != button) it.isChecked = false }
+                    refreshModelStatus()
+                } else if (checks.none { it.isChecked }) {
+                    button.isChecked = true
+                }
+            }
+        }
+        tr.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
+        gTgt.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
+        refreshModelStatus()
+
+        // Folyamat-előnézet (Whisper-szerű lépéslista)
+        val planCard = Ui.card(this)
+        planCard.addView(Ui.title(this, "Fájl esetén a folyamat", 16f))
+        planCard.addView(Ui.body(this,
+            "1. Hang kinyerése a fájlból\n" +
+                "2. PCM betöltés (hossz megjelenik)\n" +
+                "3. Felismerés chunkokban (X/Y, %)\n" +
+                "4. Opcionális fordítás\n" +
+                "5. Átirat / SRT mentés\n\n" +
+                "Közben: teljes % · lépés % · eltelt / hátralévő · kész kb. óó:pp\n" +
+                "Háttérben is fut (értesítés + wake lock)."
+        ))
+        column.addView(planCard)
+
+        column.addView(Ui.button(this, "Indítás", true) {
+            val lang = selectedLang()
+            prefs.speakerNames = names.text?.toString() ?: ""
+            val tgt = tgtCodes[gTgt.index().coerceIn(0, tgtCodes.lastIndex)]
+            if (gSrc.index() == 0) {
+                // Fájl → FileSubtitle ugyanazzal a részletes UI-val
+                fun go() {
+                    openFileSubtitle(
+                        src = lang.code,
+                        translate = tr.isChecked,
+                        output = if (tr.isChecked) 2 else 0,
+                        tgt = tgt,
+                        title = "Átirat fájlból",
+                        diarize = diar.isChecked
+                    )
+                }
+                if (lang.code != "hu") {
+                    val spec = ModelManager.forSourceLang(lang.code, true, this)
+                    val has = ModelManager.isInstalled(this, spec) ||
+                        (lang.code == "en" && (
+                            ModelManager.isInstalled(this, ModelManager.LARGE) ||
+                                ModelManager.isInstalled(this, ModelManager.SMALL)))
+                    if (!has) {
+                        android.app.AlertDialog.Builder(this)
+                            .setTitle("Hiányzik a ${lang.label} modell")
+                            .setMessage("Töltsd le: ${spec.label}. Wi-Fin, töltőn ajánlott.")
+                            .setPositiveButton("Letöltés") { _, _ ->
+                                startActivity(Intent(this, ModelsActivity::class.java))
+                            }
+                            .setNegativeButton("Mégis tovább") { _, _ -> go() }
+                            .show()
+                    } else go()
+                } else go()
+            } else {
+                prefs.saveTranscript = true
+                if (tr.isChecked) {
+                    prefs.translateDir = "${lang.code}_${tgt}"
+                    prefs.sourceLang = lang.code
+                    prefs.targetLang = tgt
+                } else {
+                    prefs.translateDir = Prefs.DIR_NONE
+                    prefs.sourceLang = lang.code
+                }
+                startLive(TranslateService.MODE_MIC)
+            }
+        })
+    }
+
+    // ---------------------------------------------------------- film felirat
+
+    // ---------------------------------------------------------- film felirat
 
     private fun buildSubtitle() {
         column.addView(Ui.title(this, "Felirat videóhoz"))
@@ -410,15 +533,22 @@ class TaskSetupActivity : AppCompatActivity() {
         })
     }
 
-    private fun openFileSubtitle(src: String, translate: Boolean, output: Int, tgt: String = "hu") {
+    private fun openFileSubtitle(
+        src: String,
+        translate: Boolean,
+        output: Int,
+        tgt: String = "hu",
+        title: String = "Felirat videóhoz",
+        diarize: Boolean = false
+    ) {
         startActivity(
             Intent(this, FileSubtitleActivity::class.java)
-                .putExtra(FileSubtitleActivity.EXTRA_TITLE, "Felirat videóhoz")
+                .putExtra(FileSubtitleActivity.EXTRA_TITLE, title)
                 .putExtra(FileSubtitleActivity.EXTRA_SRC, src)
                 .putExtra(FileSubtitleActivity.EXTRA_TRANSLATE, translate)
                 .putExtra(FileSubtitleActivity.EXTRA_OUTPUT, output)
                 .putExtra(FileSubtitleActivity.EXTRA_TGT, tgt)
-                .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, false)
+                .putExtra(FileSubtitleActivity.EXTRA_DIARIZE, diarize)
                 .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true)
         )
         finish()
