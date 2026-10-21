@@ -46,6 +46,7 @@ class TranscriptActivity : AppCompatActivity() {
     private var infos: List<TranscriptRepo.Info> = emptyList()
     private var hits: List<TranscriptRepo.Hit> = emptyList()
     private var query = ""
+    private var kindFilter = 0 // 0 = mind, 1 = élő, 2 = fájlból
     private var searchSeq = 0
     private var trashedNames: List<String> = emptyList()
 
@@ -117,6 +118,30 @@ class TranscriptActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(-1, -2).apply {
                 setMargins(dp(16), dp(4), dp(16), dp(4))
             }
+        )
+
+        // ---- szűrő: Mind / Élő / Fájlból
+        val kindRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val kindButtons = ArrayList<android.widget.Button>()
+        fun paintKinds() {
+            kindButtons.forEachIndexed { i, b ->
+                b.alpha = if (i == kindFilter) 1f else 0.55f
+                b.setTypeface(null, if (i == kindFilter) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+        }
+        listOf("Mind", "Élő", "Fájlból").forEachIndexed { i, n ->
+            val b = Ui.smallButton(this, n) {
+                kindFilter = i
+                paintKinds()
+                refresh()
+            }
+            kindButtons.add(b)
+            kindRow.addView(b, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
+        }
+        paintKinds()
+        content.addView(
+            kindRow,
+            LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(2), dp(16), dp(6)) }
         )
 
         emptyView = Ui.body(this, getString(R.string.tr_empty)).apply {
@@ -207,12 +232,20 @@ class TranscriptActivity : AppCompatActivity() {
 
     private fun searching() = query.isNotEmpty() && !query.startsWith("#")
 
+    /** A fájlból készült átiratok neve "jegyzokonyv_"-vel kezdődik, a többi élő felvétel. */
+    private fun isFromFile(i: TranscriptRepo.Info) = i.file.name.startsWith("jegyzokonyv_")
+
     private fun visibleInfos(): List<TranscriptRepo.Info> {
+        val base = when (kindFilter) {
+            1 -> infos.filter { !isFromFile(it) }
+            2 -> infos.filter { isFromFile(it) }
+            else -> infos
+        }
         if (query.startsWith("#")) {
             val tag = TranscriptRepo.fold(query.substring(1))
-            return infos.filter { tag.isEmpty() || TranscriptRepo.fold(it.tag).contains(tag) }
+            return base.filter { tag.isEmpty() || TranscriptRepo.fold(it.tag).contains(tag) }
         }
-        return infos
+        return base
     }
 
     private fun refresh() {

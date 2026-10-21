@@ -62,4 +62,6 @@ dependencies {
 
     // Wear OS Data Layer (óra companion)
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
+
+    testImplementation("junit:junit:4.13.2")
 }

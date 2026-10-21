@@ -47,6 +47,21 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("allowOnlineAsr", false)
         set(v) { p.edit().putBoolean("allowOnlineAsr", v).apply() }
 
+    /** Tolmács mód rögzített irányánál: true = magyar → angol a kezdőirány. */
+    var convStartHu: Boolean
+        get() = p.getBoolean("convStartHu", false)
+        set(v) { p.edit().putBoolean("convStartHu", v).apply() }
+
+    /** Az első indítási előkészítő képernyő már megnyílt-e. */
+    var onboarded: Boolean
+        get() = p.getBoolean("onboarded", false)
+        set(v) { p.edit().putBoolean("onboarded", v).apply() }
+
+    /** Utoljára nyitott Beállítások-fül. */
+    var settingsTab: Int
+        get() = p.getInt("settingsTab", 0)
+        set(v) { p.edit().putInt("settingsTab", v).apply() }
+
     var modelId: String
         get() = p.getString("model", "small") ?: "small"
         set(v) { p.edit().putString("model", v).apply() }

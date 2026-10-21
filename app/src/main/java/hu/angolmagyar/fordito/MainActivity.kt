@@ -128,6 +128,9 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        if (!prefs.onboarded && savedInstanceState == null && intent.getStringExtra(EXTRA_AUTO_START) == null) {
+            startActivity(Intent(this, DiagnosticsActivity::class.java))
+        }
         handleAutoStart(intent)
     }
 
@@ -390,6 +393,9 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.m_step4_desc), getString(R.string.m_open)
         ) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
 
+        card.addView(Ui.button(this, "Előkészítés ellenőrzése", false) {
+            startActivity(Intent(this, DiagnosticsActivity::class.java))
+        })
         column.addView(card)
     }
 
@@ -424,6 +430,24 @@ class MainActivity : AppCompatActivity() {
             addView(chipRow)
         })
 
+        // Mit szeretnél? – ikonos csempék, mindegyik saját varázslóval
+        fun open(task: String) = startActivity(
+            Intent(this, TaskSetupActivity::class.java).putExtra(TaskSetupActivity.EXTRA_TASK, task)
+        )
+        column.addView(Ui.small(this, "Mit szeretnél?").apply { setPadding(0, dp(14), 0, dp(2)) })
+        column.addView(Ui.tileRow(
+            this,
+            Ui.tile(this, R.drawable.ic_play, "Élő fordítás", "film, videó, előadás felirata") { open(TaskSetupActivity.TASK_LIVE) },
+            Ui.tile(this, R.drawable.ic_swap, "Tolmács", "magyar ⇄ angol beszélgetés") { open(TaskSetupActivity.TASK_INTERPRETER) }
+        ))
+        column.addView(Ui.tileRow(
+            this,
+            Ui.tile(this, R.drawable.ic_clipboard, "Átirat", "fájlból vagy felvételből") { open(TaskSetupActivity.TASK_TRANSCRIBE) },
+            Ui.tile(this, R.drawable.ic_subtitles, "Film felirat", ".srt fájl készítése") { open(TaskSetupActivity.TASK_SUBTITLE) }
+        ))
+
+        // Gyors indítás: a legutóbbi beállításokkal
+        column.addView(Ui.small(this, "Gyors indítás a legutóbbi beállításokkal").apply { setPadding(0, dp(16), 0, dp(2)) })
         column.addView(Ui.modeCard(
             this, R.drawable.ic_play, getString(R.string.m_card_internal), getString(R.string.m_card_internal_sub),
             last == TranslateService.MODE_INTERNAL
@@ -433,26 +457,6 @@ class MainActivity : AppCompatActivity() {
             this, R.drawable.ic_mic, getString(R.string.m_card_mic), getString(R.string.m_card_mic_sub),
             last == TranslateService.MODE_MIC
         ) { proceed(TranslateService.MODE_MIC, false) })
-
-        column.addView(Ui.modeCard(
-            this, R.drawable.ic_volume, getString(R.string.m_card_ptt), getString(R.string.m_card_ptt_sub),
-            last == TranslateService.MODE_PTT
-        ) { proceed(TranslateService.MODE_PTT, false) })
-
-        column.addView(Ui.modeCard(
-            this, R.drawable.ic_clipboard, getString(R.string.m_card_meeting), MeetingMode.statusText(this),
-            false
-        ) {
-            if (!MeetingMode.isReady(this)) {
-                toast(getString(R.string.m_need_hu_model))
-                startActivity(Intent(this, SettingsActivity::class.java))
-            } else {
-                // A képernyő a saját idejére kapcsolja be a tárgyalás módot, kilépéskor visszaállít.
-                startActivity(Intent(this, FileSubtitleActivity::class.java).apply {
-                    putExtra(FileSubtitleActivity.EXTRA_MEETING, true)
-                })
-            }
-        })
 
         column.addView(Ui.button(this, getString(R.string.m_quick_test), false) {
             proceed(TranslateService.MODE_MIC, true)
@@ -512,6 +516,27 @@ class MainActivity : AppCompatActivity() {
         else String.format("%d:%02d", sec / 60, sec % 60)
     }
 
+    /** Futó kártya állapotsora: irány és felismerő motor(ok). */
+    private fun engineLine(): String {
+        val s = Engines.sides(prefs)
+        val parts = ArrayList<String>()
+        if (s.other) parts.add(prefs.effectiveSpec(this).label.substringBefore("(").trim())
+        if (s.hu) {
+            parts.add(
+                if (Engines.voskSpecFor(this, prefs, "hu") != null) "magyar: saját modell"
+                else "magyar: Android"
+            )
+        }
+        val dir = when {
+            prefs.isConversation() ->
+                if (prefs.autoLangSwitch) "Tolmács · auto irány" else "Tolmács · rögzített irány"
+            prefs.isHuToEn() -> "HU → EN"
+            prefs.needsTranslation() -> "${prefs.sourceLang.uppercase()} → ${prefs.targetLang.uppercase()}"
+            else -> "Csak átirat"
+        }
+        return dir + " · " + parts.joinToString(" + ")
+    }
+
     private fun runningCard() {
         meterShown = true
         val card = Ui.card(this)
@@ -521,6 +546,7 @@ class MainActivity : AppCompatActivity() {
         timerText = timer
         timer.text = getString(R.string.m_running, modeName(AppState.mode), elapsedLabel())
         card.addView(timer)
+        card.addView(Ui.small(this, engineLine()))
         meterText = Ui.small(this, getString(R.string.m_level))
         card.addView(meterText)
         meter = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -581,6 +607,9 @@ class MainActivity : AppCompatActivity() {
                     proceed(TranslateService.MODE_MIC, false)
                 })
         }
+        card.addView(Ui.button(this, "Önellenőrzés", false) {
+            startActivity(Intent(this, DiagnosticsActivity::class.java))
+        })
         card.addView(Ui.button(this, getString(R.string.log_title), false) { LogDialog.show(this) })
         card.addView(Ui.button(this, getString(R.string.m_hide), false) { AppState.lastError = null; rebuild(false) })
         column.addView(card)

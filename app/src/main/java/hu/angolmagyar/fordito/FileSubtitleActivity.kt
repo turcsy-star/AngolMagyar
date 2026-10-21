@@ -47,7 +47,18 @@ class FileSubtitleActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_MEETING = "meeting"
+        /** Varázslóból érkező előbeállítások. */
+        const val EXTRA_TITLE = "title"
+        const val EXTRA_SRC = "src"            // "en" | "hu"
+        const val EXTRA_TRANSLATE = "translate" // boolean
+        const val EXTRA_OUTPUT = "output"      // 0 = forrás, 1 = fordítás, 2 = mindkettő
+        const val EXTRA_DIARIZE = "diarize"
+        const val EXTRA_AUTOSTART = "autostart" // fájlválasztó azonnal, feldolgozás a választás után
     }
+
+    private var autoStart = false
+    private lateinit var srcGroup: RadioGroup
+    private lateinit var translateSwitch: SwitchCompat
 
 
     private lateinit var prefs: Prefs
@@ -59,7 +70,6 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var progress: ProgressBar
     private lateinit var modeGroup: RadioGroup
-    private lateinit var dirGroup: RadioGroup
 
     private var selectedUri: Uri? = null
     private var working = false
@@ -76,6 +86,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 } catch (_: Exception) {
                 }
                 status.text = "Kiválasztva: ${uri.lastPathSegment ?: uri}"
+                if (autoStart && !working) startProcess()
             }
         }
 
@@ -127,7 +138,9 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
 
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
-        column.addView(Ui.title(this, if (meeting) "Tárgyalás – magyar átirat" else "Felirat fájlból (SRT)"))
+        autoStart = intent.getBooleanExtra(EXTRA_AUTOSTART, false)
+        val titleText = intent.getStringExtra(EXTRA_TITLE)
+        column.addView(Ui.title(this, if (meeting) "Tárgyalás – magyar átirat" else (titleText ?: "Felirat fájlból (SRT)")))
         if (meeting) {
             column.addView(Ui.small(this, MeetingMode.statusText(this)))
             column.addView(Ui.small(this, DiarizerFactory.onnxStatus(this)))
@@ -143,6 +156,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             column.addView(SwitchCompat(this).apply {
                 text = getString(R.string.f_diarize)
                 minHeight = dp(52)
+                isChecked = intent.getBooleanExtra(EXTRA_DIARIZE, false)
+                useDiarization = isChecked
                 setOnCheckedChangeListener { _, checked -> useDiarization = checked }
             })
         }
@@ -167,42 +182,44 @@ class FileSubtitleActivity : AppCompatActivity() {
         modeGroup.addView(RadioButton(this).apply {
             id = View.generateViewId()
             text = "Csak forrásnyelvű átirat (EN vagy HU)"
-            isChecked = false
+            isChecked = intent.getIntExtra(EXTRA_OUTPUT, 2) == 0
         })
         modeGroup.addView(RadioButton(this).apply {
             id = View.generateViewId()
             text = "Csak fordítás (célnyelv)"
-            isChecked = false
+            isChecked = intent.getIntExtra(EXTRA_OUTPUT, 2) == 1
         })
         modeGroup.addView(RadioButton(this).apply {
             id = View.generateViewId()
             text = "Forrás + fordítás (mindkettő)"
-            isChecked = true
+            isChecked = intent.getIntExtra(EXTRA_OUTPUT, 2) == 2
         })
         modeCard.addView(modeGroup)
         column.addView(modeCard)
 
-        // Irány
-        val dirCard = Ui.card(this)
-        dirCard.addView(Ui.title(this, "Nyelv / irány", 16f))
-        dirGroup = RadioGroup(this)
-        dirGroup.addView(RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "Angol → Magyar"
-            isChecked = prefs.translateDir == Prefs.DIR_EN_HU
-        })
-        dirGroup.addView(RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "Magyar → Angol"
-            isChecked = prefs.translateDir == Prefs.DIR_HU_EN
-        })
-        dirGroup.addView(RadioButton(this).apply {
-            id = View.generateViewId()
-            text = "Csak átirat (nincs fordítás)"
-            isChecked = prefs.translateDir == Prefs.DIR_NONE
-        })
-        dirCard.addView(dirGroup)
-        column.addView(dirCard)
+        // Nyelv
+        if (!meeting) {
+            val langCard = Ui.card(this)
+            langCard.addView(Ui.title(this, "A hang nyelve", 16f))
+            val presetSrc = intent.getStringExtra(EXTRA_SRC)
+                ?: if (prefs.translateDir == Prefs.DIR_HU_EN) "hu" else "en"
+            srcGroup = RadioGroup(this)
+            srcGroup.addView(RadioButton(this).apply {
+                id = View.generateViewId(); text = "Angol"; isChecked = presetSrc != "hu"
+            })
+            srcGroup.addView(RadioButton(this).apply {
+                id = View.generateViewId(); text = "Magyar"; isChecked = presetSrc == "hu"
+            })
+            langCard.addView(srcGroup)
+            translateSwitch = SwitchCompat(this).apply {
+                text = "Fordítás a másik nyelvre (angol ⇄ magyar)"
+                minHeight = dp(52)
+                isChecked = if (intent.hasExtra(EXTRA_TRANSLATE)) intent.getBooleanExtra(EXTRA_TRANSLATE, true)
+                else prefs.translateDir != Prefs.DIR_NONE
+            }
+            langCard.addView(translateSwitch)
+            column.addView(langCard)
+        }
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
@@ -222,6 +239,17 @@ class FileSubtitleActivity : AppCompatActivity() {
             cancel.set(true)
             Toast.makeText(this, "Megszakítás…", Toast.LENGTH_SHORT).show()
         })
+        if (autoStart) {
+            main.post {
+                openLauncher.launch(
+                    arrayOf(
+                        "audio/*", "video/*",
+                        "audio/mpeg", "audio/mp4", "audio/x-wav", "audio/ogg",
+                        "video/mp4", "video/x-matroska", "video/webm"
+                    )
+                )
+            }
+        }
     }
 
     private fun selectedMode(): SrtExporter.Mode {
@@ -234,14 +262,18 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
     }
 
+    private fun selectedSrc(): String {
+        if (prefs.meetingMode || !::srcGroup.isInitialized) return "hu"
+        val checked = srcGroup.checkedRadioButtonId
+        val idx = (0 until srcGroup.childCount).indexOfFirst { srcGroup.getChildAt(it).id == checked }
+        return if (idx == 1) "hu" else "en"
+    }
+
     private fun selectedDir(): String {
-        val checked = dirGroup.checkedRadioButtonId
-        val idx = (0 until dirGroup.childCount).indexOfFirst { dirGroup.getChildAt(it).id == checked }
-        return when (idx) {
-            1 -> Prefs.DIR_HU_EN
-            2 -> Prefs.DIR_NONE
-            else -> Prefs.DIR_EN_HU
+        if (prefs.meetingMode || !::translateSwitch.isInitialized || !translateSwitch.isChecked) {
+            return Prefs.DIR_NONE
         }
+        return if (selectedSrc() == "hu") Prefs.DIR_HU_EN else Prefs.DIR_EN_HU
     }
 
     private fun startProcess() {
@@ -262,7 +294,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         if (prefs.meetingMode) {
             dir = Prefs.DIR_NONE
         }
-        val sourceLang = if (dir == Prefs.DIR_HU_EN || prefs.meetingMode) "hu" else "en"
+        val sourceLang = selectedSrc()
         val needTranslate = dir != Prefs.DIR_NONE && !prefs.meetingMode
 
         var frToClose: FileRecognizer? = null

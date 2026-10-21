@@ -197,6 +197,69 @@ object Ui {
         }
     }
 
+
+    /** Négyzetes indító csempe: ikon + cím + rövid leírás. Két csempe fér egymás mellé. */
+    fun tile(
+        ctx: Context, iconRes: Int, title: String, subtitle: String, onClick: () -> Unit
+    ): LinearLayout {
+        val shape = GradientDrawable().apply {
+            cornerRadius = dp(ctx, 18).toFloat()
+            setColor(color(ctx, R.color.card))
+            setStroke(dp(ctx, 1), color(ctx, R.color.stroke))
+        }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+            setPadding(dp(ctx, 16), dp(ctx, 16), dp(ctx, 16), dp(ctx, 16))
+            background = RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), shape, null)
+            isClickable = true
+            isFocusable = true
+            minimumHeight = dp(ctx, 132)
+            contentDescription = "$title. $subtitle"
+            setOnClickListener {
+                Haptics.click(ctx)
+                animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).withEndAction {
+                    animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                    onClick()
+                }.start()
+            }
+            addView(ImageView(ctx).apply {
+                setImageResource(iconRes)
+                setColorFilter(color(ctx, R.color.primary))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                layoutParams = LinearLayout.LayoutParams(dp(ctx, 34), dp(ctx, 34)).apply {
+                    bottomMargin = dp(ctx, 10)
+                }
+            })
+            addView(TextView(ctx).apply {
+                text = title
+                textSize = 17f
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(color(ctx, R.color.textPrimary))
+            })
+            addView(TextView(ctx).apply {
+                text = subtitle
+                textSize = 13f
+                setTextColor(color(ctx, R.color.textSecondary))
+            })
+        }
+    }
+
+    /** Két csempe egymás mellett. */
+    fun tileRow(ctx: Context, left: View, right: View): LinearLayout =
+        LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(ctx, 10) }
+            addView(left, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                marginEnd = dp(ctx, 5)
+            })
+            addView(right, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                marginStart = dp(ctx, 5)
+            })
+        }
+
     fun smallButton(ctx: Context, label: String, onClick: () -> Unit): AppCompatButton =
         AppCompatButton(ctx).apply {
             text = label

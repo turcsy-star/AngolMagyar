@@ -262,7 +262,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         val usePtt = mode == MODE_PTT || (mode == MODE_MIC && prefs.pushToTalk)
         pttActive = !usePtt  // ha PTT, induláskor nem hallgat
         val sidesNow = Engines.sides(prefs)
-        conversationHuToEn = sidesNow.hu && !prefs.isConversation()
+        conversationHuToEn = if (prefs.isConversation()) prefs.convStartHu else sidesNow.hu
         autoDual = prefs.isConversation() && prefs.autoLangSwitch
         acquireWakeLock()
         AppState.running = true

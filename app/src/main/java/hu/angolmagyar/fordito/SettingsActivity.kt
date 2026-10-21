@@ -121,6 +121,14 @@ class SettingsActivity : AppCompatActivity() {
 
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         column.addView(Ui.title(this, "Beállítások"))
+        val tabGroups = listOf(ArrayList<View>(), ArrayList<View>(), ArrayList<View>())
+        val tabBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8) }
+        }
+        column.addView(tabBar)
 
         // ---------------------------------------------------------------- modell
         val modelCard = Ui.card(this)
@@ -133,15 +141,12 @@ class SettingsActivity : AppCompatActivity() {
         modelCard.addView(Ui.small(this, "Kevesebb melegedés és akkumulátor-fogyasztás, kicsit lassabban frissülő felirat."))
         modelCard.addView(switchRow("Automatikus takarékos mód (melegedés / alacsony akku)", prefs.adaptiveEco) { prefs.adaptiveEco = it })
         modelCard.addView(Ui.small(this, "Thermal vagy alacsony akkumulátor esetén automatikusan kis modell és ritkább frissítés."))
-        column.addView(modelCard)
+        tabGroups[1].add(modelCard)
 
         // ---------------------------------------------------------------- magyar / tárgyalás modellek
         val huCard = Ui.card(this)
-        huCard.addView(Ui.title(this, "Magyar modellek (tárgyalás)", 17f))
+        huCard.addView(Ui.title(this, "Magyar felismerés és tárgyalás", 17f))
         huCard.addView(Ui.small(this, MeetingMode.statusText(this)))
-        huCard.addView(Ui.button(this, "Magyar felismerő beállítása…", true) {
-            startActivity(Intent(this, ModelsActivity::class.java))
-        })
         huCard.addView(Ui.button(this, "Magyar nagy/egyedi ZIP telepítése…", false) {
             zipLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
         })
@@ -175,7 +180,7 @@ class SettingsActivity : AppCompatActivity() {
         })
         huCard.addView(Ui.small(this, "ONNX embedding diarization (ha nincs modell → energia S1/S2). ML Kit Language ID beépítve. Wear: :wear modul."))
         huCard.addView(Ui.small(this, "A nagy magyar modellhez Vosk-kompatibilis ZIP kell (am mappa a csomagban)."))
-        column.addView(huCard)
+        tabGroups[1].add(huCard)
 
 
         // ---------------------------------------------------------------- megjelenés (téma)
@@ -200,7 +205,7 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
         themeCard.addView(themeGroup)
-        column.addView(themeCard)
+        tabGroups[0].add(themeCard)
 
         // ---------------------------------------------------------------- fordítás iránya
         val dirCard = Ui.card(this)
@@ -229,7 +234,7 @@ class SettingsActivity : AppCompatActivity() {
             prefs.useMlLangId = it
         })
         dirCard.addView(Ui.small(this, "ML Kit on-device; ki kapcsolva csak heurisztika. Manuális ⇄ továbbra is működik."))
-        column.addView(dirCard)
+        tabGroups[1].add(dirCard)
 
         val langCard = Ui.card(this)
         langCard.addView(Ui.title(this, "Élő fordítás nyelvei", 17f))
@@ -273,10 +278,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         langCard.addView(tgtGroup)
         langCard.addView(Ui.small(this, "Natív felismeréshez töltsd le a forrásnyelv Vosk modelljét. Fordítás: ML Kit (első használatkor). WakeLock: lezárt képernyő OK."))
-        langCard.addView(Ui.button(this, "Modellek kezelése…", true) {
-            startActivity(Intent(this, ModelsActivity::class.java))
-        })
-        column.addView(langCard)
+        tabGroups[1].add(langCard)
 
         // ---------------------------------------------------------------- telepített modellek törlése
         val installedCard = Ui.card(this)
@@ -329,7 +331,7 @@ class SettingsActivity : AppCompatActivity() {
                     .show()
             })
         }
-        column.addView(installedCard)
+        tabGroups[1].add(installedCard)
 
 
 
@@ -365,7 +367,7 @@ class SettingsActivity : AppCompatActivity() {
             prefs.pushToTalk = it
         })
         advCard.addView(Ui.small(this, "A feliraton a 🎙 gombot tartsd nyomva beszélés közben."))
-        column.addView(advCard)
+        tabGroups[2].add(advCard)
 
         // ---------------------------------------------------------------- felirat
         val styleCard = Ui.card(this)
@@ -392,7 +394,7 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
         presetCard.addView(presetGroup)
-        column.addView(presetCard)
+        tabGroups[0].add(presetCard)
 
         styleCard.addView(Ui.title(this, "Felirat megjelenése", 17f))
 
@@ -489,7 +491,7 @@ class SettingsActivity : AppCompatActivity() {
             })
         })
         styleCard.addView(Ui.small(this, "Dupla koppintás = szünet / folytatás. Egy koppintás = vezérlősáv. Húzás = pozíció. Két ujjal csippentve = betűméret. Hosszú nyomás = mondat mentése a kedvencek közé."))
-        column.addView(styleCard)
+        tabGroups[0].add(styleCard)
 
         // ---------------------------------------------------------------- átirat
         val trCard = Ui.card(this)
@@ -501,7 +503,7 @@ class SettingsActivity : AppCompatActivity() {
         trCard.addView(Ui.small(this, getString(R.string.s_save_audio_hint)))
         trCard.addView(switchRow("Fordított szöveg felolvasása (TTS)", prefs.ttsEnabled) { prefs.ttsEnabled = it })
         trCard.addView(Ui.small(this, "A kész fordítást a rendszer TextToSpeech hangjával felolvassa (offline)."))
-        column.addView(trCard)
+        tabGroups[0].add(trCard)
 
         // ---------------------------------------------------------------- javítások + személyes szótár
         val fixCard = Ui.card(this)
@@ -546,7 +548,7 @@ class SettingsActivity : AppCompatActivity() {
         fixCard.addView(Ui.small(this, "Soronként: szó vagy forrás=helyes forma. Pl.\nOpenAI=OpenAI\nchatgpt=ChatGPT"))
         vocabEdit = fixEdit(prefs.customVocab, "pl.\nOpenAI\nchatgpt=ChatGPT\nbudapest=Budapest")
         fixCard.addView(vocabEdit)
-        column.addView(fixCard)
+        tabGroups[2].add(fixCard)
 
         // ---------------------------------------------------------------- rendszer
         val sysCard = Ui.card(this)
@@ -569,7 +571,32 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
         })
         sysCard.addView(Ui.button(this, getString(R.string.log_title), false) { LogDialog.show(this) })
-        column.addView(sysCard)
+        tabGroups[2].add(sysCard)
+
+        // --- fülek: Megjelenés / Felismerés / Haladó
+        val tabNames = listOf("Megjelenés", "Felismerés", "Haladó")
+        val tabButtons = ArrayList<android.widget.Button>()
+        fun showTab(i: Int) {
+            for (g in tabGroups.indices) for (v in tabGroups[g]) {
+                v.visibility = if (g == i) View.VISIBLE else View.GONE
+            }
+            tabButtons.forEachIndexed { k, b ->
+                b.alpha = if (k == i) 1f else 0.55f
+                b.setTypeface(null, if (k == i) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+            try { prefs.settingsTab = i } catch (_: Exception) {}
+        }
+        tabNames.forEachIndexed { i, n ->
+            val b = Ui.smallButton(this, n) { showTab(i) }
+            b.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (i > 0) marginStart = dp(6)
+            }
+            tabButtons.add(b)
+            tabBar.addView(b)
+        }
+        // a kártyák a fülsor után kerülnek az oszlopba, fülenként egymás után
+        for (g in tabGroups) for (v in g) column.addView(v)
+        showTab(prefs.settingsTab.coerceIn(0, 2))
 
         applyPreview()
     }

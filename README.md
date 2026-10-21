@@ -11,6 +11,14 @@ Offline élő fordítás: Vosk + ML Kit + ONNX speaker + Wear.
 ./gradlew :wear:assembleDebug
 ```
 
+## v2.9.3 (3. kör: használhatóság, adatvédelem, tesztek)
+- Önellenőrzés / „Előkészítés ellenőrzése" képernyő (modellek, magyar felismerő, fordító, overlay, mikrofon, értesítés, akkumulátor, eszköz) gombokkal; első indításkor automatikusan megnyílik.
+- Adatvédelem és mentés: online felismerés kapcsoló, beállítások + átiratok exportja/importja zipben, összes átirat törlése.
+- Beállítások három fülön (Megjelenés / Felismerés / Haladó).
+- Átiratok szűrő: Mind / Élő / Fájlból.
+- A futó kártyán állapotsor az aktív felismerő motorokkal.
+- Egységtesztek (Vad, SrtExporter, Fixes, TextPolish); a GitHub Actions lefuttatja, de hiba esetén is elkészül az APK.
+
 ## v2.9 (javítás: a Beállítások és más képernyők kártyái láthatatlanok voltak – Ui.card alpha=0)
 
 **Fontos:** ezt a csomagot nem sikerült valódi Gradle-lel buildelni (nem volt SDK/Maven-hozzáférés); csak Kotlin-fordítási ellenőrzés futott android-33 jar + stubok ellen. Az első build Android Studióban/`./gradlew` paranccsal történjen, és a hibákat jelezd.

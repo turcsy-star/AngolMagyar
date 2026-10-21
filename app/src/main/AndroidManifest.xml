@@ -34,6 +34,18 @@
             android:exported="false" />
 
         <activity
+            android:name=".DiagnosticsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".PrivacyActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".TaskSetupActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ModelsActivity"
             android:exported="false" />
 
