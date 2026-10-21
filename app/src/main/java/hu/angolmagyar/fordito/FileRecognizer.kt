@@ -234,7 +234,7 @@ class FileRecognizer(
         "fr" -> TranslateLanguage.FRENCH
         "es" -> TranslateLanguage.SPANISH
         "it" -> TranslateLanguage.ITALIAN
-        "uk" -> TranslateLanguage.UKRAINIAN
+        "uk" -> "uk" // ML Kit BCP-47
         else -> TranslateLanguage.ENGLISH
     }
 

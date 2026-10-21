@@ -278,7 +278,6 @@ class TaskSetupActivity : AppCompatActivity() {
                 "4. Fájl kiválasztása → SRT."
         ))
 
-        // --- Nyelvek jelölőnégyzettel (egyszerre egy) ---
         val cLang = Ui.card(this)
         cLang.addView(Ui.title(this, "A videó nyelve", 16f))
         val checks = ArrayList<androidx.appcompat.widget.AppCompatCheckBox>()
@@ -288,25 +287,11 @@ class TaskSetupActivity : AppCompatActivity() {
                 isChecked = i == 0
                 minHeight = dp(48)
             }
-            cb.setOnCheckedChangeListener { button, checked ->
-                if (checked) {
-                    checks.forEach { if (it != button) it.isChecked = false }
-                    refreshModelStatus()
-                } else if (checks.none { it.isChecked }) {
-                    button.isChecked = true // legalább egy legyen
-                }
-            }
             checks.add(cb)
             cLang.addView(cb)
         }
         column.addView(cLang)
 
-        fun selectedLang(): LangOpt {
-            val i = checks.indexOfFirst { it.isChecked }.coerceAtLeast(0)
-            return subtitleLangs[i]
-        }
-
-        // --- Kimenet ---
         val cOut = Ui.card(this)
         cOut.addView(Ui.title(this, "Mit írjon a felirat?", 16f))
         val gOut = radios(
@@ -319,7 +304,6 @@ class TaskSetupActivity : AppCompatActivity() {
         cOut.addView(gOut)
         column.addView(cOut)
 
-        // --- Modell ---
         val modelCard = Ui.card(this)
         modelCard.addView(Ui.title(this, "Szükséges modell", 16f))
         val modelStatus = Ui.body(this, "Ellenőrzés…")
@@ -330,6 +314,11 @@ class TaskSetupActivity : AppCompatActivity() {
         modelBtn.visibility = android.view.View.GONE
         modelCard.addView(modelBtn)
         column.addView(modelCard)
+
+        fun selectedLang(): LangOpt {
+            val i = checks.indexOfFirst { it.isChecked }.coerceAtLeast(0)
+            return subtitleLangs[i]
+        }
 
         fun refreshModelStatus() {
             val lang = selectedLang()
@@ -348,13 +337,13 @@ class TaskSetupActivity : AppCompatActivity() {
                     missing = true
                 }
             } else {
-                val spec = ModelManager.forSourceLang(lang.code, preferLargeEn = lang.code == "en", ctx = this)
-                if (ModelManager.isInstalled(this, spec)) {
-                    lines.add("✓ ${spec.label} telepítve")
-                } else if (lang.code == "en" && ModelManager.isInstalled(this, ModelManager.LARGE)) {
-                    lines.add("✓ Angol nagy modell telepítve")
-                } else if (lang.code == "en" && ModelManager.isInstalled(this, ModelManager.SMALL)) {
-                    lines.add("✓ Angol kicsi modell telepítve")
+                val spec = ModelManager.forSourceLang(lang.code, lang.code == "en", this)
+                val has = ModelManager.isInstalled(this, spec) ||
+                    (lang.code == "en" && (
+                        ModelManager.isInstalled(this, ModelManager.LARGE) ||
+                            ModelManager.isInstalled(this, ModelManager.SMALL)))
+                if (has) {
+                    lines.add("✓ ${lang.label} felismerő telepítve")
                 } else {
                     lines.add("✗ Nincs ${lang.label} felismerő modell")
                     lines.add("  Ajánlott: ${spec.label}")
@@ -362,11 +351,23 @@ class TaskSetupActivity : AppCompatActivity() {
                 }
             }
             if (needTr) {
-                lines.add("Fordítás: ML Kit (${lang.label} → magyar) – Modellek képernyő")
+                lines.add("Fordítás: ML Kit (${lang.label} → magyar)")
             }
             modelStatus.text = lines.joinToString("\n")
             modelBtn.visibility = if (missing) android.view.View.VISIBLE else android.view.View.GONE
             modelBtn.text = "Hiányzó modell letöltése…"
+        }
+
+        // Listeners only AFTER local functions exist
+        checks.forEach { cb ->
+            cb.setOnCheckedChangeListener { button, checked ->
+                if (checked) {
+                    checks.forEach { if (it != button) it.isChecked = false }
+                    refreshModelStatus()
+                } else if (checks.none { it.isChecked }) {
+                    button.isChecked = true
+                }
+            }
         }
         gOut.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
         refreshModelStatus()
@@ -379,10 +380,11 @@ class TaskSetupActivity : AppCompatActivity() {
                 else -> false to 0
             }
             if (lang.code != "hu") {
-                val spec = ModelManager.forSourceLang(lang.code, preferLargeEn = true, ctx = this)
+                val spec = ModelManager.forSourceLang(lang.code, true, this)
                 val has = ModelManager.isInstalled(this, spec) ||
-                    (lang.code == "en" && (ModelManager.isInstalled(this, ModelManager.LARGE) ||
-                        ModelManager.isInstalled(this, ModelManager.SMALL)))
+                    (lang.code == "en" && (
+                        ModelManager.isInstalled(this, ModelManager.LARGE) ||
+                            ModelManager.isInstalled(this, ModelManager.SMALL)))
                 if (!has) {
                     android.app.AlertDialog.Builder(this)
                         .setTitle("Hiányzik a ${lang.label} modell")
@@ -394,10 +396,12 @@ class TaskSetupActivity : AppCompatActivity() {
                             openFileSubtitle(lang.code, tr, out)
                         }
                         .show()
-                    return@button
+                } else {
+                    openFileSubtitle(lang.code, tr, out)
                 }
+            } else {
+                openFileSubtitle(lang.code, tr, out)
             }
-            openFileSubtitle(lang.code, tr, out)
         })
     }
 
