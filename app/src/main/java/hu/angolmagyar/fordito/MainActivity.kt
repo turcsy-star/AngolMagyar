@@ -390,16 +390,7 @@ class MainActivity : AppCompatActivity() {
             batteryOk(), getString(R.string.m_step4),
             getString(R.string.m_step4_desc), getString(R.string.m_open)
         ) {
-            try {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        android.net.Uri.parse("package:$packageName")
-                    )
-                )
-            } catch (_: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
+            BatterySettings.open(this)
         }
 
         card.addView(Ui.button(this, "Előkészítés ellenőrzése", false) {

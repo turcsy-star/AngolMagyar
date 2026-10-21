@@ -223,22 +223,12 @@ class TaskSetupActivity : AppCompatActivity() {
         // Nyelvek – ugyanaz a lista, mint a film-feliratnál
         val cLang = Ui.card(this)
         cLang.addView(Ui.title(this, "A beszéd nyelve", 16f))
-        val checks = ArrayList<androidx.appcompat.widget.AppCompatCheckBox>()
-        subtitleLangs.forEachIndexed { i, opt ->
-            val cb = androidx.appcompat.widget.AppCompatCheckBox(this).apply {
-                text = opt.label
-                isChecked = opt.code == "hu" // átiratnál magyar az alap
-                minHeight = dp(48)
-            }
-            checks.add(cb)
-            cLang.addView(cb)
-        }
+        // egyetlen nyelv választható → rádiógomb (átiratnál magyar az alap)
+        val gLang = radios(subtitleLangs.map { it.label }, subtitleLangs.indexOfFirst { it.code == "hu" })
+        cLang.addView(gLang)
         column.addView(cLang)
 
-        fun selectedLang(): LangOpt {
-            val i = checks.indexOfFirst { it.isChecked }.coerceAtLeast(0)
-            return subtitleLangs[i]
-        }
+        fun selectedLang(): LangOpt = subtitleLangs[gLang.index().coerceIn(0, subtitleLangs.lastIndex)]
 
         val cOut = Ui.card(this)
         cOut.addView(Ui.title(this, "Kimenet", 16f))
@@ -312,16 +302,7 @@ class TaskSetupActivity : AppCompatActivity() {
             modelBtn.visibility = if (missing) android.view.View.VISIBLE else android.view.View.GONE
         }
 
-        checks.forEach { cb ->
-            cb.setOnCheckedChangeListener { button, checked ->
-                if (checked) {
-                    checks.forEach { if (it != button) it.isChecked = false }
-                    refreshModelStatus()
-                } else if (checks.none { it.isChecked }) {
-                    button.isChecked = true
-                }
-            }
-        }
+        gLang.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
         tr.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
         gTgt.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
         refreshModelStatus()
@@ -390,41 +371,38 @@ class TaskSetupActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------- film felirat
 
-    // ---------------------------------------------------------- film felirat
-
     private fun buildSubtitle() {
         column.addView(Ui.title(this, "Felirat videóhoz"))
         column.addView(Ui.small(this,
-            "1. Jelöld be a videó nyelvét (egyet).\n" +
-                "2. Mit írjon a felirat.\n" +
+            "1. Válaszd ki a videó nyelvét.\n" +
+                "2. Jelöld be, mi kerüljön a feliratba.\n" +
                 "3. Ha hiányzik a modell, töltsd le.\n" +
                 "4. Fájl kiválasztása → SRT."
         ))
 
+        // A videó nyelve: pontosan egy → rádiógomb
         val cLang = Ui.card(this)
         cLang.addView(Ui.title(this, "A videó nyelve", 16f))
-        val checks = ArrayList<androidx.appcompat.widget.AppCompatCheckBox>()
-        subtitleLangs.forEachIndexed { i, opt ->
-            val cb = androidx.appcompat.widget.AppCompatCheckBox(this).apply {
-                text = opt.label
-                isChecked = i == 0
-                minHeight = dp(48)
-            }
-            checks.add(cb)
-            cLang.addView(cb)
-        }
+        val gLang = radios(subtitleLangs.map { it.label }, 0)
+        cLang.addView(gLang)
         column.addView(cLang)
 
+        // Kimenet: egymástól független igen/nem → jelölőnégyzet (legalább az egyik kell)
         val cOut = Ui.card(this)
         cOut.addView(Ui.title(this, "Mit írjon a felirat?", 16f))
-        val gOut = radios(
-            listOf(
-                "Csak fordítás (célnyelv) – ajánlott",
-                "Eredeti + fordítás (két sor)",
-                "Csak eredeti szöveg (fordítás nélkül)"
-            ), 0
-        )
-        cOut.addView(gOut)
+        val cbOrig = androidx.appcompat.widget.AppCompatCheckBox(this).apply {
+            text = "Eredeti szöveg (a videó nyelvén)"
+            isChecked = false
+            minHeight = dp(48)
+        }
+        val cbTr = androidx.appcompat.widget.AppCompatCheckBox(this).apply {
+            text = "Fordítás (célnyelven) – ajánlott"
+            isChecked = true
+            minHeight = dp(48)
+        }
+        cOut.addView(cbTr)
+        cOut.addView(cbOrig)
+        cOut.addView(Ui.small(this, "Mindkettő bejelölve: két soros felirat (eredeti + fordítás)."))
         column.addView(cOut)
 
         val cTgt = Ui.card(this)
@@ -447,14 +425,13 @@ class TaskSetupActivity : AppCompatActivity() {
         modelCard.addView(modelBtn)
         column.addView(modelCard)
 
-        fun selectedLang(): LangOpt {
-            val i = checks.indexOfFirst { it.isChecked }.coerceAtLeast(0)
-            return subtitleLangs[i]
-        }
+        fun selectedLang(): LangOpt = subtitleLangs[gLang.index().coerceIn(0, subtitleLangs.lastIndex)]
+        fun targetCode(): String = tgtCodes[gTgt.index().coerceIn(0, tgtCodes.lastIndex)]
 
         fun refreshModelStatus() {
             val lang = selectedLang()
-            val needTr = gOut.index() != 2
+            val needTr = cbTr.isChecked
+            cTgt.visibility = if (needTr) android.view.View.VISIBLE else android.view.View.GONE
             val lines = ArrayList<String>()
             var missing = false
             if (lang.code == "hu") {
@@ -483,35 +460,51 @@ class TaskSetupActivity : AppCompatActivity() {
                 }
             }
             if (needTr) {
-                lines.add("Fordítás: ML Kit (${lang.label} → magyar)")
+                if (targetCode() == lang.code) {
+                    lines.add("⚠ A videó és a célnyelv azonos – válassz másik célnyelvet.")
+                } else {
+                    val tgtLabel = listOf("magyar", "angol", "német", "francia", "spanyol")[gTgt.index().coerceIn(0, 4)]
+                    lines.add("Fordítás: ML Kit (${lang.label} → $tgtLabel)")
+                }
             }
             modelStatus.text = lines.joinToString("\n")
             modelBtn.visibility = if (missing) android.view.View.VISIBLE else android.view.View.GONE
             modelBtn.text = "Hiányzó modell letöltése…"
         }
 
-        // Listeners only AFTER local functions exist
-        checks.forEach { cb ->
-            cb.setOnCheckedChangeListener { button, checked ->
-                if (checked) {
-                    checks.forEach { if (it != button) it.isChecked = false }
-                    refreshModelStatus()
-                } else if (checks.none { it.isChecked }) {
-                    button.isChecked = true
-                }
+        // Ha a videó nyelve = célnyelv, automatikusan átállítjuk a célnyelvet (magyar ↔ angol)
+        fun fixTargetIfSame() {
+            if (targetCode() == selectedLang().code) {
+                gTgt.check(gTgt.getChildAt(if (selectedLang().code == "hu") 1 else 0).id)
             }
         }
-        gOut.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
+
+        // Legalább az egyik kimenet legyen bejelölve
+        cbOrig.setOnCheckedChangeListener { _, checked ->
+            if (!checked && !cbTr.isChecked) cbTr.isChecked = true
+            refreshModelStatus()
+        }
+        cbTr.setOnCheckedChangeListener { _, checked ->
+            if (!checked && !cbOrig.isChecked) cbOrig.isChecked = true
+            refreshModelStatus()
+        }
+        // Listeners only AFTER local functions exist
+        gLang.setOnCheckedChangeListener { _, _ ->
+            fixTargetIfSame()
+            refreshModelStatus()
+        }
+        gTgt.setOnCheckedChangeListener { _, _ -> refreshModelStatus() }
+        fixTargetIfSame()
         refreshModelStatus()
 
         column.addView(Ui.button(this, "Tovább: fájl kiválasztása", true) {
             val lang = selectedLang()
-            val (tr, out) = when (gOut.index()) {
-                0 -> true to 1
-                1 -> true to 2
+            val (tr, out) = when {
+                cbTr.isChecked && cbOrig.isChecked -> true to 2
+                cbTr.isChecked -> true to 1
                 else -> false to 0
             }
-            val tgt = tgtCodes[gTgt.index().coerceIn(0, tgtCodes.lastIndex)]
+            val tgt = targetCode()
             fun go() = openFileSubtitle(lang.code, tr, out, tgt)
             if (lang.code != "hu") {
                 val spec = ModelManager.forSourceLang(lang.code, true, this)

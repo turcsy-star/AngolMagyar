@@ -144,11 +144,7 @@ class SetupWizardActivity : AppCompatActivity() {
             Step.OVERLAY -> startActivity(
                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
             )
-            Step.BATTERY -> try {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-            } catch (_: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
+            Step.BATTERY -> BatterySettings.open(this)
             Step.MODELS -> {
                 // Ne indítson automatikus letöltést – a felhasználó válassza ki a modelleket
                 startActivity(Intent(this, ModelsActivity::class.java))

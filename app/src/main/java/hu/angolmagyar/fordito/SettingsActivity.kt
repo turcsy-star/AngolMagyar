@@ -568,16 +568,7 @@ class SettingsActivity : AppCompatActivity() {
             )
         })
         sysCard.addView(Ui.button(this, "Akkumulátor-optimalizálás beállításai", false) {
-            try {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:$packageName")
-                    )
-                )
-            } catch (_: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
+            BatterySettings.open(this)
         })
         sysCard.addView(Ui.button(this, getString(R.string.log_title), false) { LogDialog.show(this) })
         tabGroups[2].add(sysCard)

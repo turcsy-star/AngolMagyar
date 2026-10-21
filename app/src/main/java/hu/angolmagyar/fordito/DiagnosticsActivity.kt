@@ -147,16 +147,7 @@ class DiagnosticsActivity : AppCompatActivity() {
             if (battery) "Rendben." else "Nélküle a rendszer pár perc után leállíthatja a háttérben futó appot.",
             "Beállítás"
         ) {
-            try {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        android.net.Uri.parse("package:$packageName")
-                    )
-                )
-            } catch (_: Exception) {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
+            BatterySettings.open(this)
         })
 
         val dev = Engines.device(this)
