@@ -71,6 +71,21 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var progress: ProgressBar
     private lateinit var modeGroup: RadioGroup
 
+    // Folyamatpanel
+    private lateinit var progressPanel: LinearLayout
+    private lateinit var stepTitle: TextView
+    private lateinit var stepList: TextView
+    private lateinit var overallLabel: TextView
+    private lateinit var stepLabel: TextView
+    private lateinit var stepProgress: ProgressBar
+    private lateinit var timeLabel: TextView
+    private lateinit var startBtn: android.widget.Button
+    private lateinit var cancelBtn: android.widget.Button
+    private var processStartMs = 0L
+    private var stepStartMs = 0L
+    private val stepsLog = ArrayList<String>()
+    private var currentStepName = ""
+
     private var selectedUri: Uri? = null
     private var working = false
     private val cancel = AtomicBoolean(false)
@@ -86,7 +101,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                 } catch (_: Exception) {
                 }
                 status.text = "Kiválasztva: ${uri.lastPathSegment ?: uri}"
-                if (autoStart && !working) startProcess()
+                // Ne induljon automatikusan – a felhasználó ellenőrizheti a beállításokat,
+                // majd az „SRT készítése” gombbal indít. (autoStart csak a fájlválasztót nyitja)
             }
         }
 
@@ -221,9 +237,20 @@ class FileSubtitleActivity : AppCompatActivity() {
             column.addView(langCard)
         }
 
+        // --- Folyamatpanel (varázsló-szerű lépések + idő + progress) ---
+        progressPanel = Ui.card(this).apply { visibility = View.GONE }
+        stepTitle = Ui.title(this, "Folyamat", 16f)
+        progressPanel.addView(stepTitle)
+        stepList = TextView(this).apply {
+            textSize = 13f
+            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textSecondary))
+            setLineSpacing(0f, 1.15f)
+        }
+        progressPanel.addView(stepList)
+        overallLabel = Ui.small(this, "Teljes folyamat")
+        progressPanel.addView(overallLabel)
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            visibility = View.GONE
             progressTintList = android.content.res.ColorStateList.valueOf(
                 Ui.color(this@FileSubtitleActivity, R.color.primary)
             )
@@ -232,13 +259,31 @@ class FileSubtitleActivity : AppCompatActivity() {
             )
             scaleY = 1.5f
         }
-        column.addView(progress)
+        progressPanel.addView(progress)
+        stepLabel = Ui.small(this, "Aktuális lépés")
+        progressPanel.addView(stepLabel)
+        stepProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progressTintList = android.content.res.ColorStateList.valueOf(
+                Ui.color(this@FileSubtitleActivity, R.color.accentGlow)
+            )
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(
+                Ui.color(this@FileSubtitleActivity, R.color.stroke)
+            )
+            scaleY = 1.2f
+        }
+        progressPanel.addView(stepProgress)
+        timeLabel = Ui.small(this, "")
+        progressPanel.addView(timeLabel)
+        column.addView(progressPanel)
 
-        column.addView(Ui.button(this, "SRT készítése", true) { startProcess() })
-        column.addView(Ui.button(this, "Megszakítás", false) {
+        startBtn = Ui.button(this, "SRT készítése", true) { startProcess() }
+        column.addView(startBtn)
+        cancelBtn = Ui.button(this, "Megszakítás", false) {
             cancel.set(true)
             Toast.makeText(this, "Megszakítás…", Toast.LENGTH_SHORT).show()
-        })
+        }
+        column.addView(cancelBtn)
         if (autoStart) {
             main.post {
                 openLauncher.launch(
@@ -249,6 +294,57 @@ class FileSubtitleActivity : AppCompatActivity() {
                     )
                 )
             }
+        }
+    }
+
+    private fun fmtDur(ms: Long): String {
+        val sec = (ms / 1000).coerceAtLeast(0)
+        val m = sec / 60
+        val s = sec % 60
+        return if (m > 0) "%d:%02d".format(m, s) else "%d s".format(s)
+    }
+
+    private fun beginStep(name: String) {
+        currentStepName = name
+        stepStartMs = System.currentTimeMillis()
+        stepsLog.add("▶ $name")
+        updateProgressUi(0, 0, name, null)
+    }
+
+    private fun finishStep(extra: String = "") {
+        val elapsed = System.currentTimeMillis() - stepStartMs
+        val last = stepsLog.lastOrNull()
+        if (last != null && last.startsWith("▶ ")) {
+            stepsLog[stepsLog.size - 1] = "✓ " + last.removePrefix("▶ ") +
+                " (${fmtDur(elapsed)})${if (extra.isNotEmpty()) " – $extra" else ""}"
+        }
+    }
+
+    private fun updateProgressUi(overallPct: Int, stepPct: Int, stepMsg: String, etaMs: Long?) {
+        main.post {
+            progressPanel.visibility = View.VISIBLE
+            if (overallPct >= 0) {
+                progress.isIndeterminate = overallPct <= 0 && stepPct <= 0
+                progress.progress = overallPct.coerceIn(0, 100)
+                overallLabel.text = "Teljes folyamat: $overallPct%"
+            }
+            stepProgress.isIndeterminate = stepPct <= 0
+            stepProgress.progress = stepPct.coerceIn(0, 100)
+            stepLabel.text = "Aktuális: $stepMsg" + if (stepPct > 0) " ($stepPct%)" else ""
+            val now = System.currentTimeMillis()
+            val elapsed = now - processStartMs
+            val stepElapsed = now - stepStartMs
+            val etaStr = when {
+                etaMs != null && etaMs > 0 -> " · becsült hátralévő: ${fmtDur(etaMs)}"
+                overallPct in 1..99 -> {
+                    val totalEst = (elapsed * 100.0 / overallPct).toLong()
+                    " · becsült hátralévő: ${fmtDur((totalEst - elapsed).coerceAtLeast(0))}"
+                }
+                else -> ""
+            }
+            timeLabel.text = "Eltelt: ${fmtDur(elapsed)} (lépés: ${fmtDur(stepElapsed)})$etaStr"
+            stepList.text = stepsLog.joinToString("\n")
+            status.text = stepMsg
         }
     }
 
@@ -285,9 +381,14 @@ class FileSubtitleActivity : AppCompatActivity() {
         if (working) return
         working = true
         cancel.set(false)
-        progress.visibility = View.VISIBLE
-        progress.isIndeterminate = true
-        status.text = "Feldolgozás indul…"
+        processStartMs = System.currentTimeMillis()
+        stepsLog.clear()
+        main.post {
+            startBtn.isEnabled = false
+            progressPanel.visibility = View.VISIBLE
+            status.setTextColor(Ui.color(this, R.color.textPrimary))
+        }
+        beginStep("Előkészítés")
 
         val mode = selectedMode()
         var dir = selectedDir()
@@ -319,14 +420,16 @@ class FileSubtitleActivity : AppCompatActivity() {
                         )
                     }
                 }
+                finishStep()
+                beginStep("Hang kinyerése a fájlból")
                 val fr = FileRecognizer(this, prefs, cancel)
                 frToClose = fr
 
-                main.post { status.text = "Hang kinyerése…" }
                 val pcmFile = extractPcm(uri)
                 if (cancel.get()) throw InterruptedException("Megszakítva")
+                finishStep()
 
-                main.post { status.text = "PCM betöltése…" }
+                beginStep("PCM betöltése")
                 val pcmBytes = pcmFile.readBytes()
                 val shorts = ShortArray(pcmBytes.size / 2)
                 for (i in shorts.indices) {
@@ -335,19 +438,18 @@ class FileSubtitleActivity : AppCompatActivity() {
                     shorts[i] = ((hi shl 8) or lo).toShort()
                 }
                 val durationMin = shorts.size / 16000.0 / 60.0
+                finishStep("%.1f perc hang".format(durationMin))
                 val useChunked = prefs.meetingMode || prefs.meetingSafeMode || durationMin > 20
 
                 val cues: List<SrtExporter.Cue>
                 if (useChunked) {
-                    main.post {
-                        status.text = "Chunkolt feldolgozás (%.0f perc, biztonságos mód)".format(durationMin)
-                    }
+                    beginStep("Chunkolt felismerés (%.0f perc)".format(durationMin))
                     val chunker = ChunkedTranscriber(this, prefs)
                     val chunkMs = prefs.meetingChunkMinutes * 60 * 1000
                     val result = chunker.run(
                         pcm16kMono = shorts,
                         chunkMs = chunkMs,
-                        overlapMs = 8_000, // 8 s átfedés – szó/mondat ne vágódjon el
+                        overlapMs = 8_000,
                         pauseBetweenMs = if (prefs.meetingSafeMode) 10_000L else 5_000L,
                         processChunk = { slice, offsetMs, idx, isFirst, isLast ->
                             val diarizer = DiarizerFactory.create(this, preferOnnx = prefs.preferOnnx)
@@ -356,49 +458,55 @@ class FileSubtitleActivity : AppCompatActivity() {
                             val shifted = segs.map {
                                 it.copy(startMs = it.startMs + offsetMs, endMs = it.endMs + offsetMs)
                             }
-                            fr.recognize(slice, sourceLang, modelSpec, needTranslate, dir, offsetMs, { t -> speakerAt(shifted, t) }, null)
+                            // Fontos: onProgress átadása, különben a chunk alatt „megáll” a UI
+                            fr.recognize(
+                                slice, sourceLang, modelSpec, needTranslate, dir, offsetMs,
+                                { t -> speakerAt(shifted, t) }
+                            ) { pct, msg ->
+                                updateProgressUi(-1, pct, "Chunk ${idx + 1}: $msg", null)
+                            }
                         },
                         onProgress = { prog ->
-                            main.post {
-                                progress.isIndeterminate = false
-                                progress.progress = prog.pctOverall.coerceIn(0, 100)
-                                status.text = prog.message + if (prog.pausedForCooling) " ⏸" else ""
-                                if (prog.pausedForCooling) {
-                                    status.setTextColor(Ui.color(this, R.color.warn))
-                                } else {
-                                    status.setTextColor(Ui.color(this, R.color.textPrimary))
-                                }
+                            val overall = prog.pctOverall.coerceIn(0, 100)
+                            val eta = if (overall in 1..99) {
+                                val elapsed = System.currentTimeMillis() - processStartMs
+                                ((elapsed * 100.0 / overall) - elapsed).toLong().coerceAtLeast(0)
+                            } else null
+                            val msg = prog.message + if (prog.pausedForCooling) " ⏸" else ""
+                            if (prog.pausedForCooling) {
+                                main.post { status.setTextColor(Ui.color(this, R.color.warn)) }
+                            } else {
+                                main.post { status.setTextColor(Ui.color(this, R.color.textPrimary)) }
                             }
+                            updateProgressUi(overall, 0, msg, eta)
                         }
                     )
                     cues = result.cues
+                    finishStep("${cues.size} blokk")
                     if (result.stoppedEarly) {
                         main.post {
                             Toast.makeText(this, "Feldolgozás megszakítva / korán leállt – részleges SRT mentve.", Toast.LENGTH_LONG).show()
                         }
                     }
                 } else {
+                    beginStep("Felismerés")
                     val diarizer = DiarizerFactory.create(this, preferOnnx = prefs.preferOnnx)
                     val segments = if (prefs.meetingMode || useDiarization) {
                         diarizer.diarize(shorts, 16000)
                     } else emptyList()
-                    main.post {
-                        status.text = if (segments.isNotEmpty())
-                            "Felismerés… (${segments.size} szegmens)"
-                        else "Felismerés…"
-                    }
                     cues = fr.recognize(
                         shorts, sourceLang, modelSpec, needTranslate, dir, 0L,
                         { t -> speakerAt(segments, t) }
                     ) { pct, msg ->
-                        main.post {
-                            progress.isIndeterminate = false
-                            progress.progress = pct
-                            status.text = msg
-                        }
+                        val eta = if (pct in 1..99) {
+                            val elapsed = System.currentTimeMillis() - processStartMs
+                            ((elapsed * 100.0 / pct) - elapsed).toLong().coerceAtLeast(0)
+                        } else null
+                        updateProgressUi(pct, pct, msg, eta)
                     }
+                    finishStep("${cues.size} blokk")
                 }
-                pcmFile.delete()
+                                pcmFile.delete()
                 fr.close()
 
                 if (cancel.get()) throw InterruptedException("Megszakítva")
@@ -429,15 +537,21 @@ class FileSubtitleActivity : AppCompatActivity() {
                 frToClose?.close()
                 main.post {
                     working = false
-                    progress.visibility = View.GONE
+                    startBtn.isEnabled = true
+                    stepsLog.add("⏸ Megszakítva")
+                    stepList.text = stepsLog.joinToString("\n")
                     status.text = "Megszakítva."
+                    status.setTextColor(Ui.color(this, R.color.warn))
                 }
             } catch (e: Exception) {
                 frToClose?.close()
                 main.post {
                     working = false
-                    progress.visibility = View.GONE
+                    startBtn.isEnabled = true
+                    stepsLog.add("✗ Hiba: ${e.message}")
+                    stepList.text = stepsLog.joinToString("\n")
                     status.text = "Hiba: ${e.message}"
+                    status.setTextColor(Ui.color(this, R.color.warn))
                     Toast.makeText(this, "Hiba: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }

@@ -106,9 +106,11 @@ class SetupWizardActivity : AppCompatActivity() {
                 val big = Engines.device(this).canRunLarge
                 Four(
                     "⬇️", "Letöltendő modellek",
-                    if (big) "Ajánlott csomag: nagy angol felismerő és fordítómodell (~190 MB). Wi-Fin egyből indul."
-                    else "Ajánlott csomag: kis angol felismerő és fordítómodell (~100 MB). Wi-Fin egyből indul.",
-                    "Letöltés most"
+                    if (big)
+                        "Válaszd ki, mit szeretnél: nagy angol felismerő + fordító (~190 MB, pontosabb filmekhez) vagy kisebb csomag (~100 MB, gyorsabb). Wi-Fin ajánlott."
+                    else
+                        "Válaszd ki a modelleket a következő képernyőn (kis angol felismerő + fordító, ~100 MB). Wi-Fin ajánlott.",
+                    "Modellek választása"
                 )
             }
         }
@@ -148,7 +150,8 @@ class SetupWizardActivity : AppCompatActivity() {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             }
             Step.MODELS -> {
-                startActivity(Intent(this, ModelsActivity::class.java).putExtra(ModelsActivity.EXTRA_AUTO, true))
+                // Ne indítson automatikus letöltést – a felhasználó válassza ki a modelleket
+                startActivity(Intent(this, ModelsActivity::class.java))
                 finish()
             }
         }

@@ -389,7 +389,18 @@ class MainActivity : AppCompatActivity() {
         stepRow(
             batteryOk(), getString(R.string.m_step4),
             getString(R.string.m_step4_desc), getString(R.string.m_open)
-        ) { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        ) {
+            try {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        android.net.Uri.parse("package:$packageName")
+                    )
+                )
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        }
 
         card.addView(Ui.button(this, "Előkészítés ellenőrzése", false) {
             startActivity(Intent(this, DiagnosticsActivity::class.java))

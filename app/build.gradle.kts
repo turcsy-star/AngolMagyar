@@ -11,8 +11,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 29
-        versionName = "2.9"
+        versionCode = 297
+        versionName = "2.9.7"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
@@ -20,9 +20,23 @@ android {
         }
     }
 
+    // Állandó debug kulcs – ugyanaz a signature minden buildnél (app/debug.keystore)
+    signingConfigs {
+        create("debugPermanent") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debugPermanent")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debugPermanent")
         }
     }
 
