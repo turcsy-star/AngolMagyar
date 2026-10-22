@@ -144,8 +144,8 @@ object TextPolish {
 
     /** Teljes átirat szöveg tisztítása (soronként, TranscriptStore formátum). */
     fun cleanTranscript(raw: String, enRules: List<Pair<Regex, String>>, huRules: List<Pair<Regex, String>>): String {
-        val re = Regex("""\[(\d{2}:\d{2}:\d{2})]\s*(.+)\n\s+(.+)""")
-        val spRe = Regex("""^\{([^}]*)}\s*""")
+        val re = Regex("""\[(\d{2}:\d{2}:\d{2})\]\s*(.+)\n\s+(.+)""")
+        val spRe = Regex("""^\{([^\}]*)\}\s*""")
         val sb = StringBuilder()
         var matched = false
         for (m in re.findAll(raw)) {

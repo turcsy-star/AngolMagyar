@@ -33,6 +33,44 @@ object Engines {
         else -> ModelManager.forSourceLang(lang)
     }
 
+    const val K_WHISPER = 0
+    const val K_VOSK = 1
+    const val K_SYSTEM = 2
+
+    /** A fájl-átirat felismerője egy nyelvhez. */
+    data class Asr(val kind: Int, val vosk: ModelManager.Spec?, val whisper: ModelManager.Spec?) {
+        val label: String
+            get() = when (kind) {
+                K_WHISPER -> whisper?.label?.substringBefore("(")?.trim() ?: "Whisper"
+                K_VOSK -> vosk?.label?.substringBefore("(")?.trim() ?: "Vosk"
+                else -> "Android beépített felismerő"
+            }
+        val key: String get() = when (kind) { K_WHISPER -> "w"; K_VOSK -> "v"; else -> "s" }
+    }
+
+    /** Whisper használható-e (natív könyvtár betölt + van letöltött modell). */
+    fun whisperSpec(ctx: Context): ModelManager.Spec? {
+        if (!WhisperNative.available()) return null
+        return ModelManager.bestWhisper(ctx, AsrPrefs.whisperId(ctx))
+    }
+
+    fun asrFor(ctx: Context, prefs: Prefs, lang: String): Asr {
+        val vosk = voskSpecFor(ctx, prefs, lang)
+        val voskOk = vosk != null && ModelManager.isInstalled(ctx, vosk)
+        val wh = whisperSpec(ctx)
+        val r = when (AsrPrefs.engine(ctx)) {
+            AsrPrefs.WHISPER -> Asr(K_WHISPER, vosk, wh)
+            AsrPrefs.VOSK -> if (vosk != null) Asr(K_VOSK, vosk, wh) else Asr(K_SYSTEM, null, wh)
+            else -> when {
+                wh != null -> Asr(K_WHISPER, vosk, wh)
+                vosk != null -> Asr(K_VOSK, vosk, null)
+                else -> Asr(K_SYSTEM, null, null)
+            }
+        }
+        // Vosk kiválasztva, de nincs letöltve: Whisperre váltunk, ha az megvan
+        return if (r.kind == K_VOSK && !voskOk && wh != null) Asr(K_WHISPER, vosk, wh) else r
+    }
+
     /** Élő módban mely nyelvi oldalak kellenek: (magyar oldal, másik oldal). */
     data class Sides(val hu: Boolean, val other: Boolean, val otherLang: String)
 

@@ -11,12 +11,19 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2110
-        versionName = "2.11.0"
+        versionCode = 2120
+        versionName = "2.12.0"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments += listOf("-DANDROID_STL=c++_static", "-DCMAKE_BUILD_TYPE=Release")
+                cppFlags += listOf("-O3")
+            }
         }
     }
 
@@ -37,6 +44,13 @@ android {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debugPermanent")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 

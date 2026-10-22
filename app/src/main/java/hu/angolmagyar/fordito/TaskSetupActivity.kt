@@ -277,16 +277,18 @@ class TaskSetupActivity : AppCompatActivity() {
                 val ok = try {
                     SystemAsrSupport.onDeviceAvailable(this) ||
                         (Prefs(this).allowOnlineAsr && SystemAsrSupport.anyAvailable(this)) ||
-                        ModelManager.isInstalled(this, ModelManager.HU_LARGE)
+                        ModelManager.isInstalled(this, ModelManager.HU_LARGE) ||
+                        Engines.whisperSpec(this) != null
                 } catch (_: Exception) { false }
-                if (ok) lines.add("✓ Magyar felismerő elérhető")
+                if (ok) lines.add(if (Engines.whisperSpec(this) != null) "✓ Magyar felismerő: Whisper (offline)" else "✓ Magyar felismerő elérhető")
                 else {
                     lines.add("✗ Magyar offline felismerő nem elérhető")
+                    lines.add("  Tipp: a Modellek képernyőn töltsd le a Whisper modellt – offline és pontos magyarul is.")
                     missing = true
                 }
             } else {
                 val spec = ModelManager.forSourceLang(lang.code, lang.code == "en", this)
-                val has = ModelManager.isInstalled(this, spec) ||
+                val has = Engines.whisperSpec(this) != null || ModelManager.isInstalled(this, spec) ||
                     (lang.code == "en" && (
                         ModelManager.isInstalled(this, ModelManager.LARGE) ||
                             ModelManager.isInstalled(this, ModelManager.SMALL)))
@@ -339,7 +341,7 @@ class TaskSetupActivity : AppCompatActivity() {
                 }
                 if (lang.code != "hu") {
                     val spec = ModelManager.forSourceLang(lang.code, true, this)
-                    val has = ModelManager.isInstalled(this, spec) ||
+                    val has = Engines.whisperSpec(this) != null || ModelManager.isInstalled(this, spec) ||
                         (lang.code == "en" && (
                             ModelManager.isInstalled(this, ModelManager.LARGE) ||
                                 ModelManager.isInstalled(this, ModelManager.SMALL)))
@@ -438,16 +440,18 @@ class TaskSetupActivity : AppCompatActivity() {
                 val ok = try {
                     SystemAsrSupport.onDeviceAvailable(this) ||
                         (Prefs(this).allowOnlineAsr && SystemAsrSupport.anyAvailable(this)) ||
-                        ModelManager.isInstalled(this, ModelManager.HU_LARGE)
+                        ModelManager.isInstalled(this, ModelManager.HU_LARGE) ||
+                        Engines.whisperSpec(this) != null
                 } catch (_: Exception) { false }
-                if (ok) lines.add("✓ Magyar felismerő elérhető")
+                if (ok) lines.add(if (Engines.whisperSpec(this) != null) "✓ Magyar felismerő: Whisper (offline)" else "✓ Magyar felismerő elérhető")
                 else {
                     lines.add("✗ Magyar offline felismerő nem elérhető")
+                    lines.add("  Tipp: a Modellek képernyőn töltsd le a Whisper modellt – offline és pontos magyarul is.")
                     missing = true
                 }
             } else {
                 val spec = ModelManager.forSourceLang(lang.code, lang.code == "en", this)
-                val has = ModelManager.isInstalled(this, spec) ||
+                val has = Engines.whisperSpec(this) != null || ModelManager.isInstalled(this, spec) ||
                     (lang.code == "en" && (
                         ModelManager.isInstalled(this, ModelManager.LARGE) ||
                             ModelManager.isInstalled(this, ModelManager.SMALL)))
@@ -508,7 +512,7 @@ class TaskSetupActivity : AppCompatActivity() {
             fun go() = openFileSubtitle(lang.code, tr, out, tgt)
             if (lang.code != "hu") {
                 val spec = ModelManager.forSourceLang(lang.code, true, this)
-                val has = ModelManager.isInstalled(this, spec) ||
+                val has = Engines.whisperSpec(this) != null || ModelManager.isInstalled(this, spec) ||
                     (lang.code == "en" && (
                         ModelManager.isInstalled(this, ModelManager.LARGE) ||
                             ModelManager.isInstalled(this, ModelManager.SMALL)))

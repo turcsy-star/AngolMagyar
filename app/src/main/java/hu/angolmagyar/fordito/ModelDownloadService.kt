@@ -202,6 +202,7 @@ class ModelDownloadService : Service() {
                             },
                             { stage -> post(-1, "($idx/$queueTotal) ${shortName(id)}: $stage", false) }
                         )
+                        if (spec.isWhisper) AsrPrefs.setWhisperId(this, spec.id)
                         if (id == ModelManager.LARGE.id) prefs.modelId = "large"
                         if (id == ModelManager.SMALL.id) prefs.modelId = "small"
                     }
@@ -251,7 +252,7 @@ class ModelDownloadService : Service() {
         "mlkit" -> 60 * MB
         ModelManager.LARGE.id -> 130 * MB
         ModelManager.SMALL.id -> 40 * MB
-        else -> 50 * MB
+        else -> ModelManager.byId(id).let { if (it.approxMb > 0) it.approxMb * MB else 50 * MB }
     }
 
     private fun shortName(id: String): String =

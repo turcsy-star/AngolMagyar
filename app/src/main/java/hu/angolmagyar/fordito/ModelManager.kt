@@ -17,8 +17,28 @@ object ModelManager {
         val url: String,
         val dirName: String,
         val lang: String = "en",
-        val optional: Boolean = false
-    )
+        val optional: Boolean = false,
+        /** Egyfájlos modell (Whisper ggml): a fájl neve; null = Vosk ZIP-mappa. */
+        val file: String? = null,
+        val approxMb: Int = 0
+    ) {
+        val isWhisper: Boolean get() = file != null
+    }
+
+    private const val HF = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
+
+    val WH_BASE = Spec("wh_base", "Whisper base (~57 MB)", HF + "ggml-base-q5_1.bin",
+        "wh-base", "multi", file = "ggml-base-q5_1.bin", approxMb = 57)
+    val WH_SMALL = Spec("wh_small", "Whisper small (~181 MB)", HF + "ggml-small-q5_1.bin",
+        "wh-small", "multi", file = "ggml-small-q5_1.bin", approxMb = 181)
+    val WH_TURBO = Spec("wh_turbo", "Whisper large-v3-turbo (~574 MB)", HF + "ggml-large-v3-turbo-q5_0.bin",
+        "wh-turbo", "multi", file = "ggml-large-v3-turbo-q5_0.bin", approxMb = 574)
+    val WH_MEDIUM = Spec("wh_medium", "Whisper medium (~515 MB)", HF + "ggml-medium-q5_0.bin",
+        "wh-medium", "multi", file = "ggml-medium-q5_0.bin", approxMb = 515)
+    val WH_LARGE = Spec("wh_large", "Whisper large-v3 (~1,1 GB)", HF + "ggml-large-v3-q5_0.bin",
+        "wh-large", "multi", file = "ggml-large-v3-q5_0.bin", approxMb = 1080)
+
+    val WHISPER = listOf(WH_SMALL, WH_TURBO, WH_MEDIUM, WH_LARGE, WH_BASE)
 
     val SMALL = Spec(
         "small", "Angol small (~40 MB)",
@@ -81,14 +101,25 @@ object ModelManager {
         }
     }
 
-    fun byId(id: String?): Spec = ALL.firstOrNull { it.id == id } ?: SMALL
+    fun byId(id: String?): Spec =
+        ALL.firstOrNull { it.id == id } ?: WHISPER.firstOrNull { it.id == id } ?: SMALL
+
+    /** A telepített, legnagyobb használható Whisper modell (preferált id előnyben), vagy null. */
+    fun bestWhisper(ctx: Context, preferredId: String?): Spec? {
+        WHISPER.firstOrNull { it.id == preferredId && isInstalled(ctx, it) }?.let { return it }
+        return listOf(WH_TURBO, WH_MEDIUM, WH_LARGE, WH_SMALL, WH_BASE).firstOrNull { isInstalled(ctx, it) }
+    }
 
     fun forLang(lang: String, preferLarge: Boolean, ctx: Context): Spec =
         forSourceLang(lang, preferLarge && lang == "en", ctx)
 
-    fun dir(ctx: Context, spec: Spec): File = File(File(ctx.filesDir, "models"), spec.dirName)
+    fun dir(ctx: Context, spec: Spec): File =
+        if (spec.file != null) File(File(File(ctx.filesDir, "models"), "whisper"), spec.file)
+        else File(File(ctx.filesDir, "models"), spec.dirName)
 
-    fun isInstalled(ctx: Context, spec: Spec): Boolean = File(dir(ctx, spec), "am").isDirectory
+    fun isInstalled(ctx: Context, spec: Spec): Boolean =
+        if (spec.file != null) dir(ctx, spec).let { it.isFile && it.length() > 20L * 1024 * 1024 || (it.isFile && spec.approxMb < 20) }
+        else File(dir(ctx, spec), "am").isDirectory
 
     fun sizeMb(ctx: Context, spec: Spec): Long {
         val d = dir(ctx, spec)
@@ -103,7 +134,7 @@ object ModelManager {
         return d.deleteRecursively()
     }
 
-    fun installedSpecs(ctx: Context): List<Spec> = ALL.filter { isInstalled(ctx, it) }
+    fun installedSpecs(ctx: Context): List<Spec> = (ALL + WHISPER).filter { isInstalled(ctx, it) }
 
     /** Szüneteltetés / megszakítás jelzése a letöltő szálnak. */
     class DlControl {
@@ -164,6 +195,16 @@ object ModelManager {
                 onStage("Megszakadt a kapcsolat, újrapróbálom ($attempt/3)…")
                 try { Thread.sleep(2000L * attempt) } catch (_: InterruptedException) {}
             }
+        }
+        if (spec.file != null) {
+            val target = dir(ctx, spec)
+            target.parentFile?.mkdirs()
+            target.delete()
+            if (!part.renameTo(target)) {
+                part.copyTo(target, overwrite = true)
+                part.delete()
+            }
+            return
         }
         onStage("Kicsomagolás…")
         try {

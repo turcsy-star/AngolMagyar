@@ -61,6 +61,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         const val EXTRA_DIARIZE = "diarize"
         const val EXTRA_AUTOSTART = "autostart" // fájlválasztó azonnal, feldolgozás a választás után
         const val EXTRA_TGT = "tgt" // célnyelv: hu/en/de/…
+        const val EXTRA_KIND = "kind" // SrtJobService.KIND_TRANSCRIPT / KIND_SUBTITLE
     }
 
     private var autoStart = false
@@ -104,6 +105,20 @@ class FileSubtitleActivity : AppCompatActivity() {
     private val stepRows = ArrayList<StepRow>()
     private lateinit var saveBtn: android.widget.Button
     private lateinit var bgHint: LinearLayout
+    private lateinit var coolBanner: TextView
+    private lateinit var phaseLabel: TextView
+    private lateinit var chunkMap: ChunkMapView
+    private lateinit var chunkLegend: TextView
+    private lateinit var previewBox: LinearLayout
+    private lateinit var previewText: TextView
+    private lateinit var perfLabel: TextView
+    private lateinit var perfSeek: android.widget.SeekBar
+    private lateinit var perfDesc: TextView
+    private lateinit var whereDefault: TextView
+    private lateinit var whereVideo: TextView
+    private lateinit var engineInfo: TextView
+    private var kind = SrtJobService.KIND_SUBTITLE
+    private var closeScheduled = false
 
     private class StepRow(
         val root: LinearLayout,
@@ -154,6 +169,32 @@ class FileSubtitleActivity : AppCompatActivity() {
             render()
         }
 
+    private fun takeTree(uri: Uri) {
+        try {
+            contentResolver.takePersistableUriPermission(
+                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+        } catch (_: Exception) {
+        }
+    }
+
+    private val pickDefaultTree =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) { takeTree(uri); OutputPrefs.setDefaultTree(this, uri); refreshWhere() }
+        }
+
+    private val pickVideoTree =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) { takeTree(uri); OutputPrefs.setVideoTree(this, uri); refreshWhere() }
+        }
+
+    private fun refreshWhere() {
+        if (!::whereDefault.isInitialized) return
+        val d = OutputPrefs.defaultTree(this)
+        whereDefault.text = "Átirat / tartalék mappa: " + (d?.let { "✓ " + OutputWriter.folderLabel(it) } ?: "✗ nincs beállítva")
+        whereVideo.text = "Felirat a videó mellé: " + OutputWriter.besideVideoStatus(this)
+    }
+
     private fun dp(v: Int) = Ui.dp(this, v)
 
     override fun onDestroy() {
@@ -190,6 +231,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         wizardSrc = intent.getStringExtra(EXTRA_SRC)
         wizardTgt = intent.getStringExtra(EXTRA_TGT) ?: "hu"
         val titleText = intent.getStringExtra(EXTRA_TITLE)
+        kind = intent.getStringExtra(EXTRA_KIND)
+            ?: if (meeting || titleText == "Átirat fájlból") SrtJobService.KIND_TRANSCRIPT else SrtJobService.KIND_SUBTITLE
         column.addView(Ui.title(this, if (meeting) "Tárgyalás – magyar átirat" else (titleText ?: "Felirat fájlból (SRT)")))
         if (meeting) {
             column.addView(Ui.small(this, MeetingMode.statusText(this)))
@@ -313,9 +356,99 @@ class FileSubtitleActivity : AppCompatActivity() {
             setPadding(0, dp(10), 0, dp(6))
         }
         progressPanel.addView(stepsBox)
+        engineInfo = Ui.small(this, "")
+        progressPanel.addView(engineInfo)
+        coolBanner = Ui.body(this, "").apply {
+            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.warn))
+            visibility = View.GONE
+        }
+        progressPanel.addView(coolBanner)
+        phaseLabel = Ui.small(this, "").apply { visibility = View.GONE }
+        progressPanel.addView(phaseLabel)
+        chunkMap = ChunkMapView(this)
+        progressPanel.addView(chunkMap, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(8) })
+        chunkLegend = Ui.small(this, "").apply { visibility = View.GONE }
+        progressPanel.addView(chunkLegend)
         timeLabel = Ui.small(this, "")
         progressPanel.addView(timeLabel)
         column.addView(progressPanel)
+
+        // Élő előnézet: az utoljára felismert sorok
+        previewBox = Ui.card(this).apply { visibility = View.GONE }
+        previewBox.addView(Ui.title(this, "Élő előnézet (az utolsó felismert sorok)", 15f))
+        previewText = TextView(this).apply {
+            textSize = 12.5f
+            typeface = Typeface.MONOSPACE
+            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
+            setTextIsSelectable(true)
+        }
+        previewBox.addView(previewText)
+        column.addView(previewBox)
+
+        // Teljesítmény csúszka – futás közben is állítható
+        Perf.load(this)
+        val perfCard = Ui.card(this)
+        perfCard.addView(Ui.title(this, "Teljesítmény", 16f))
+        perfLabel = Ui.body(this, "")
+        perfCard.addView(perfLabel)
+        perfSeek = android.widget.SeekBar(this).apply {
+            max = Perf.MAX - Perf.MIN
+            progress = Perf.level - Perf.MIN
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) Perf.set(this@FileSubtitleActivity, p + Perf.MIN)
+                    perfLabel.text = "Szint: ${Perf.level}/5 – ${Perf.name()}"
+                    perfDesc.text = Perf.describe()
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar?) {}
+            })
+        }
+        perfCard.addView(perfSeek, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
+        ))
+        perfDesc = Ui.small(this, "")
+        perfCard.addView(perfDesc)
+        perfCard.addView(Ui.small(this,
+            "Futás közben is átállítható: a prioritás kb. egy másodpercen belül él, a Whisper szálszáma a következő (max. 3 perces) darabtól. Magasabb szinten több CPU-szál és magasabb szálprioritás dolgozik, " +
+                "ezért gyorsabb, de melegebb lesz a telefon és hamarabb fogy az akku; túlmelegedésnél a program magától szünetel. " +
+                "A feldolgozás csak a processzort használja (a Whisper/Vosk nem használ GPU-t)."))
+        perfLabel.text = "Szint: ${Perf.level}/5 – ${Perf.name()}"
+        perfDesc.text = Perf.describe()
+        column.addView(perfCard)
+
+        // Mentés helye
+        val whereCard = Ui.card(this)
+        whereCard.addView(Ui.title(this, "Mentés helye", 16f))
+        whereCard.addView(Ui.small(this,
+            "A kész feliratot a program magától elmenti: a videó mellé, az átiratot az alapértelmezett mappába."))
+        whereVideo = Ui.small(this, "")
+        whereCard.addView(whereVideo)
+        whereDefault = Ui.small(this, "")
+        whereCard.addView(whereDefault)
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            whereCard.addView(Ui.button(this, "Teljes fájlhozzáférés megadása (videó melletti mentés)", false) {
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:$packageName")))
+                } catch (_: Exception) {
+                    try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                    catch (_: Exception) {}
+                }
+            })
+        }
+        whereCard.addView(Ui.button(this, "Videók mappája (mentés a videó mellé)…", false) { pickVideoTree.launch(null) })
+        whereCard.addView(Ui.button(this, "Alapértelmezett mappa (átirat)…", false) { pickDefaultTree.launch(null) })
+        whereCard.addView(SwitchCompat(this).apply {
+            text = "Kész után zárja be ezt a képernyőt"
+            minHeight = dp(48)
+            isChecked = OutputPrefs.autoClose(this@FileSubtitleActivity)
+            setOnCheckedChangeListener { _, c -> OutputPrefs.setAutoClose(this@FileSubtitleActivity, c) }
+        })
+        column.addView(whereCard)
+        refreshWhere()
 
         // Figyelmeztetés, ha az akkumulátor-optimalizálás leállíthatja a háttérben futó munkát
         bgHint = Ui.card(this)
@@ -518,24 +651,45 @@ class FileSubtitleActivity : AppCompatActivity() {
                 else { r.bar.isIndeterminate = false; r.bar.progress = st.pct }
             }
             val pctTxt = if (st.state == SrtJob.ACTIVE && st.pct > 0) "${st.pct}% · " else ""
-            val etaTxt = if (i == SrtJob.ST_RECOG && st.state == SrtJob.ACTIVE && job.etaMs > 0)
-                " · hátra ${fmtDur(job.etaMs)}" else ""
-            val text = if (st.comment.isEmpty()) "" else pctTxt + st.comment + etaTxt
+            val text = if (st.comment.isEmpty()) "" else pctTxt + st.comment
             r.comment.text = text
             r.comment.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
         }
         segBar.update()
 
-        val chunkPart = if (job.chunkTotal > 0) " · chunk ${job.chunkCur}/${job.chunkTotal}" else ""
-        val finishPart = if (job.running && job.etaMs > 0) " · kész kb. ${fmtClock(now + job.etaMs)}" else ""
-        overallLabel.text = "Teljes: ${job.overall}%$chunkPart$finishPart"
+        val chunkPart = if (job.chunkTotal > 1) " · chunk ${job.chunkDone}/${job.chunkTotal} kész" else ""
+        overallLabel.text = "Teljes: ${job.overall}%$chunkPart"
         val end = if (job.running) now else job.endMs.takeIf { it > 0 } ?: now
         val etaPart = when {
             !job.running -> ""
-            job.etaMs > 0 -> "\nHátralévő: ${fmtDur(job.etaMs)} · kész kb. ${fmtClock(now + job.etaMs)}"
-            else -> "\nHátralévő: számítás…"
+            job.etaAtMs > 0 -> "\nVárhatóan kész: ${fmtClock(job.etaAtMs)} körül · hátra kb. ${fmtDur(job.etaMs)}" +
+                (if (job.etaBasis.isNotEmpty()) " (${job.etaBasis})" else "")
+            job.curStep >= SrtJob.ST_RECOG -> "\nVárható befejezés: számítás (pár másodperc múlva)…"
+            else -> ""
         }
         timeLabel.text = "Eltelt: ${fmtDur(end - job.startMs)}$etaPart"
+        engineInfo.text = if (job.engineLabel.isNotEmpty()) "Felismerő: ${job.engineLabel}" else ""
+
+        // hűtési szünet
+        coolBanner.visibility = if (job.running && job.cooling) View.VISIBLE else View.GONE
+        if (job.cooling) coolBanner.text = job.waitReason.ifBlank { "Szünet (hűtés)" }
+
+        // mit csinál éppen (aktív chunkok) + chunk-térkép
+        val showChunks = job.chunkState.isNotEmpty()
+        chunkMap.visibility = if (showChunks) View.VISIBLE else View.GONE
+        chunkLegend.visibility = if (showChunks) View.VISIBLE else View.GONE
+        if (showChunks) {
+            chunkMap.update()
+            chunkLegend.text = "■ kész ${job.chunkDone}   ■ dolgozik ${job.chunkState.count { it == 1 }}   ■ vár ${job.chunkState.count { it == 0 }}"
+        }
+        val ph = job.phases.entries.sortedBy { it.key }.map { it.value }
+        phaseLabel.visibility = if (job.running && ph.isNotEmpty()) View.VISIBLE else View.GONE
+        phaseLabel.text = ph.joinToString("\n")
+
+        // élő előnézet
+        val pv = job.preview
+        previewBox.visibility = if (pv.isNotEmpty()) View.VISIBLE else View.GONE
+        previewText.text = pv.joinToString("\n")
 
         when {
             job.running -> {
@@ -544,7 +698,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
             job.finished -> {
                 status.text = "✓ Kész – ${job.resultCount} feliratblokk" +
-                    (if (job.partial) " (részleges)" else "") + "\n${job.resultName}"
+                    (if (job.partial) " (részleges)" else "") +
+                    (job.savedWhere?.let { "\nMentve $it" } ?: "\n${job.resultName}")
                 status.setTextColor(Ui.color(this, R.color.ok))
             }
             job.cancelled -> {
@@ -552,10 +707,18 @@ class FileSubtitleActivity : AppCompatActivity() {
                 status.setTextColor(Ui.color(this, R.color.warn))
             }
             job.error != null -> {
-                status.text = "Hiba: ${job.error}"
+                status.text = "Hiba: ${job.error}" +
+                    (job.partialWhere?.let { "\nA kész rész elmentve $it" } ?: "")
                 status.setTextColor(Ui.color(this, R.color.warn))
             }
         }
+
+        // automatikus bezárás kész + sikeres mentés után
+        if (job.finished && job.saved && watchedRun && !closeScheduled && OutputPrefs.autoClose(this)) {
+            closeScheduled = true
+            main.postDelayed({ if (!isFinishing) finish() }, 2500)
+        }
+        refreshWhere()
 
         // Ha a képernyő végignézte a futást, a végén magától felkínálja a mentést
         if (job.finished && !job.saved && watchedRun && !saveAsked && job.resultSrt != null) {
@@ -607,7 +770,10 @@ class FileSubtitleActivity : AppCompatActivity() {
         watchedRun = false
         saveAsked = false
         // A munkát az előtér-szolgáltatás végzi: másik appra váltva / zárolt képernyővel is megy tovább.
-        SrtJobService.start(this, uri, selectedMode(), selectedSrc(), dir, needTranslate, useDiarization)
+        val mode = selectedMode()
+        val tgtLang = if (needTranslate && mode != SrtExporter.Mode.SOURCE_ONLY) dir.substringAfter("_", selectedSrc()) else selectedSrc()
+        closeScheduled = false
+        SrtJobService.start(this, uri, mode, selectedSrc(), dir, needTranslate, useDiarization, kind, tgtLang)
         main.removeCallbacks(tick)
         main.post(tick)
         render()

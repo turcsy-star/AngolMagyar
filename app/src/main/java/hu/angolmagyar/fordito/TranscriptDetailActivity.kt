@@ -207,7 +207,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
                 ""
             }
             val raw = file.name.startsWith("jegyzokonyv_") || file.name.startsWith("felirat_") ||
-                !Regex("(?m)^\\[\\d{2}:\\d{2}:\\d{2}]").containsMatchIn(text)
+                !Regex("(?m)^\\[\\d{2}:\\d{2}:\\d{2}\\]").containsMatchIn(text)
             val parsed = SrtExporter.parseCuesFromTranscript(text)
             val a = TranscriptStore.audioFile(file)
             ui.post {

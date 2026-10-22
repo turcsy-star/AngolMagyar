@@ -51,7 +51,8 @@ class SegmentedBar(ctx: Context) : View(ctx) {
             val color = when (states[i]) {
                 SrtJob.ERROR -> Ui.color(context, R.color.err)
                 SrtJob.STOPPED -> Ui.color(context, R.color.warn)
-                else -> SrtJob.COLORS[i]
+                else -> if (i == SrtJob.ST_RECOG && states[i] == SrtJob.ACTIVE && SrtJob.cooling)
+                    Ui.color(context, R.color.warn) else SrtJob.COLORS[i]
             }
             // sáv-alap (halvány)
             paint.color = ColorUtils.setAlphaComponent(color, 60)

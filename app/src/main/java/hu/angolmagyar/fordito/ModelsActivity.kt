@@ -224,6 +224,9 @@ class ModelsActivity : AppCompatActivity() {
         val d = Engines.device(this)
         val ids = ArrayList<String>()
         ids.add(if (d.canRunLarge) ModelManager.LARGE.id else ModelManager.SMALL.id)
+        if (WhisperNative.available() && ModelManager.WHISPER.none { ModelManager.isInstalled(this, it) }) {
+            ids.add(if (d.canRunLarge) ModelManager.WH_TURBO.id else ModelManager.WH_SMALL.id)
+        }
         ids.add("mlkit")
         return ids
     }
@@ -297,6 +300,79 @@ class ModelsActivity : AppCompatActivity() {
             vCard.addView(g)
         }
         root.addView(vCard)
+
+        // --- Whisper (offline, magyarul is)
+        val wCard = Ui.card(this)
+        wCard.addView(Ui.title(this, "Whisper felismerő (offline, magyarul is)", 17f))
+        if (!WhisperNative.available()) {
+            wCard.addView(Ui.small(this,
+                "A Whisper ezen a telefonon nem használható: " + WhisperNative.error().ifBlank { "natív könyvtár hiányzik" }))
+        } else {
+            wCard.addView(Ui.small(this,
+                "Ugyanaz a technika, mint a PC-s változatban: a hang a telefonon marad, a magyar felismerés pontos. " +
+                    "A nagyobb modell pontosabb, de lassabb és több memóriát kér. Ajánlott: " +
+                    (if (dev.canRunLarge) "large-v3-turbo (jó arány)." else "small (a telefon RAM-jához).")))
+            for (spec in ModelManager.WHISPER) {
+                val installed = ModelManager.isInstalled(this, spec)
+                val part = if (installed) 0L else ModelManager.partialBytes(this, spec)
+                val rec = (dev.canRunLarge && spec.id == ModelManager.WH_TURBO.id) ||
+                    (!dev.canRunLarge && spec.id == ModelManager.WH_SMALL.id)
+                val cb = CheckBox(this).apply {
+                    text = buildString {
+                        append(spec.label)
+                        if (rec) append(" – ajánlott")
+                        if (installed) append("  ✓ telepítve")
+                        else if (part > 0) append("  ⏸ félbehagyva, folytatható")
+                    }
+                    minHeight = dp(48)
+                    isChecked = installed || selected.contains(spec.id)
+                    isEnabled = !installed && !downloading
+                    setOnCheckedChangeListener { _, c ->
+                        if (c) selected.add(spec.id) else selected.remove(spec.id)
+                        updateOkButton()
+                    }
+                }
+                wCard.addView(cb)
+            }
+            val instW = ModelManager.WHISPER.filter { ModelManager.isInstalled(this, it) }
+            if (instW.isNotEmpty()) {
+                wCard.addView(Ui.body(this, "Használt Whisper modell:"))
+                val cur = ModelManager.bestWhisper(this, AsrPrefs.whisperId(this))?.id
+                val gw = RadioGroup(this)
+                for (spec in instW) {
+                    gw.addView(RadioButton(this).apply {
+                        id = View.generateViewId()
+                        text = spec.label.substringBefore("(").trim()
+                        isChecked = spec.id == cur
+                        setOnClickListener { AsrPrefs.setWhisperId(this@ModelsActivity, spec.id) }
+                    })
+                }
+                wCard.addView(gw)
+                wCard.addView(Ui.body(this, "Melyik felismerő dolgozzon a fájlokon?"))
+                val ge = RadioGroup(this)
+                val engs = listOf(
+                    AsrPrefs.AUTO to "Automatikus (Whisper, ha van)",
+                    AsrPrefs.WHISPER to "Mindig Whisper",
+                    AsrPrefs.VOSK to "Vosk (gyors, pontatlanabb)"
+                )
+                for ((v, label) in engs) {
+                    ge.addView(RadioButton(this).apply {
+                        id = View.generateViewId()
+                        text = label
+                        isChecked = AsrPrefs.engine(this@ModelsActivity) == v
+                        setOnClickListener { AsrPrefs.setEngine(this@ModelsActivity, v) }
+                    })
+                }
+                wCard.addView(ge)
+                wCard.addView(SwitchCompat(this).apply {
+                    text = "Pontosabb keresés (beam 5, kb. 2–3× lassabb)"
+                    isChecked = AsrPrefs.beam(this@ModelsActivity) > 1
+                    minHeight = dp(52)
+                    setOnCheckedChangeListener { _, c -> AsrPrefs.setBeam(this@ModelsActivity, if (c) 5 else 1) }
+                })
+            }
+        }
+        root.addView(wCard)
 
         // --- magyar felismerő
         val hCard = Ui.card(this)
@@ -389,7 +465,8 @@ class ModelsActivity : AppCompatActivity() {
     }
 
     private fun totalMb(ids: List<String>): Int = ids.sumOf { id ->
-        if (id == "mlkit") 60 else items.firstOrNull { it.spec.id == id }?.mb ?: 0
+        if (id == "mlkit") 60
+        else items.firstOrNull { it.spec.id == id }?.mb ?: ModelManager.byId(id).approxMb
     }
 
     private fun okLabel(): String {

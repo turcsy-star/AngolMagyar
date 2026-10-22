@@ -127,8 +127,8 @@ object SrtExporter {
         return sb.toString()
     }
 
-    private val STAMP_LINE = Regex("""^\[(\d{2}):(\d{2}):(\d{2})]\s?(.*)$""")
-    private val SPEAKER_PREFIX = Regex("""^\{([^}]*)}\s*""")
+    private val STAMP_LINE by lazy { Regex("""^\[(\d{2}):(\d{2}):(\d{2})\]\s?(.*)$""") }
+    private val SPEAKER_PREFIX by lazy { Regex("""^\{([^\}]*)\}\s*""") }
 
     /** Átirat szöveg → Cue lista (sor alapú, a {Beszélő} jelölést is érti). */
     fun parseCuesFromTranscript(text: String): List<Cue> {

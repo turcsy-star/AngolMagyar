@@ -34,6 +34,13 @@ class FileRecognizer(
     private var translatorOk = false
     private var blocking: BlockingAsr? = null
 
+    // közös modellek: a chunkok nem töltik újra (a Vosk Model több szálból is használható)
+    private var voskModel: Model? = null
+    private var voskModelKey = ""
+    private var whisper: WhisperNative? = null
+    private var whisperKey = ""
+    private val whisperLock = Any()
+
     private val enRules by lazy { Fixes.parse(prefs.enFixes) }
     private val huRules by lazy { Fixes.parse(prefs.huFixes) }
 
@@ -42,16 +49,34 @@ class FileRecognizer(
         translator = null
         blocking?.close()
         blocking = null
+        try { synchronized(this) { voskModel?.close(); voskModel = null } } catch (_: Exception) {}
+        try { synchronized(whisperLock) { whisper?.close(); whisper = null } } catch (_: Exception) {}
+    }
+
+    /** Azonnali leállítás (Whisper közben is). */
+    fun abort() {
+        try { whisper?.abort(true) } catch (_: Exception) {}
+    }
+
+    /** Modellek betöltése a feldolgozás elején, hogy a chunkok már ne várjanak rá. */
+    fun prepare(asr: Engines.Asr, needTranslate: Boolean, dir: String) {
+        when (asr.kind) {
+            Engines.K_VOSK -> voskModel(asr.vosk!!)
+            Engines.K_WHISPER -> whisperCtx(asr.whisper!!)
+            else -> {}
+        }
+        if (needTranslate) prepareTranslator(dir)
     }
 
     /**
-     * @param spec a Vosk modell; null = a rendszer-felismerő (magyar)
-     * @param srcLang "en" vagy "hu" – a javító szabályokhoz és a nyelvi utómunkához
+     * @param asr a felismerő (Whisper / Vosk / rendszer)
+     * @param srcLang a forrásnyelv kódja ("hu", "en", …)
+     * @param onProgress (0–100, állapotüzenet): a felismerés, majd a fordítás, majd az utómunka
      */
     fun recognize(
         pcm: ShortArray,
         srcLang: String,
-        spec: ModelManager.Spec?,
+        asr: Engines.Asr,
         needTranslate: Boolean,
         dir: String,
         offsetMs: Long,
@@ -59,19 +84,96 @@ class FileRecognizer(
         onProgress: ((Int, String) -> Unit)? = null
     ): List<SrtExporter.Cue> {
         if (pcm.isEmpty()) return emptyList()
-        val raws = if (spec != null) rawVosk(pcm, spec, offsetMs, onProgress)
-        else rawSystem(pcm, offsetMs, onProgress)
-        if (needTranslate) prepareTranslator(dir)
-        val out = ArrayList<SrtExporter.Cue>()
+        val recEnd = if (needTranslate) 70 else 90
+        val rp: (Int, String) -> Unit = { p, m -> onProgress?.invoke(p * recEnd / 100, m) }
+        val raws = when (asr.kind) {
+            Engines.K_WHISPER -> rawWhisper(pcm, asr.whisper!!, srcLang, offsetMs, rp)
+            Engines.K_VOSK -> rawVosk(pcm, asr.vosk!!, offsetMs, rp)
+            else -> rawSystem(pcm, offsetMs, rp)
+        }
+        if (cancel.get()) return emptyList()
+        onProgress?.invoke(recEnd, "Szöveg javítása (${raws.size} blokk)…")
+        val polished = ArrayList<Raw>(raws.size)
         for (r in raws) {
-            if (cancel.get()) break
             var src = Fixes.apply(r.text, if (srcLang == "en") enRules else huRules)
             if (TextPolish.isNoise(src)) continue
             src = if (srcLang == "en") TextPolish.polishEnglish(src) else TextPolish.polishHungarian(src)
-            val target = translate(src, dir)
-            out.add(SrtExporter.Cue(r.startMs, r.endMs, src, target, speakerAt(r.startMs)))
+            polished.add(Raw(r.startMs, r.endMs, src))
         }
+        val targets: List<String> = if (needTranslate && polished.isNotEmpty()) {
+            prepareTranslator(dir)
+            translateAll(polished.map { it.text }, dir) { done, n ->
+                onProgress?.invoke(70 + 25 * done / n.coerceAtLeast(1), "Fordítás: $done/$n blokk")
+            }
+        } else polished.map { "" }
+        onProgress?.invoke(97, "Blokkok összeállítása…")
+        val out = ArrayList<SrtExporter.Cue>(polished.size)
+        for ((i, r) in polished.withIndex()) {
+            out.add(SrtExporter.Cue(r.startMs, r.endMs, r.text, targets.getOrElse(i) { "" }, speakerAt(r.startMs)))
+        }
+        onProgress?.invoke(100, "Kész (${out.size} blokk)")
         return out
+    }
+
+    // ---------------------------------------------------------------- Whisper
+
+    private fun whisperCtx(spec: ModelManager.Spec): WhisperNative {
+        synchronized(whisperLock) {
+            val key = spec.id
+            whisper?.let { if (whisperKey == key) return it }
+            try { whisper?.close() } catch (_: Exception) {}
+            whisper = null
+            val path = ModelManager.dir(ctx, spec).absolutePath
+            val w = WhisperNative.open(path) ?: throw IllegalStateException(
+                if (!WhisperNative.available()) "A Whisper motor nem tölthető be: ${WhisperNative.error()}"
+                else "A Whisper modell nem tölthető be (${spec.label}). Töltsd le újra a Modellek képernyőn."
+            )
+            whisper = w
+            whisperKey = key
+            return w
+        }
+    }
+
+    private fun rawWhisper(
+        pcm: ShortArray, spec: ModelManager.Spec, lang: String, offsetMs: Long,
+        onProgress: ((Int, String) -> Unit)?
+    ): List<Raw> {
+        val w = whisperCtx(spec)
+        val audio = FloatArray(pcm.size) { pcm[it] / 32768f }
+        val out = ArrayList<Raw>()
+        val prompt = if (lang == "hu") "Ez egy magyar nyelvű felvétel, helyes központozással." else null
+        val cb = onProgress
+        cb?.invoke(0, "Whisper: felismerés indul…")
+        if (cancel.get()) return emptyList()
+        var lastPct = -1
+        Perf.applyPriority() // a ggml munkaszálak a hívó szál prioritását öröklik
+        val rc = synchronized(whisperLock) {
+            w.abort(false)
+            w.transcribe(audio, lang, Perf.whisperThreads(), AsrPrefs.beam(ctx), prompt,
+                object : WhisperNative.Listener {
+                    override fun onProgress(percent: Int) {
+                        if (percent != lastPct) {
+                            lastPct = percent
+                            cb?.invoke(percent, "Whisper felismerés: $percent%")
+                        }
+                    }
+                    override fun onSegment(t0: Long, t1: Long, text: ByteArray) {}
+                })
+        }
+        if (cancel.get()) return emptyList()
+        if (rc != 0) throw IllegalStateException("A Whisper hibával leállt (kód $rc).")
+        var prev1 = ""
+        var prev2 = ""
+        for (sg in w.segments()) {
+            if (sg.noSpeech > 0.8f) continue
+            val t = sg.text.trim()
+            if (t.isBlank()) continue
+            // zajra gyakori ismétlődő "hallucináció" kiszűrése
+            if (t == prev1 && t == prev2) continue
+            prev2 = prev1; prev1 = t
+            out.addAll(splitLong(Raw(offsetMs + sg.startMs, offsetMs + sg.endMs, t)))
+        }
+        return finishTiming(out)
     }
 
     // ------------------------------------------------------------------- Vosk
@@ -80,8 +182,7 @@ class FileRecognizer(
         pcm: ShortArray, spec: ModelManager.Spec, offsetMs: Long,
         onProgress: ((Int, String) -> Unit)?
     ): List<Raw> {
-        LibVosk.setLogLevel(LogLevel.WARNINGS)
-        val model = Model(ModelManager.dir(ctx, spec).absolutePath)
+        val model = voskModel(spec)
         val rec = Recognizer(model, 16000f)
         rec.setWords(true)
         val out = ArrayList<Raw>()
@@ -89,7 +190,7 @@ class FileRecognizer(
             val step = 8000 // 0,5 mp
             var o = 0
             var lastEnd = 0L
-            val started = System.currentTimeMillis()
+            var lastPct = -1
             while (o < pcm.size && !cancel.get()) {
                 val e = (o + step).coerceAtMost(pcm.size)
                 val slice = pcm.copyOfRange(o, e)
@@ -99,18 +200,25 @@ class FileRecognizer(
                 o = e
                 if (onProgress != null) {
                     val pct = (o * 100L / pcm.size).toInt()
-                    val el = System.currentTimeMillis() - started
-                    val eta = if (pct > 2 && el > 500) ((el * 100.0 / pct - el) / 1000).toInt() else -1
-                    val etaS = if (eta >= 0) " · ~" + (if (eta >= 60) "${eta / 60}p ${eta % 60}mp" else "$eta mp") else ""
-                    onProgress(pct, "Felismerés… $pct%$etaS")
+                    if (pct != lastPct) { lastPct = pct; Perf.applyPriority(); onProgress(pct, "Vosk felismerés: $pct%") }
                 }
             }
             addVoskResult(rec.finalResult, offsetMs, lastEnd, out)
         } finally {
             rec.close()
-            model.close()
         }
         return finishTiming(out)
+    }
+
+    @Synchronized
+    private fun voskModel(spec: ModelManager.Spec): Model {
+        voskModel?.let { if (voskModelKey == spec.id) return it }
+        LibVosk.setLogLevel(LogLevel.WARNINGS)
+        try { voskModel?.close() } catch (_: Exception) {}
+        val m = Model(ModelManager.dir(ctx, spec).absolutePath)
+        voskModel = m
+        voskModelKey = spec.id
+        return m
     }
 
     private fun addVoskResult(json: String, offsetMs: Long, lastEndMs: Long, out: MutableList<Raw>): Long {
@@ -166,7 +274,6 @@ class FileRecognizer(
         }
         val segs = Vad.segments(pcm)
         val out = ArrayList<Raw>()
-        val started = System.currentTimeMillis()
         for ((i, s) in segs.withIndex()) {
             if (cancel.get()) break
             val slice = pcm.copyOfRange(s.start, s.end.coerceAtMost(pcm.size))
@@ -178,10 +285,7 @@ class FileRecognizer(
             }
             if (onProgress != null) {
                 val pct = ((i + 1) * 100 / segs.size)
-                val el = System.currentTimeMillis() - started
-                val eta = if (pct > 2 && el > 1000) ((el * 100.0 / pct - el) / 1000).toInt() else -1
-                val etaS = if (eta >= 0) " · ~" + (if (eta >= 60) "${eta / 60}p ${eta % 60}mp" else "$eta mp") else ""
-                onProgress(pct, "Felismerés (magyar)… $pct%$etaS")
+                onProgress(pct, "Android felismerő: ${i + 1}/${segs.size} szakasz")
             }
         }
         return finishTiming(out)
@@ -238,6 +342,7 @@ class FileRecognizer(
         else -> TranslateLanguage.ENGLISH
     }
 
+    @Synchronized
     private fun prepareTranslator(dir: String) {
         val key = dir
         if (translator != null && translatorKey == key) return
@@ -276,20 +381,30 @@ class FileRecognizer(
         }
     }
 
-    private fun translate(src: String, dir: String): String {
-        val t = translator ?: return ""
-        var target = ""
-        val latch = CountDownLatch(1)
-        t.translate(src)
-            .addOnSuccessListener { res ->
-                val toHu = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
-                target = if (toHu) TextPolish.polishHungarian(Fixes.apply(res, huRules))
+    /** Az összes blokk fordítása egyszerre beadva; az előrehaladást a kész darabok számából mutatjuk. */
+    private fun translateAll(srcs: List<String>, dir: String, onDone: (Int, Int) -> Unit): List<String> {
+        val t = translator ?: return srcs.map { "" }
+        val toHu = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
+        val tasks = srcs.map { t.translate(it) }
+        val done = java.util.concurrent.atomic.AtomicInteger(0)
+        for (k in tasks) k.addOnCompleteListener { done.incrementAndGet() }
+        val n = srcs.size
+        var last = -1
+        var lastChange = System.currentTimeMillis()
+        onDone(0, n)
+        while (done.get() < n && !cancel.get()) {
+            try { Thread.sleep(150) } catch (_: InterruptedException) { break }
+            val d = done.get()
+            if (d != last) { last = d; lastChange = System.currentTimeMillis(); onDone(d, n) }
+            else if (System.currentTimeMillis() - lastChange > 120_000) break // beragadt: ami kész, azt használjuk
+        }
+        return tasks.map { k ->
+            if (k.isComplete && k.isSuccessful) {
+                val res = k.result ?: ""
+                if (toHu) TextPolish.polishHungarian(Fixes.apply(res, huRules))
                 else TextPolish.polishEnglish(Fixes.apply(res, enRules))
-                latch.countDown()
-            }
-            .addOnFailureListener { latch.countDown() }
-        latch.await(15, TimeUnit.SECONDS)
-        return target
+            } else ""
+        }
     }
 
     companion object {

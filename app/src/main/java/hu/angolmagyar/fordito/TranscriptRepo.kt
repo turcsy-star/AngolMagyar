@@ -78,7 +78,7 @@ object TranscriptRepo {
                     count++
                     last = st
                     if (first.isEmpty()) {
-                        first = l.substring(10).trim().replace(Regex("^\\{[^}]*}\\s*"), "")
+                        first = l.substring(10).trim().replace(Regex("^\\{[^\\}]*\\}\\s*"), "")
                     }
                 }
             }
@@ -199,7 +199,7 @@ object TranscriptRepo {
                         if (st != null) lastStamp = st
                         if (l.isBlank()) continue
                         if (fold(l).contains(q)) {
-                            val text = l.substringAfter("]", l).trim().replace(Regex("^\\{[^}]*}\\s*"), "")
+                            val text = l.substringAfter("]", l).trim().replace(Regex("^\\{[^\\}]*\\}\\s*"), "")
                             hits.add(Hit(f, title, lastStamp, text.take(160)))
                             if (hits.size >= maxHits) return hits
                         }

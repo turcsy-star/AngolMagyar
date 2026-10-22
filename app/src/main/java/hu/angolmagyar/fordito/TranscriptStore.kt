@@ -43,7 +43,7 @@ class TranscriptStore(private val ctx: Context, resume: Boolean = false) {
 
         /** Az utolsó [HH:mm:ss] bélyeg ms-ben (0, ha nincs). */
         fun lastStampMs(text: String): Long {
-            val re = Regex("""(?m)^\[(\d{2}):(\d{2}):(\d{2})]""")
+            val re = Regex("""(?m)^\[(\d{2}):(\d{2}):(\d{2})\]""")
             var last = 0L
             for (m in re.findAll(text)) {
                 last = (m.groupValues[1].toLong() * 3600 + m.groupValues[2].toLong() * 60 +

@@ -1,4 +1,14 @@
-# Angol–Magyar élő fordító – v2.9
+# Angol–Magyar élő fordító – v2.12
+
+## v2.12.0 (Whisper, élő teljesítmény-csúszka, pontosabb állapotjelzés)
+- **Whisper (whisper.cpp) offline felismerő** – a PC-s változat motorja a telefonon: magyarul is pontos, nincs szükség Google csomagra. A modellt a Modellek képernyőn töltöd le (ajánlott: large-v3-turbo q5_0 ≈ 574 MB, gyengébb telefonra small ≈ 181 MB). Automatikus választás: ha van Whisper modell, az dolgozik; felülbírálható.
+- **Teljesítmény-csúszka (1–5)** futás közben is: CPU-szálak száma (Whisper), szálprioritás, szünetek, melegedési küszöb; Vosk-nál csak a legfelső szinteken fut több chunk párhuzamosan. Csak CPU, GPU-t nem használ.
+- **ETA és folyamat** másodpercenként frissül (az utolsó percek mért tempója alapján).
+- **Chunk-végi tevékenység kiírva**: beszélők, felismerés %, javítás, fordítás i/n, összeállítás; chunk-térkép, hűtés-szalag, élő előnézet.
+- Gyorsabb fordítás (egyszerre beadott blokkok), a Vosk modell nem töltődik újra chunkonként.
+- **Mentés javítva**: az Android ICU reguláris kifejezés-hiba (ExceptionInInitializerError) megszűnt; a hibaüzenet most az okot is kiírja.
+- Mentés a videó mellé / alapértelmezett mappába (Minden fájl elérése vagy mappa-engedély), kész rész mentése megszakításnál.
+- Natív build: a CI-nek most C++-t is fordítania kell (NDK/CMake 3.22.1), az első build hosszabb.
 
 Offline élő fordítás: Vosk + ML Kit + ONNX speaker + Wear.
 
