@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Live translator</string>
+    <string name="w_connecting">Connecting…</string>
+    <string name="w_phone_ok">Phone OK</string>
+    <string name="w_no_phone">No phone connected</string>
+    <string name="w_api_error">Wear API error</string>
+    <string name="w_unavailable">Wear unavailable</string>
+    <string name="w_send_failed">Send failed</string>
+    <string name="w_idle">Idle</string>
+    <string name="w_paused">Paused · %1$s</string>
+    <string name="w_running">Running · %1$s</string>
+    <string name="w_start_mic">▶ Microphone</string>
+    <string name="w_start_ptt">Push-to-talk</string>
+    <string name="w_pause">⏸ Pause</string>
+    <string name="w_resume">▶ Resume</string>
+    <string name="w_switch">⇄ Direction</string>
+    <string name="w_stop">■ Stop</string>
+</resources>
