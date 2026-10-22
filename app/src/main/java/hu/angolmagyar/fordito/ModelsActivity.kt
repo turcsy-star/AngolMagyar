@@ -174,11 +174,14 @@ class ModelsActivity : AppCompatActivity() {
                     val sup = s.supportedOnDeviceLanguages.any { it.startsWith("hu") }
                     huInstalled = inst
                     huCanDownload = sup && !inst
+                    val whisperOk = WhisperNative.available() &&
+                        ModelManager.WHISPER.any { ModelManager.isInstalled(this@ModelsActivity, it) }
                     huStatus = when {
                         inst -> "✓ Telepítve, offline működik."
                         pend -> "Letöltés folyamatban… (pár perc, majd frissítsd az állapotot)"
                         sup -> "Letölthető (kb. 50–100 MB)."
-                        else -> "Ez a felismerő nem támogatja a magyart offline."
+                        whisperOk -> "A Google offline magyar csomag nincs telepítve – de a Whisper már offline működik magyarul is (ajánlott)."
+                        else -> "Ez a Google felismerő nem támogatja a magyart offline. Használd a Whisper modellt (fent)."
                     }
                     try { r.destroy() } catch (_: Exception) {}
                     if (!downloading) build()
@@ -377,9 +380,17 @@ class ModelsActivity : AppCompatActivity() {
         // --- magyar felismerő
         val hCard = Ui.card(this)
         hCard.addView(Ui.title(this, "Magyar felismerő", 17f))
+        val whisperOk = WhisperNative.available() &&
+            ModelManager.WHISPER.any { ModelManager.isInstalled(this, it) }
         hCard.addView(Ui.small(this,
-            "A magyar beszédfelismerést az Android beépített (Google) felismerője végzi, mert " +
-                "a Vosk-nak nincs magyar modellje. A csomag a telefonon fut, a hang nem kerül ki."))
+            if (whisperOk)
+                "A Whisper már offline magyar felismerést is ad (fent). Az alábbi Google csomag opcionális tartalék " +
+                    "(élő mikrofonos módhoz). A hang a telefonon marad, ha offline van."
+            else
+                "A magyar beszédfelismerést az Android beépített (Google) felismerője végzi, mert " +
+                    "a Vosk-nak nincs magyar modellje. A csomag a telefonon fut, a hang nem kerül ki. " +
+                    "Ajánlott: töltsd le a Whisper modellt (fent) – az offline, pontos, magyarul is."
+        ))
         hCard.addView(Ui.body(this, huStatus))
         if (huCanDownload && !huInstalled) {
             hCard.addView(Ui.button(this, "Magyar csomag letöltése", true) { triggerHuDownload() })

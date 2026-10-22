@@ -117,8 +117,17 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var whereDefault: TextView
     private lateinit var whereVideo: TextView
     private lateinit var engineInfo: TextView
+    private lateinit var pickFileBtn: android.widget.Button
+    private lateinit var modeLangCard: View
+    private lateinit var whereCard: LinearLayout
+    private lateinit var perfCard: LinearLayout
+    private lateinit var whereModeGroup: RadioGroup
+    private lateinit var queueBox: LinearLayout
+    private lateinit var queueTitle: TextView
     private var kind = SrtJobService.KIND_SUBTITLE
     private var closeScheduled = false
+    /** true = videó mellé (alapértelmezett), false = alapértelmezett mappa */
+    private var saveBesideVideo = true
 
     private class StepRow(
         val root: LinearLayout,
@@ -135,20 +144,40 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     private var selectedUri: Uri? = null
+    /** Várólista: a kiválasztott fájlok (az első a current). */
+    private val fileQueue = ArrayList<Uri>()
+    /** Hányadik fájl a sorban (1-alapú), 0 = nincs sor. */
+    private var queueIndex = 0
+    private var queueTotal = 0
+    private var autoAdvance = true
+
+    private val mimeTypes = arrayOf(
+        "audio/*", "video/*",
+        "audio/mpeg", "audio/mp4", "audio/x-wav", "audio/ogg",
+        "video/mp4", "video/x-matroska", "video/webm"
+    )
 
     private val openLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri != null) {
-                selectedUri = uri
+        registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+            if (uris.isNullOrEmpty()) return@registerForActivityResult
+            fileQueue.clear()
+            for (uri in uris) {
                 try {
                     contentResolver.takePersistableUriPermission(
                         uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                     )
                 } catch (_: Exception) {
                 }
-                status.text = "Kiválasztva: ${uri.lastPathSegment ?: uri}"
-                // Ne induljon automatikusan – a felhasználó ellenőrizheti a beállításokat,
-                // majd az „SRT készítése” gombbal indít. (autoStart csak a fájlválasztót nyitja)
+                fileQueue.add(uri)
+            }
+            selectedUri = fileQueue.firstOrNull()
+            queueIndex = 0
+            queueTotal = fileQueue.size
+            refreshQueueUi()
+            status.text = when {
+                fileQueue.isEmpty() -> "Nincs fájl kiválasztva."
+                fileQueue.size == 1 -> "Kiválasztva: ${displayName(fileQueue[0])}"
+                else -> "${fileQueue.size} fájl a sorban – az első: ${displayName(fileQueue[0])}"
             }
         }
 
@@ -191,8 +220,10 @@ class FileSubtitleActivity : AppCompatActivity() {
     private fun refreshWhere() {
         if (!::whereDefault.isInitialized) return
         val d = OutputPrefs.defaultTree(this)
-        whereDefault.text = "Átirat / tartalék mappa: " + (d?.let { "✓ " + OutputWriter.folderLabel(it) } ?: "✗ nincs beállítva")
-        whereVideo.text = "Felirat a videó mellé: " + OutputWriter.besideVideoStatus(this)
+        val prefer = OutputPrefs.preferBeside(this)
+        whereVideo.text = (if (prefer) "▶ Kiválasztva · " else "") + "Videó mellé: " + OutputWriter.besideVideoStatus(this)
+        whereDefault.text = (if (!prefer) "▶ Kiválasztva · " else "") + "Alapértelmezett mappa: " +
+            (d?.let { "✓ " + OutputWriter.folderLabel(it) } ?: "✗ nincs beállítva")
     }
 
     private fun dp(v: Int) = Ui.dp(this, v)
@@ -255,18 +286,22 @@ class FileSubtitleActivity : AppCompatActivity() {
             })
         }
 
-        column.addView(Ui.button(this, "Fájl kiválasztása…", true) {
-            openLauncher.launch(
-                arrayOf(
-                    "audio/*", "video/*",
-                    "audio/mpeg", "audio/mp4", "audio/x-wav", "audio/ogg",
-                    "video/mp4", "video/x-matroska", "video/webm"
-                )
-            )
-        })
+        pickFileBtn = Ui.button(this, "Fájl(ok) kiválasztása…", true) {
+            openLauncher.launch(mimeTypes)
+        }
+        column.addView(pickFileBtn)
 
         status = Ui.body(this, "Nincs fájl kiválasztva.")
         column.addView(status)
+
+        // Várólista (több fájl)
+        queueBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        queueTitle = Ui.small(this, "")
+        queueBox.addView(queueTitle)
+        column.addView(queueBox)
 
         // Mód + nyelv: varázslóból jövet összefoglaló, különben teljes választó
         modeGroup = RadioGroup(this)
@@ -303,6 +338,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                 else prefs.translateDir != Prefs.DIR_NONE
             }
         }
+        val modeLangWrap = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        modeLangCard = modeLangWrap
         if (fromWizard && !meeting) {
             val langName = when (presetSrc) {
                 "hu" -> "Magyar"; "de" -> "Német"; "fr" -> "Francia"
@@ -321,7 +358,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             card.addView(Ui.title(this, "Felirat", 16f))
             card.addView(Ui.body(this, summary))
             card.addView(Ui.small(this, "Válaszd ki a fájlt, majd indítsd az SRT készítést."))
-            column.addView(card)
+            modeLangWrap.addView(card)
             // Rejtett, de a selectedMode/selectedSrc olvassa
             modeGroup.visibility = View.GONE
             if (::srcGroup.isInitialized) srcGroup.visibility = View.GONE
@@ -330,15 +367,16 @@ class FileSubtitleActivity : AppCompatActivity() {
             val modeCard = Ui.card(this)
             modeCard.addView(Ui.title(this, "Kimenet", 16f))
             modeCard.addView(modeGroup)
-            column.addView(modeCard)
+            modeLangWrap.addView(modeCard)
             if (!meeting) {
                 val langCard = Ui.card(this)
                 langCard.addView(Ui.title(this, "A hang nyelve", 16f))
                 langCard.addView(srcGroup)
                 langCard.addView(translateSwitch)
-                column.addView(langCard)
+                modeLangWrap.addView(langCard)
             }
         }
+        column.addView(modeLangWrap)
 
         // --- Folyamatpanel (varázsló-szerű lépések + idő + progress) ---
         progressPanel = Ui.card(this).apply { visibility = View.GONE }
@@ -389,7 +427,7 @@ class FileSubtitleActivity : AppCompatActivity() {
 
         // Teljesítmény csúszka – futás közben is állítható
         Perf.load(this)
-        val perfCard = Ui.card(this)
+        perfCard = Ui.card(this)
         perfCard.addView(Ui.title(this, "Teljesítmény", 16f))
         perfLabel = Ui.body(this, "")
         perfCard.addView(perfLabel)
@@ -414,16 +452,37 @@ class FileSubtitleActivity : AppCompatActivity() {
         perfCard.addView(Ui.small(this,
             "Futás közben is átállítható: a prioritás kb. egy másodpercen belül él, a Whisper szálszáma a következő (max. 3 perces) darabtól. Magasabb szinten több CPU-szál és magasabb szálprioritás dolgozik, " +
                 "ezért gyorsabb, de melegebb lesz a telefon és hamarabb fogy az akku; túlmelegedésnél a program magától szünetel. " +
-                "A feldolgozás csak a processzort használja (a Whisper/Vosk nem használ GPU-t)."))
+                "A feldolgozás csak a processzort használja (a Whisper/Vosk jelenleg nem használ GPU-t – a natív könyvtár CPU-ra van fordítva)."))
         perfLabel.text = "Szint: ${Perf.level}/5 – ${Perf.name()}"
         perfDesc.text = Perf.describe()
         column.addView(perfCard)
 
-        // Mentés helye
-        val whereCard = Ui.card(this)
+        // Mentés helye – két egyértelmű opció, kiválasztás jelölve
+        whereCard = Ui.card(this)
         whereCard.addView(Ui.title(this, "Mentés helye", 16f))
         whereCard.addView(Ui.small(this,
-            "A kész feliratot a program magától elmenti: a videó mellé, az átiratot az alapértelmezett mappába."))
+            "Alapértelmezés: a forrásvideó mellé (ha a mappa elérhető). Különben az alapértelmezett mappába."))
+        whereModeGroup = RadioGroup(this)
+        whereModeGroup.addView(RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "Videó mellé (ajánlott)"
+            isChecked = true
+        })
+        whereModeGroup.addView(RadioButton(this).apply {
+            id = View.generateViewId()
+            text = "Alapértelmezett mappa"
+        })
+        whereModeGroup.setOnCheckedChangeListener { _, checkedId ->
+            val idx = (0 until whereModeGroup.childCount).indexOfFirst { whereModeGroup.getChildAt(it).id == checkedId }
+            saveBesideVideo = idx != 1
+            OutputPrefs.setPreferBeside(this@FileSubtitleActivity, saveBesideVideo)
+            refreshWhere()
+        }
+        whereCard.addView(whereModeGroup)
+        saveBesideVideo = OutputPrefs.preferBeside(this)
+        if (!saveBesideVideo && whereModeGroup.childCount > 1) {
+            (whereModeGroup.getChildAt(1) as? RadioButton)?.isChecked = true
+        }
         whereVideo = Ui.small(this, "")
         whereCard.addView(whereVideo)
         whereDefault = Ui.small(this, "")
@@ -439,8 +498,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                 }
             })
         }
-        whereCard.addView(Ui.button(this, "Videók mappája (mentés a videó mellé)…", false) { pickVideoTree.launch(null) })
-        whereCard.addView(Ui.button(this, "Alapértelmezett mappa (átirat)…", false) { pickDefaultTree.launch(null) })
+        whereCard.addView(Ui.button(this, "Videók mappája (engedély a mellé mentéshez)…", false) { pickVideoTree.launch(null) })
+        whereCard.addView(Ui.button(this, "Alapértelmezett mappa beállítása…", false) { pickDefaultTree.launch(null) })
         whereCard.addView(SwitchCompat(this).apply {
             text = "Kész után zárja be ezt a képernyőt"
             minHeight = dp(48)
@@ -475,15 +534,42 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         column.addView(cancelBtn)
         if (autoStart) {
-            main.post {
-                openLauncher.launch(
-                    arrayOf(
-                        "audio/*", "video/*",
-                        "audio/mpeg", "audio/mp4", "audio/x-wav", "audio/ogg",
-                        "video/mp4", "video/x-matroska", "video/webm"
-                    )
-                )
+            main.post { openLauncher.launch(mimeTypes) }
+        }
+    }
+
+    private fun displayName(uri: Uri): String =
+        OutputWriter.displayName(this, uri) ?: uri.lastPathSegment ?: uri.toString()
+
+    private fun refreshQueueUi() {
+        if (!::queueBox.isInitialized) return
+        // Csak a cím sort tartjuk, a többi gyermeket újraépítjük
+        while (queueBox.childCount > 1) queueBox.removeViewAt(1)
+        if (fileQueue.isEmpty()) {
+            queueBox.visibility = View.GONE
+            return
+        }
+        queueBox.visibility = View.VISIBLE
+        val running = SrtJob.running
+        val idx = if (running && queueIndex > 0) queueIndex else 1
+        queueTitle.text = if (fileQueue.size == 1) "Kiválasztott fájl"
+        else "Várólista (${fileQueue.size} fájl)" + if (running) " – most: $idx/${fileQueue.size}" else ""
+        val maxShow = 8
+        for ((i, uri) in fileQueue.withIndex()) {
+            if (i >= maxShow) {
+                queueBox.addView(Ui.small(this, "… +${fileQueue.size - maxShow} további"))
+                break
             }
+            val mark = when {
+                running && i + 1 == queueIndex -> "▶ "
+                running && i + 1 < queueIndex -> "✓ "
+                else -> "  "
+            }
+            queueBox.addView(Ui.small(this, "$mark${i + 1}. ${displayName(uri)}"))
+        }
+        if (fileQueue.size > 1 && !running) {
+            queueBox.addView(Ui.small(this,
+                "Az „SRT készítése” mindet egymás után feldolgozza (ugyanazokkal a beállításokkal)."))
         }
     }
 
@@ -626,9 +712,17 @@ class FileSubtitleActivity : AppCompatActivity() {
         if (!::progressPanel.isInitialized) return
         val job = SrtJob
         val show = job.running || job.finished || job.cancelled || job.error != null
-        bgHint.visibility = if (BatterySettings.isIgnoring(this)) View.GONE else View.VISIBLE
+        // Varázsló mód futás közben: csak folyamat + prioritás + megszakítás
+        val wizardRun = job.running
+        if (::pickFileBtn.isInitialized) pickFileBtn.visibility = if (wizardRun) View.GONE else View.VISIBLE
+        if (::modeLangCard.isInitialized) modeLangCard.visibility = if (wizardRun) View.GONE else View.VISIBLE
+        if (::whereCard.isInitialized) whereCard.visibility = if (wizardRun) View.GONE else View.VISIBLE
+        if (::bgHint.isInitialized) {
+            bgHint.visibility = if (wizardRun || BatterySettings.isIgnoring(this)) View.GONE else View.VISIBLE
+        }
         progressPanel.visibility = if (show) View.VISIBLE else View.GONE
         startBtn.isEnabled = !job.running
+        startBtn.visibility = if (wizardRun) View.GONE else View.VISIBLE
         cancelBtn.isEnabled = job.running
         saveBtn.visibility = if (job.finished && !job.saved) View.VISIBLE else View.GONE
         if (!show) return
@@ -657,18 +751,35 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         segBar.update()
 
-        val chunkPart = if (job.chunkTotal > 1) " · chunk ${job.chunkDone}/${job.chunkTotal} kész" else ""
-        overallLabel.text = "Teljes: ${job.overall}%$chunkPart"
+        val filePart = if (queueTotal > 1 && queueIndex > 0)
+            "Fájl $queueIndex/$queueTotal · " else ""
+        val chunkPart = if (job.chunkTotal > 1) " · darab ${job.chunkDone}/${job.chunkTotal}" else ""
+        val stepPct = job.steps.getOrNull(job.curStep)?.pct?.takeIf { it >= 0 }?.let { " · lépés $it%" } ?: ""
+        val activeName = selectedUri?.let { displayName(it) }?.let { "\n$it" } ?: ""
+        overallLabel.text = "${filePart}Teljes: ${job.overall}%$chunkPart$stepPct$activeName"
         val end = if (job.running) now else job.endMs.takeIf { it > 0 } ?: now
+        val elapsed = end - job.startMs
         val etaPart = when {
             !job.running -> ""
-            job.etaAtMs > 0 -> "\nVárhatóan kész: ${fmtClock(job.etaAtMs)} körül · hátra kb. ${fmtDur(job.etaMs)}" +
+            job.etaAtMs > 0 -> "\nKész kb. ${fmtClock(job.etaAtMs)} · hátra ${fmtDur(job.etaMs)}" +
                 (if (job.etaBasis.isNotEmpty()) " (${job.etaBasis})" else "")
-            job.curStep >= SrtJob.ST_RECOG -> "\nVárható befejezés: számítás (pár másodperc múlva)…"
+            job.curStep >= SrtJob.ST_RECOG -> "\nHátralévő: számítás…"
             else -> ""
         }
-        timeLabel.text = "Eltelt: ${fmtDur(end - job.startMs)}$etaPart"
-        engineInfo.text = if (job.engineLabel.isNotEmpty()) "Felismerő: ${job.engineLabel}" else ""
+        timeLabel.text = "Eltelt: ${fmtDur(elapsed)}$etaPart"
+        val src = selectedSrc()
+        val eng = if (job.engineLabel.isNotEmpty())
+            "Felismerő: ${job.engineLabel} · forrásnyelv: $src" else ""
+        // Aktív darab részlete (Whisper UI-szerűen)
+        val activeChunk = job.phases.entries.minByOrNull { it.key }
+        val phaseLine = when {
+            activeChunk != null && job.running ->
+                "Aktuális darab: #${activeChunk.key + 1}" +
+                    (if (job.chunkTotal > 0) "/${job.chunkTotal}" else "") +
+                    " · ${activeChunk.value}"
+            else -> null
+        }
+        engineInfo.text = listOfNotNull(eng, phaseLine).joinToString("\n")
 
         // hűtési szünet
         coolBanner.visibility = if (job.running && job.cooling) View.VISIBLE else View.GONE
@@ -693,35 +804,53 @@ class FileSubtitleActivity : AppCompatActivity() {
 
         when {
             job.running -> {
-                status.text = job.message
+                val q = if (queueTotal > 1) "[$queueIndex/$queueTotal] " else ""
+                status.text = q + job.message
                 status.setTextColor(Ui.color(this, if (job.cooling) R.color.warn else R.color.textPrimary))
             }
             job.finished -> {
+                val more = if (queueIndex > 0 && queueIndex < fileQueue.size)
+                    "\nKövetkező fájl indítása…" else ""
                 status.text = "✓ Kész – ${job.resultCount} feliratblokk" +
                     (if (job.partial) " (részleges)" else "") +
-                    (job.savedWhere?.let { "\nMentve $it" } ?: "\n${job.resultName}")
+                    (job.savedWhere?.let { "\nMentve $it" } ?: "\n${job.resultName}") + more
                 status.setTextColor(Ui.color(this, R.color.ok))
             }
             job.cancelled -> {
-                status.text = "Megszakítva."
+                status.text = "Megszakítva." +
+                    (if (queueTotal > 1) " A várólista megállt ($queueIndex/$queueTotal)." else "")
                 status.setTextColor(Ui.color(this, R.color.warn))
             }
             job.error != null -> {
                 status.text = "Hiba: ${job.error}" +
-                    (job.partialWhere?.let { "\nA kész rész elmentve $it" } ?: "")
+                    (job.partialWhere?.let { "\nA kész rész elmentve $it" } ?: "") +
+                    (if (queueTotal > 1) "\nA várólista megállt ($queueIndex/$queueTotal)." else "")
                 status.setTextColor(Ui.color(this, R.color.warn))
             }
         }
 
-        // automatikus bezárás kész + sikeres mentés után
-        if (job.finished && job.saved && watchedRun && !closeScheduled && OutputPrefs.autoClose(this)) {
+        refreshWhere()
+        refreshQueueUi()
+
+        // Várólista: következő fájl automatikusan
+        if (job.finished && watchedRun && tryAdvanceQueue()) {
+            // ne zárja be / ne mentés-párbeszéd a köztes fájloknál
+            return
+        }
+
+        // automatikus bezárás kész + sikeres mentés után (csak az utolsó fájlnál)
+        if (job.finished && job.saved && watchedRun && !closeScheduled &&
+            OutputPrefs.autoClose(this) && (queueIndex >= fileQueue.size || fileQueue.size <= 1)
+        ) {
             closeScheduled = true
             main.postDelayed({ if (!isFinishing) finish() }, 2500)
         }
-        refreshWhere()
 
         // Ha a képernyő végignézte a futást, a végén magától felkínálja a mentést
-        if (job.finished && !job.saved && watchedRun && !saveAsked && job.resultSrt != null) {
+        // (csak ha a szolgáltatás nem mentette el, és nincs következő a sorban)
+        if (job.finished && !job.saved && watchedRun && !saveAsked && job.resultSrt != null &&
+            (queueIndex >= fileQueue.size || fileQueue.size <= 1)
+        ) {
             saveAsked = true
             Haptics.click(this)
             saveSrtLauncher.launch(job.resultName)
@@ -759,24 +888,53 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     private fun startProcess() {
-        val uri = selectedUri
-        if (uri == null) {
+        if (fileQueue.isEmpty() && selectedUri != null) {
+            fileQueue.add(selectedUri!!)
+        }
+        if (fileQueue.isEmpty()) {
             Toast.makeText(this, "Előbb válassz fájlt.", Toast.LENGTH_SHORT).show()
             return
         }
         if (SrtJob.running) return
+        queueIndex = 1
+        queueTotal = fileQueue.size
+        selectedUri = fileQueue[0]
+        startOne(fileQueue[0])
+    }
+
+    private fun startOne(uri: Uri) {
+        selectedUri = uri
         val dir = if (prefs.meetingMode) Prefs.DIR_NONE else selectedDir()
         val needTranslate = dir != Prefs.DIR_NONE && !prefs.meetingMode
         watchedRun = false
         saveAsked = false
-        // A munkát az előtér-szolgáltatás végzi: másik appra váltva / zárolt képernyővel is megy tovább.
-        val mode = selectedMode()
-        val tgtLang = if (needTranslate && mode != SrtExporter.Mode.SOURCE_ONLY) dir.substringAfter("_", selectedSrc()) else selectedSrc()
         closeScheduled = false
+        val mode = selectedMode()
+        val tgtLang = if (needTranslate && mode != SrtExporter.Mode.SOURCE_ONLY)
+            dir.substringAfter("_", selectedSrc()) else selectedSrc()
         SrtJobService.start(this, uri, mode, selectedSrc(), dir, needTranslate, useDiarization, kind, tgtLang)
         main.removeCallbacks(tick)
         main.post(tick)
+        refreshQueueUi()
         render()
+    }
+
+    /** Ha a sorban van következő fájl, indítja; true ha indított. */
+    private fun tryAdvanceQueue(): Boolean {
+        if (!autoAdvance || SrtJob.running) return false
+        if (queueIndex < 1 || queueIndex >= fileQueue.size) return false
+        // csak sikeres kész után lép tovább (hiba/megszakításnál megáll)
+        if (!SrtJob.finished || SrtJob.error != null || SrtJob.cancelled) return false
+        val next = queueIndex // 1-based current done → next index
+        if (next >= fileQueue.size) return false
+        queueIndex = next + 1
+        val uri = fileQueue[next]
+        Toast.makeText(this, "Következő (${queueIndex}/${fileQueue.size}): ${displayName(uri)}", Toast.LENGTH_SHORT).show()
+        // kis szünet, hogy a mentés befejeződjön
+        main.postDelayed({
+            if (!SrtJob.running && queueIndex == next + 1) startOne(uri)
+        }, 800)
+        return true
     }
 
     private fun fmtDur(ms: Long) = SrtJob.fmtDur(ms)

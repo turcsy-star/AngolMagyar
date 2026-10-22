@@ -21,6 +21,10 @@ object OutputPrefs {
 
     fun autoClose(ctx: Context): Boolean = sp(ctx).getBoolean("autoClose", false)
     fun setAutoClose(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("autoClose", v).apply()
+
+    /** Preferált mentés: true = videó mellé (alapértelmezett), false = alapértelmezett mappa. */
+    fun preferBeside(ctx: Context): Boolean = sp(ctx).getBoolean("preferBeside", true)
+    fun setPreferBeside(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("preferBeside", v).apply()
 }
 
 /**

@@ -570,8 +570,14 @@ class SrtJobService : Service() {
         } else {
             val lt = if (langTag.isNotBlank()) ".$langTag" else ""
             val name = "$base$lt$suffix.srt"
-            OutputWriter.saveBesideVideo(this, video, name, OutputWriter.MIME_SRT, srtBytes)
-                ?: tree?.let { OutputWriter.saveInTree(this, it, name, OutputWriter.MIME_SRT, srtBytes) }
+            val preferBeside = OutputPrefs.preferBeside(this)
+            if (preferBeside) {
+                OutputWriter.saveBesideVideo(this, video, name, OutputWriter.MIME_SRT, srtBytes)
+                    ?: tree?.let { OutputWriter.saveInTree(this, it, name, OutputWriter.MIME_SRT, srtBytes) }
+            } else {
+                tree?.let { OutputWriter.saveInTree(this, it, name, OutputWriter.MIME_SRT, srtBytes) }
+                    ?: OutputWriter.saveBesideVideo(this, video, name, OutputWriter.MIME_SRT, srtBytes)
+            }
         }
     }
 
@@ -605,8 +611,8 @@ class SrtJobService : Service() {
                     try { Thread.sleep(800) } catch (_: InterruptedException) { break }
                     if (!pulse.get()) break
                     p = (p + 1).coerceAtMost(90)
-                    val sec = (System.currentTimeMillis() - t0) / 1000
-                    SrtJob.progress(p, "Hang dekódolása… ${sec}s")
+                    val elapsed = System.currentTimeMillis() - t0
+                    SrtJob.progress(p, "Hang dekódolása… ${SrtJob.fmtDur(elapsed)}")
                 }
             }.start()
             try {
