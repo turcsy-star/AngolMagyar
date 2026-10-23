@@ -18,6 +18,10 @@ object SubPrefs {
     fun speakerColors(ctx: Context): Boolean = p(ctx).getBoolean("subSpkColors", false)
     fun setSpeakerColors(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subSpkColors", v).apply() }
 
+    /** Háttérfutás-kényszerítés (néma hangfolyam) – ha a telefon zárolt képernyőnél lefagyasztja az appot. */
+    fun keepAlive(ctx: Context): Boolean = p(ctx).getBoolean("subKeepAlive", true)
+    fun setKeepAlive(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subKeepAlive", v).apply() }
+
     fun profile(ctx: Context): String = p(ctx).getString("subProfile", "custom") ?: "custom"
     fun setProfile(ctx: Context, id: String) { p(ctx).edit().putString("subProfile", id).apply() }
 }

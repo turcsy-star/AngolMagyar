@@ -59,10 +59,41 @@ class FileSubtitleActivity : AppCompatActivity() {
     /** Varázslóból jövő forrásnyelv (en/de/fr/…); ha üres, a UI választó érvényes. */
     private var wizardSrc: String? = null
     private var wizardTgt: String = "hu"
-    private val jobListener: () -> Unit = { render() }
+    private var lastRenderMs = 0L
+    private var renderPosted = false
+    /** A haladás-értesítések másodpercenként legfeljebb egyszer rajzolják újra a képernyőt (nyugodt, olvasható számok). */
+    private val jobListener: () -> Unit = {
+        val now = System.currentTimeMillis()
+        val since = now - lastRenderMs
+        if (since >= 1000) {
+            lastRenderMs = now
+            render()
+        } else if (!renderPosted) {
+            renderPosted = true
+            main.postDelayed({
+                renderPosted = false
+                lastRenderMs = System.currentTimeMillis()
+                render()
+            }, 1000 - since)
+        }
+    }
+
+    /** Hátralévő idő simítása: a kijelzett érték másodpercenként csökken, a becslés csak lassan húzza el. */
+    private val etaMem = HashMap<String, Pair<Long, Long>>()
+    private fun smoothRem(key: String, rem: Long, now: Long): Long {
+        val prev = etaMem[key]
+        if (prev != null && prev.second == now) return prev.first // ugyanabban a rajzolásban többször kérdezhetjük
+        val out = if (prev == null) rem else {
+            val predicted = prev.first - (now - prev.second)
+            if (predicted <= 0) rem else (predicted * 0.85 + rem * 0.15).toLong()
+        }
+        etaMem[key] = out to now
+        return out
+    }
     private val tick = object : Runnable {
         override fun run() {
             if (!SrtJob.batchRunning) return
+            lastRenderMs = System.currentTimeMillis()
             render()
             main.postDelayed(this, 1000)
         }
@@ -314,6 +345,12 @@ class FileSubtitleActivity : AppCompatActivity() {
             minHeight = dp(52)
             isChecked = SubPrefs.speakerColors(this@FileSubtitleActivity)
             setOnCheckedChangeListener { _, c -> SubPrefs.setSpeakerColors(this@FileSubtitleActivity, c) }
+        })
+        card.addView(SwitchCompat(this).apply {
+            text = "Háttérfutás kényszerítése (néma hang) – ha zároláskor leáll a feldolgozás"
+            minHeight = dp(52)
+            isChecked = SubPrefs.keepAlive(this@FileSubtitleActivity)
+            setOnCheckedChangeListener { _, c -> SubPrefs.setKeepAlive(this@FileSubtitleActivity, c) }
         })
         card.addView(Ui.button(this, "Szótár (nevek, javítások)…", false) { showGlossary() })
         refreshProfiles()
@@ -1038,10 +1075,15 @@ class FileSubtitleActivity : AppCompatActivity() {
         status.setTextColor(Ui.color(this, if (job.cooling) R.color.warn else R.color.textSecondary))
 
         // Hátralévő idő és várható befejezés: eltelt idő és haladás alapján (lineáris becslés)
-        fun etaText(elapsed: Long, pct: Int): String {
+        fun etaText(elapsed: Long, pct: Int, key: String): String {
             if (pct >= 100) return ""
             if (pct < 1 || elapsed < 2000) return " · Hátra: számítás…"
-            val rem = elapsed * (100 - pct) / pct
+            val rem = smoothRem(key, elapsed * (100 - pct) / pct, now)
+            return " · Hátra: kb. ${fmtDur(rem)} · Kész: ${SrtJob.fmtClock(now + rem)} körül"
+        }
+        /** A futás-becslés (etaAtMs) simított változata. */
+        fun etaFromJob(key: String): String {
+            val rem = smoothRem(key, job.etaMs, now)
             return " · Hátra: kb. ${fmtDur(rem)} · Kész: ${SrtJob.fmtClock(now + rem)} körül"
         }
 
@@ -1053,7 +1095,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             barChunk.set(
                 "Aktuális darab · ${job.curChunkNo}/${job.chunkTotal}",
                 pc,
-                "Eltelt: ${fmtDur(el)}" + etaText(el, pc)
+                "Eltelt: ${fmtDur(el)}" + etaText(el, pc, "c${job.curChunkNo}")
             )
         } else {
             val idx = job.curStep.coerceAtLeast(0)
@@ -1064,7 +1106,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             barChunk.set(
                 "Aktuális lépés · ${job.label(idx)}",
                 p,
-                "Eltelt: ${fmtDur(el)}" + (if (p >= 0) etaText(el, p) else "")
+                "Eltelt: ${fmtDur(el)}" + (if (p >= 0) etaText(el, p, "s$idx") else "")
             )
         }
 
@@ -1077,8 +1119,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         val recEta = when {
             rs.state != SrtJob.ACTIVE -> ""
-            job.etaAtMs > now -> " · Hátra: kb. ${fmtDur(job.etaMs)} · Kész: ${SrtJob.fmtClock(job.etaAtMs)} körül"
-            else -> etaText(now - job.stepStartMs, rp)
+            job.etaAtMs > now -> etaFromJob("r")
+            else -> etaText(now - job.stepStartMs, rp, "r")
         }
         barRecog.set(
             job.label(SrtJob.ST_RECOG),
@@ -1091,8 +1133,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         val elapsedAll = now - job.startMs
         val etaPart = when {
             job.etaAtMs > now && job.curStep >= SrtJob.ST_RECOG ->
-                " · Hátra: kb. ${fmtDur(job.etaMs)} · Kész: ${SrtJob.fmtClock(job.etaAtMs)} körül"
-            else -> etaText(elapsedAll, job.overall)
+                etaFromJob("t")
+            else -> etaText(elapsedAll, job.overall, "t")
         }
         val basis = when {
             job.etaAtMs > now && job.curStep >= SrtJob.ST_RECOG && job.etaBasis.isNotEmpty() -> "\n(${job.etaBasis})"
@@ -1106,8 +1148,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         val primary = Ui.color(this, R.color.textPrimary)
         // hátralévő idő a teljes folyamatra (ms), -1 = még nem becsülhető
         val totRem: Long = when {
-            job.etaAtMs > now && job.curStep >= SrtJob.ST_RECOG -> job.etaMs
-            job.overall >= 1 && elapsedAll >= 2000 -> elapsedAll * (100 - job.overall) / job.overall
+            job.etaAtMs > now && job.curStep >= SrtJob.ST_RECOG -> smoothRem("t", job.etaMs, now)
+            job.overall >= 1 && elapsedAll >= 2000 -> smoothRem("t", elapsedAll * (100 - job.overall) / job.overall, now)
             else -> -1L
         }
         var unitsRem = 0.0
@@ -1132,7 +1174,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 if (!show) continue
                 val pc = job.curChunkPct.coerceIn(0, 100)
                 val el = if (job.curChunkStartMs > 0) now - job.curChunkStartMs else 0L
-                val rem = if (pc >= 1 && el >= 2000) el * (100 - pc) / pc else -1L
+                val rem = if (pc >= 1 && el >= 2000) smoothRem("c${job.curChunkNo}", el * (100 - pc) / pc, now) else -1L
                 v.icon.text = "↳"; v.icon.setTextColor(secondary)
                 v.name.text = "Darab ${job.curChunkNo}/${job.chunkTotal}"
                 v.name.setTextColor(primary); v.name.setTypeface(null, Typeface.NORMAL)
@@ -1175,8 +1217,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                     val p = st.pct
                     val el = now - job.stepStartMs
                     val own = when {
-                        i == SrtJob.ST_RECOG && job.etaAtMs > now -> job.etaMs
-                        p >= 1 && el >= 2000 -> el * (100 - p) / p
+                        i == SrtJob.ST_RECOG && job.etaAtMs > now -> smoothRem("r", job.etaMs, now)
+                        p >= 1 && el >= 2000 -> smoothRem("s$i", el * (100 - p) / p, now)
                         perUnit >= 0 -> (SrtJob.WEIGHTS[i] * (100 - p.coerceAtLeast(0)) / 100.0 * perUnit).toLong()
                         else -> -1L
                     }

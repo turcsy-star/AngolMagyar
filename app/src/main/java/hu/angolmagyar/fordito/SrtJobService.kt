@@ -179,6 +179,7 @@ class SrtJobService : Service() {
         if (screenReg) { try { unregisterReceiver(screenReceiver) } catch (_: Exception) {} }
         SrtJob.removeListener(jobListener)
         tickHandler.removeCallbacks(notifTick)
+        KeepAlive.stop()
         releaseWake()
         super.onDestroy()
     }
@@ -369,6 +370,7 @@ class SrtJobService : Service() {
     private fun runBatch(o: Opts) {
         cancelFlag.set(false)
         acquireWake()
+        if (SubPrefs.keepAlive(this)) KeepAlive.start()
         Perf.load(this)
         worker = Thread {
             try {
@@ -383,6 +385,7 @@ class SrtJobService : Service() {
                 chunker = null
                 recRef = null
                 batchNotif()
+                KeepAlive.stop()
                 releaseWake()
                 stopFg()
             }
