@@ -19,12 +19,14 @@ object OutputPrefs {
     fun videoTree(ctx: Context): Uri? = sp(ctx).getString("videoTree", null)?.let { Uri.parse(it) }
     fun setVideoTree(ctx: Context, uri: Uri?) = sp(ctx).edit().putString("videoTree", uri?.toString()).apply()
 
+    const val SAVE_BESIDE = 0   // a videó mellé (alapértelmezett)
+    const val SAVE_DEFAULT = 1  // az alapértelmezett mappába
+
+    fun saveMode(ctx: Context): Int = sp(ctx).getInt("saveMode", SAVE_BESIDE)
+    fun setSaveMode(ctx: Context, v: Int) = sp(ctx).edit().putInt("saveMode", v).apply()
+
     fun autoClose(ctx: Context): Boolean = sp(ctx).getBoolean("autoClose", false)
     fun setAutoClose(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("autoClose", v).apply()
-
-    /** Preferált mentés: true = videó mellé (alapértelmezett), false = alapértelmezett mappa. */
-    fun preferBeside(ctx: Context): Boolean = sp(ctx).getBoolean("preferBeside", true)
-    fun setPreferBeside(ctx: Context, v: Boolean) = sp(ctx).edit().putBoolean("preferBeside", v).apply()
 }
 
 /**
@@ -74,47 +76,84 @@ object OutputWriter {
 
     // ------------------------------------------------------------ a videó szülőmappája
 
-    /** A videó szülőmappájának "dokumentum-azonosítója" (pl. "primary:Movies/Sorozat"), ha kideríthető. */
-    private fun parentDocId(ctx: Context, video: Uri): String? {
+    /** Egy MediaStore-azonosítóhoz tartozó fájl mappája (a teljes MediaStore-ban azonos az azonosító). */
+    @Suppress("DEPRECATION")
+    private fun dirFromMediaStore(ctx: Context, id: Long): File? {
+        val uri = android.content.ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), id)
+        ctx.contentResolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.VOLUME_NAME),
+            null, null, null
+        )?.use { c ->
+            if (!c.moveToFirst()) return null
+            val data = c.getString(0)
+            if (!data.isNullOrBlank()) File(data).parentFile?.let { return it }
+            val rel = c.getString(1)?.trimEnd('/') ?: return null
+            val vol = c.getString(2)
+            val base = if (vol == null || vol == "external_primary" || vol == "external")
+                Environment.getExternalStorageDirectory() else File("/storage/$vol")
+            return File(base, rel)
+        }
+        return null
+    }
+
+    /**
+     * Honnan lett betöltve a videó: a szülőmappája fájlként (ha kideríthető).
+     * Kezeli: külső tárhely, médiaválasztó (Videók/Hang), Letöltések, file:// és a _data oszlopot adó szolgáltatók.
+     */
+    @Suppress("DEPRECATION")
+    fun parentDir(ctx: Context, video: Uri): File? {
         try {
+            if (video.scheme == "file") return video.path?.let { File(it).parentFile }
             val auth = video.authority ?: return null
-            val docId = DocumentsContract.getDocumentId(video)
-            return when (auth) {
-                EXT_STORAGE -> parentOf(docId)
+            when (auth) {
+                EXT_STORAGE -> {
+                    val docId = DocumentsContract.getDocumentId(video)
+                    return fileFor(parentOf(docId))
+                }
                 MEDIA_DOCS -> {
-                    if (Build.VERSION.SDK_INT < 29) return null
-                    val kind = docId.substringBefore(':')
-                    val id = docId.substringAfter(':').toLongOrNull() ?: return null
-                    val coll = when (kind) {
-                        "video" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                        "audio" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
-                        else -> return null
-                    }
-                    ctx.contentResolver.query(
-                        android.content.ContentUris.withAppendedId(coll, id),
-                        arrayOf(MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.VOLUME_NAME),
-                        null, null, null
-                    )?.use {
-                        if (!it.moveToFirst()) return null
-                        val rel = (it.getString(0) ?: return null).trimEnd('/')
-                        val vol = it.getString(1)
-                        val v = if (vol == null || vol == "external_primary" || vol == "external") "primary" else vol
-                        "$v:$rel"
-                    }
+                    val id = DocumentsContract.getDocumentId(video).substringAfter(':').toLongOrNull()
+                    if (id != null) dirFromMediaStore(ctx, id)?.let { return it }
                 }
                 DOWNLOAD_DOCS -> {
-                    if (docId.startsWith("raw:")) {
-                        val path = docId.removePrefix("raw:")
-                        val root = Environment.getExternalStorageDirectory().absolutePath
-                        if (path.startsWith("$root/")) parentOf("primary:" + path.removePrefix("$root/")) else null
-                    } else null
+                    val docId = DocumentsContract.getDocumentId(video)
+                    if (docId.startsWith("raw:")) return File(docId.removePrefix("raw:")).parentFile
+                    val id = docId.substringAfter(':').toLongOrNull()
+                    if (id != null) dirFromMediaStore(ctx, id)?.let { return it }
                 }
-                else -> null
+                "media" -> {
+                    val id = android.content.ContentUris.parseId(video)
+                    if (id > 0) dirFromMediaStore(ctx, id)?.let { return it }
+                }
+            }
+            // általános tartalék: sok szolgáltató megadja a tényleges útvonalat
+            ctx.contentResolver.query(video, arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val d = c.getString(0)
+                    if (!d.isNullOrBlank() && d.startsWith("/")) return File(d).parentFile
+                }
             }
         } catch (_: Exception) {
-            return null
         }
+        return null
     }
+
+    /** A mappa "dokumentum-azonosítója" (pl. "primary:Movies/Sorozat") a mappaengedélyes íráshoz. */
+    private fun docIdOf(dir: File): String? {
+        val p = dir.absolutePath
+        val root = Environment.getExternalStorageDirectory().absolutePath
+        if (p == root) return "primary:"
+        if (p.startsWith("$root/")) return "primary:" + p.removePrefix("$root/")
+        if (p.startsWith("/storage/")) {
+            val rest = p.removePrefix("/storage/")
+            val vol = rest.substringBefore('/')
+            if (vol == "emulated" || vol == "self") return null
+            return "$vol:" + rest.substringAfter('/', "")
+        }
+        return null
+    }
+
+    fun dirLabel(dir: File): String = docIdOf(dir)?.let { docIdLabel(it) } ?: dir.absolutePath
 
     private fun parentOf(docId: String): String {
         val i = docId.lastIndexOf('/')
@@ -168,23 +207,27 @@ object OutputWriter {
         }
     }
 
-    /** A videó mellé ment (teljes fájlhozzáféréssel vagy engedélyezett mappán keresztül). */
+    /**
+     * A videó mellé ment (a mappa onnan derül ki, ahonnan a videót betöltöttük).
+     * Teljes fájlhozzáféréssel közvetlenül ír; e nélkül a régebben engedélyezett mappán keresztül próbálja.
+     * Ad: ember-olvasható hely (fájlnévvel), vagy null.
+     */
     fun saveBesideVideo(ctx: Context, video: Uri, name: String, mime: String, bytes: ByteArray): String? {
-        val parent = parentDocId(ctx, video) ?: return null
-        if (hasAllFiles()) {
+        val dir = parentDir(ctx, video) ?: return null
+        if (hasAllFiles() || dir.canWrite()) {
             try {
-                val dir = fileFor(parent)
                 if (dir.isDirectory) {
                     val f = uniqueFile(dir, name)
                     f.writeBytes(bytes)
-                    return "a videó mellé: " + docIdLabel(parent)
+                    return "a videó mellé: " + dirLabel(dir) + "/" + f.name
                 }
             } catch (_: Exception) {
             }
         }
+        val parent = docIdOf(dir) ?: return null
         val tree = OutputPrefs.videoTree(ctx) ?: return null
         if (!treeContains(tree, parent)) return null
-        return if (writeInTree(ctx, tree, parent, name, mime, bytes)) "a videó mellé: " + docIdLabel(parent) else null
+        return if (writeInTree(ctx, tree, parent, name, mime, bytes)) "a videó mellé: " + docIdLabel(parent) + "/" + name else null
     }
 
     /** Hozzáférés-állapot a képernyőn való kiíráshoz. */

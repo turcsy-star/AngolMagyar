@@ -41,6 +41,9 @@ class FileRecognizer(
     private var whisperKey = ""
     private val whisperLock = Any()
 
+    /** Azonnal, a befejező szálon fut: így a fordítás nem függ a főszáltól (háttérben sem akad meg). */
+    private val direct = java.util.concurrent.Executor { it.run() }
+
     private val enRules by lazy { Fixes.parse(prefs.enFixes) }
     private val huRules by lazy { Fixes.parse(prefs.huFixes) }
 
@@ -89,7 +92,7 @@ class FileRecognizer(
         val raws = when (asr.kind) {
             Engines.K_WHISPER -> rawWhisper(pcm, asr.whisper!!, srcLang, offsetMs, rp)
             Engines.K_VOSK -> rawVosk(pcm, asr.vosk!!, offsetMs, rp)
-            else -> rawSystem(pcm, offsetMs, rp)
+            else -> rawSystem(pcm, srcLang, offsetMs, rp)
         }
         if (cancel.get()) return emptyList()
         onProgress?.invoke(recEnd, "Szöveg javítása (${raws.size} blokk)…")
@@ -262,12 +265,23 @@ class FileRecognizer(
 
     // ------------------------------------------------------ rendszer-felismerő
 
+    /** A rendszer-felismerő nyelve a forrásnyelvből (korábban fixen hu-HU volt, ami angol videónál téves volt). */
+    private fun systemLocale(lang: String): String = when (lang) {
+        "hu" -> "hu-HU"
+        "de" -> "de-DE"
+        "fr" -> "fr-FR"
+        "es" -> "es-ES"
+        "it" -> "it-IT"
+        "uk" -> "uk-UA"
+        else -> "en-US"
+    }
+
     private fun rawSystem(
-        pcm: ShortArray, offsetMs: Long, onProgress: ((Int, String) -> Unit)?
+        pcm: ShortArray, lang: String, offsetMs: Long, onProgress: ((Int, String) -> Unit)?
     ): List<Raw> {
         var asr = blocking
         if (asr == null) {
-            asr = BlockingAsr(ctx, "hu-HU", prefs.allowOnlineAsr)
+            asr = BlockingAsr(ctx, systemLocale(lang), prefs.allowOnlineAsr)
             val err = asr.open()
             if (err != null) throw IllegalStateException(err)
             blocking = asr
@@ -365,9 +379,10 @@ class FileRecognizer(
         )
         val latch = CountDownLatch(1)
         var ok = false
+        // a visszahívások a háttérszálon futnak (alapból a főszálon: háttérben megakadhatnának)
         t.downloadModelIfNeeded(DownloadConditions.Builder().build())
-            .addOnSuccessListener { ok = true; latch.countDown() }
-            .addOnFailureListener { latch.countDown() }
+            .addOnSuccessListener(direct) { ok = true; latch.countDown() }
+            .addOnFailureListener(direct) { latch.countDown() }
         latch.await(90, TimeUnit.SECONDS)
         translatorKey = key
         if (ok) {
@@ -387,7 +402,7 @@ class FileRecognizer(
         val toHu = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
         val tasks = srcs.map { t.translate(it) }
         val done = java.util.concurrent.atomic.AtomicInteger(0)
-        for (k in tasks) k.addOnCompleteListener { done.incrementAndGet() }
+        for (k in tasks) k.addOnCompleteListener(direct) { done.incrementAndGet() }
         val n = srcs.size
         var last = -1
         var lastChange = System.currentTimeMillis()

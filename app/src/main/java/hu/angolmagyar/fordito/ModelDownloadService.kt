@@ -142,6 +142,7 @@ class ModelDownloadService : Service() {
                 message = "Megszakítva"
                 Companion.notifyListeners()
                 stopFg()
+                finalNotif("Letöltés megszakítva", "A félbehagyott rész megmarad, folytatható.")
             }
         }
         return START_STICKY
@@ -237,7 +238,37 @@ class ModelDownloadService : Service() {
             }
             Companion.notifyListeners()
             stopFg()
+            // A "ragadt" folyamatjelző helyett végleges, elhúzható értesítés (különben örökre
+            // "Modellek letöltése (2/3) 547/547 MB" maradna a sávban, mintha nem készült volna el).
+            val fm = failedMsg
+            when {
+                cancelFlag.get() -> finalNotif("Letöltés megszakítva", "A félbehagyott rész megmarad, folytatható.")
+                fm != null -> finalNotif("Letöltési hiba", fm)
+                else -> finalNotif("Modellek letöltve ✓", "Minden kért modell telepítve van.")
+            }
         }.also { it.start() }
+    }
+
+    private fun finalNotif(title: String, text: String) {
+        try {
+            val open = PendingIntent.getActivity(
+                this, 0,
+                Intent(this, ModelsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val n = NotificationCompat.Builder(this, CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_translate)
+                .setContentTitle(title)
+                .setContentText(text.take(80))
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setContentIntent(open)
+                .setOngoing(false)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .build()
+            getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
+        } catch (_: Exception) {
+        }
     }
 
     private fun post(p: Int, msg: String, isPaused: Boolean) {

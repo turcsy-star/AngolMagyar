@@ -235,7 +235,7 @@ class Prefs(ctx: Context) {
 
     /** Téma: 0 = rendszer, 1 = világos, 2 = sötét. */
     var themeMode: Int
-        get() = p.getInt("themeMode", 2)
+        get() = p.getInt("themeMode", 0)
         set(v) { p.edit().putInt("themeMode", v.coerceIn(0, 2)).apply() }
 
     /** A hang tömörített mentése az átirat mellé (visszajátszáshoz). Alapból ki. */

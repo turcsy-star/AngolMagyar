@@ -174,14 +174,11 @@ class ModelsActivity : AppCompatActivity() {
                     val sup = s.supportedOnDeviceLanguages.any { it.startsWith("hu") }
                     huInstalled = inst
                     huCanDownload = sup && !inst
-                    val whisperOk = WhisperNative.available() &&
-                        ModelManager.WHISPER.any { ModelManager.isInstalled(this@ModelsActivity, it) }
                     huStatus = when {
                         inst -> "✓ Telepítve, offline működik."
                         pend -> "Letöltés folyamatban… (pár perc, majd frissítsd az állapotot)"
                         sup -> "Letölthető (kb. 50–100 MB)."
-                        whisperOk -> "A Google offline magyar csomag nincs telepítve – de a Whisper már offline működik magyarul is (ajánlott)."
-                        else -> "Ez a Google felismerő nem támogatja a magyart offline. Használd a Whisper modellt (fent)."
+                        else -> "Ez a felismerő nem támogatja a magyart offline."
                     }
                     try { r.destroy() } catch (_: Exception) {}
                     if (!downloading) build()
@@ -380,39 +377,41 @@ class ModelsActivity : AppCompatActivity() {
         // --- magyar felismerő
         val hCard = Ui.card(this)
         hCard.addView(Ui.title(this, "Magyar felismerő", 17f))
-        val whisperOk = WhisperNative.available() &&
-            ModelManager.WHISPER.any { ModelManager.isInstalled(this, it) }
-        hCard.addView(Ui.small(this,
-            if (whisperOk)
-                "A Whisper már offline magyar felismerést is ad (fent). Az alábbi Google csomag opcionális tartalék " +
-                    "(élő mikrofonos módhoz). A hang a telefonon marad, ha offline van."
-            else
-                "A magyar beszédfelismerést az Android beépített (Google) felismerője végzi, mert " +
-                    "a Vosk-nak nincs magyar modellje. A csomag a telefonon fut, a hang nem kerül ki. " +
-                    "Ajánlott: töltsd le a Whisper modellt (fent) – az offline, pontos, magyarul is."
-        ))
-        hCard.addView(Ui.body(this, huStatus))
-        if (huCanDownload && !huInstalled) {
-            hCard.addView(Ui.button(this, "Magyar csomag letöltése", true) { triggerHuDownload() })
-        }
-        hCard.addView(Ui.button(this, "Állapot frissítése", false) {
-            huStatus = "Ellenőrzés…"
-            build()
-            checkHungarian()
-        })
-        hCard.addView(Ui.button(this, "Hangbeviteli beállítások megnyitása", false) {
-            try {
-                startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
-            } catch (_: Exception) {
-                Toast.makeText(this, "Nem nyitható meg.", Toast.LENGTH_SHORT).show()
+        val whisperOk = try { Engines.whisperSpec(this) != null } catch (_: Exception) { false }
+        if (whisperOk) {
+            // Ha a Whisper működik, nincs szükség a Google-csomagra: ne jelenjen meg félrevezető "nem támogatja" üzenet.
+            hCard.addView(Ui.body(this, "✓ A magyar felismerést a Whisper végzi – offline, a telefonon."))
+            hCard.addView(Ui.small(this,
+                "Nincs szükség másik csomagra. Az Android beépített (Google) felismerője csak tartalék, " +
+                    "ha a Whisper nem érhető el; ilyenkor a Modellek képernyő jelzi."))
+        } else {
+            hCard.addView(Ui.small(this,
+                "A Whisper modell nincs telepítve, ezért a magyar felismerést az Android beépített (Google) " +
+                    "felismerője végezné (tartalék). A csomag a telefonon fut, a hang nem kerül ki. " +
+                    "Pontosabb és egységes megoldás: töltsd le a Whisper modellt fent."))
+            hCard.addView(Ui.body(this, huStatus))
+            if (huCanDownload && !huInstalled) {
+                hCard.addView(Ui.button(this, "Magyar csomag letöltése", true) { triggerHuDownload() })
             }
-        })
-        hCard.addView(SwitchCompat(this).apply {
-            text = "Online magyar felismerés engedélyezése (tartalék; a hang a Google-hoz kerül)"
-            isChecked = prefs.allowOnlineAsr
-            minHeight = dp(52)
-            setOnCheckedChangeListener { _, c -> prefs.allowOnlineAsr = c }
-        })
+            hCard.addView(Ui.button(this, "Állapot frissítése", false) {
+                huStatus = "Ellenőrzés…"
+                build()
+                checkHungarian()
+            })
+            hCard.addView(Ui.button(this, "Hangbeviteli beállítások megnyitása", false) {
+                try {
+                    startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "Nem nyitható meg.", Toast.LENGTH_SHORT).show()
+                }
+            })
+            hCard.addView(SwitchCompat(this).apply {
+                text = "Online magyar felismerés engedélyezése (tartalék; a hang a Google-hoz kerül)"
+                isChecked = prefs.allowOnlineAsr
+                minHeight = dp(52)
+                setOnCheckedChangeListener { _, c -> prefs.allowOnlineAsr = c }
+            })
+        }
         root.addView(hCard)
 
         // --- fordítás
