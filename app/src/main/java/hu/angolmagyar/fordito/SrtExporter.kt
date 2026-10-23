@@ -32,10 +32,14 @@ object SrtExporter {
         return String.format(Locale.US, "%02d:%02d:%02d,%03d", h, m, s, milli)
     }
 
-    private fun prefixSpeaker(c: Cue, body: String): String {
+    private fun prefixSpeaker(c: Cue, body: String, colors: Map<String, String>? = null): String {
         if (c.speaker.isBlank() || body.isBlank()) return body
         val lines = body.split("\n").toMutableList()
-        if (lines.isNotEmpty()) lines[0] = "${c.speaker}: ${lines[0]}"
+        val col = colors?.get(c.speaker)
+        if (lines.isNotEmpty()) {
+            lines[0] = if (col != null) "<font color=\"$col\">${c.speaker}:</font> ${lines[0]}"
+            else "${c.speaker}: ${lines[0]}"
+        }
         return lines.joinToString("\n")
     }
 
@@ -59,20 +63,21 @@ object SrtExporter {
         return lines
     }
 
-    fun build(cues: List<Cue>, mode: Mode): String {
+    /** @param colors beszélő → szín (#RRGGBB): ha meg van adva, a beszélőjelölés színes (<font>) */
+    fun build(cues: List<Cue>, mode: Mode, colors: Map<String, String>? = null): String {
         val sb = StringBuilder()
         var idx = 1
         for (c in cues) {
             val body = when (mode) {
-                Mode.SOURCE_ONLY -> prefixSpeaker(c, wrap(c.source).joinToString("\n"))
-                Mode.TARGET_ONLY -> prefixSpeaker(c, wrap(c.target).joinToString("\n"))
+                Mode.SOURCE_ONLY -> prefixSpeaker(c, SubFormat.wrapBalanced(c.source).joinToString("\n"), colors)
+                Mode.TARGET_ONLY -> prefixSpeaker(c, SubFormat.wrapBalanced(c.target).joinToString("\n"), colors)
                 Mode.BOTH -> {
-                    val src = wrap(c.source).joinToString("\n")
-                    val tgt = wrap(c.target).joinToString("\n")
+                    val src = SubFormat.wrapBalanced(c.source).joinToString("\n")
+                    val tgt = SubFormat.wrapBalanced(c.target).joinToString("\n")
                     val merged = if (src.isBlank()) tgt
                     else if (tgt.isBlank()) src
                     else "$src\n$tgt"
-                    prefixSpeaker(c, merged)
+                    prefixSpeaker(c, merged, colors)
                 }
             }
             if (body.isBlank()) continue
@@ -106,11 +111,11 @@ object SrtExporter {
         var idx = 1
         for (c in cues) {
             val body = when (mode) {
-                Mode.SOURCE_ONLY -> prefixSpeaker(c, wrap(c.source).joinToString("\n"))
-                Mode.TARGET_ONLY -> prefixSpeaker(c, wrap(c.target).joinToString("\n"))
+                Mode.SOURCE_ONLY -> prefixSpeaker(c, SubFormat.wrapBalanced(c.source).joinToString("\n"))
+                Mode.TARGET_ONLY -> prefixSpeaker(c, SubFormat.wrapBalanced(c.target).joinToString("\n"))
                 Mode.BOTH -> {
-                    val src = wrap(c.source).joinToString("\n")
-                    val tgt = wrap(c.target).joinToString("\n")
+                    val src = SubFormat.wrapBalanced(c.source).joinToString("\n")
+                    val tgt = SubFormat.wrapBalanced(c.target).joinToString("\n")
                     val merged = if (src.isBlank()) tgt
                     else if (tgt.isBlank()) src
                     else "$src\n$tgt"

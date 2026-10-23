@@ -26,4 +26,21 @@ class VadTest {
         assertTrue(segs.isNotEmpty())
         for (s in segs) assertTrue((s.end - s.start) <= 16 * 12_500)
     }
+
+    /** Regresszió: a darabhossz-számítás Int-túlcsordult, és minden beszédrész kiesett. */
+    @Test fun speechChunksAreNotLostToOverflow() {
+        val pcm = tone(2000, 4000) + ShortArray(16 * 1500) + tone(2000, 4000)
+        val merged = Vad.speechChunks(pcm, maxGapMs = 2500, maxChunkMs = 180_000)
+        assertEquals(1, merged.size)
+        assertTrue(merged[0].end > merged[0].start)
+        val split = Vad.speechChunks(pcm, maxGapMs = 500, maxChunkMs = 180_000)
+        assertEquals(2, split.size)
+        assertTrue(split.all { it.start >= 0 && it.end <= pcm.size && it.end > it.start })
+    }
+
+    @Test fun mostlySilentDetectsSilenceOnly() {
+        assertTrue(Vad.isMostlySilent(ShortArray(16000 * 5)))
+        // a csend-ellenőrzés relatív (a halk zajszinthez képest): kell némi csend + beszéd
+        assertTrue(!Vad.isMostlySilent(ShortArray(16000) + tone(2000, 4000)))
+    }
 }

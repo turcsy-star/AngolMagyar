@@ -62,7 +62,7 @@ object Vad {
 
         val maxGapSamp = rate * maxGapMs / 1000
         val padSamp = rate * padMs / 1000
-        val maxChunkSamp = rate * (maxChunkMs / 1000.0).toInt().coerceAtLeast(rate * 30)
+        val maxChunkSamp = (rate.toLong() * maxChunkMs / 1000L).coerceAtLeast(rate * 30L).coerceAtMost(Int.MAX_VALUE.toLong() / 2).toInt()
 
         // 1) közeli finom szegmensek összevonása
         val merged = ArrayList<Seg>()
@@ -132,7 +132,7 @@ object Vad {
         // egyesít / padding – dummy tömb helyett a totalSamples a felső határ
         val maxGapSamp = rate * maxGapMs / 1000
         val padSamp = rate * padMs / 1000
-        val maxChunkSamp = rate * (maxChunkMs / 1000.0).toInt().coerceAtLeast(rate * 30)
+        val maxChunkSamp = (rate.toLong() * maxChunkMs / 1000L).coerceAtLeast(rate * 30L).coerceAtMost(Int.MAX_VALUE.toLong() / 2).toInt()
         allFine.sortBy { it.start }
         val merged = ArrayList<Seg>()
         var curS = allFine[0].start

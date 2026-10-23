@@ -124,7 +124,7 @@ class ModelDownloadService : Service() {
                     paused = true
                     ctl.pause()
                     post(-1, "$message · szüneteltetve", false)
-                    updateNotif("Szüneteltetve")
+                    updateNotif("Szüneteltetve", true)
                 }
             }
             ACTION_RESUME -> {
@@ -142,7 +142,7 @@ class ModelDownloadService : Service() {
                 message = "Megszakítva"
                 Companion.notifyListeners()
                 stopFg()
-                finalNotif("Letöltés megszakítva", "A félbehagyott rész megmarad, folytatható.")
+                Thread { finalNotif("Letöltés megszakítva", "A félbehagyott rész megmarad, folytatható.") }.start()
             }
         }
         return START_STICKY
@@ -212,7 +212,7 @@ class ModelDownloadService : Service() {
                 } catch (e: ModelManager.PausedException) {
                     paused = true
                     post(-1, "${shortName(id)} · szüneteltetve", true)
-                    updateNotif("Szüneteltetve – koppints a folytatáshoz")
+                    updateNotif("Szüneteltetve – koppints a folytatáshoz", true)
                     try { wakeLock?.release() } catch (_: Exception) {}
                     return@Thread
                 } catch (e: Exception) {
@@ -251,6 +251,10 @@ class ModelDownloadService : Service() {
 
     private fun finalNotif(title: String, text: String) {
         try {
+            // várunk, hogy az Android ne dobja el a végső értesítést a gyors frissítések miatt
+            try { Thread.sleep(1500) } catch (_: InterruptedException) {}
+            getSystemService(NotificationManager::class.java).cancel(NOTIF_ID)
+            try { Thread.sleep(300) } catch (_: InterruptedException) {}
             val open = PendingIntent.getActivity(
                 this, 0,
                 Intent(this, ModelsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
@@ -376,7 +380,13 @@ class ModelDownloadService : Service() {
         }
     }
 
-    private fun updateNotif(text: String) {
+    @Volatile private var lastNotifMs = 0L
+
+    /** Az Android eldobja a túl gyakori értesítésfrissítéseket (akár a végsőt is), ezért legfeljebb ~1/mp. */
+    private fun updateNotif(text: String, force: Boolean = false) {
+        val now = SystemClock.elapsedRealtime()
+        if (!force && now - lastNotifMs < 1000) return
+        lastNotifMs = now
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIF_ID, buildNotif(text))
     }

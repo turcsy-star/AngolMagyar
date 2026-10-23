@@ -160,6 +160,8 @@ object SrtJob {
     /** Chunkonkénti haladás 0..1 (a teljes felismerési %-hoz). */
     private var chunkFrac = DoubleArray(0)
     private var chunkStartAt = LongArray(0)
+    /** Chunkonkénti hanghossz (ms): a felismerési % ebből súlyozódik (intelligens darabolásnál a darabok nem egyformák). */
+    private var chunkLenMs = LongArray(0)
     @Volatile var waitReason = ""
     @Volatile var engineLabel = ""
     /** Felismerés nyelve (pl. "angol") – a képernyőn is látszik, hogy nem tévedhet a program. */
@@ -184,6 +186,8 @@ object SrtJob {
     @Volatile var histEstMs = 0L
     /** Az utolsó észlelt haladás ideje (a "megállt a háttérben?" jelzéshez). */
     @Volatile var lastProgressMs = 0L
+    /** Hány darabot (részt) kellett kihagyni, mert a felismerés elakadt (elakadás-őr). */
+    @Volatile var skippedParts = 0
 
     @Volatile var resultSrt: String? = null
     @Volatile var resultName = ""
@@ -243,6 +247,7 @@ object SrtJob {
         chunkState = IntArray(0)
         chunkFrac = DoubleArray(0)
         chunkStartAt = LongArray(0)
+        chunkLenMs = LongArray(0)
         phases.clear()
         waitReason = ""
         engineLabel = ""
@@ -260,6 +265,7 @@ object SrtJob {
         savedWhere = null
         partialWhere = null
         histEstMs = 0
+        skippedParts = 0
         resultSrt = null
         resultName = ""
         resultCount = 0
@@ -386,6 +392,12 @@ object SrtJob {
         changed()
     }
 
+    /** A darabok hossza (ms) – a felismerés haladása és az ETA a tényleges beszédhossz arányában számol. */
+    @Synchronized
+    fun setChunkLens(lens: LongArray) {
+        chunkLenMs = lens
+    }
+
     @Synchronized
     fun initChunks(n: Int) {
         chunkState = IntArray(n)
@@ -416,6 +428,7 @@ object SrtJob {
         chunkCur = i + 1
         lastProgressMs = System.currentTimeMillis()
         refreshCurrent()
+        DiagLog.log("DARAB ${i + 1}/$chunkTotal indul")
         changed()
     }
 
@@ -425,10 +438,19 @@ object SrtJob {
         if (i !in chunkFrac.indices) return
         chunkFrac[i] = frac.coerceIn(0.0, 1.0)
         phases[i] = what
-        var doneMs = 0.0
-        val per = if (chunkFrac.isNotEmpty()) totalAudioMs.toDouble() / chunkFrac.size else 1.0
-        for (f in chunkFrac) doneMs += f * per
-        val pct = if (totalAudioMs > 0) (doneMs * 100.0 / totalAudioMs).toInt() else 0
+        val lens = chunkLenMs
+        val pct: Int
+        if (lens.size == chunkFrac.size && lens.isNotEmpty() && lens.sum() > 0L) {
+            var doneMs = 0.0
+            var sumMs = 0.0
+            for (k in chunkFrac.indices) { doneMs += chunkFrac[k] * lens[k]; sumMs += lens[k] }
+            pct = (doneMs * 100.0 / sumMs).toInt()
+        } else {
+            var doneMs = 0.0
+            val per = if (chunkFrac.isNotEmpty()) totalAudioMs.toDouble() / chunkFrac.size else 1.0
+            for (f in chunkFrac) doneMs += f * per
+            pct = if (totalAudioMs > 0) (doneMs * 100.0 / totalAudioMs).toInt() else 0
+        }
         refreshCurrent()
         val msg = phases.entries.sortedBy { it.key }.take(4)
             .joinToString("  ·  ") { "#${it.key + 1} ${it.value}" }
@@ -437,7 +459,11 @@ object SrtJob {
 
     @Synchronized
     fun chunkFinish(i: Int) {
-        if (i in chunkState.indices) { chunkState[i] = 2; chunkFrac[i] = 1.0 }
+        if (i in chunkState.indices) {
+            val took = (System.currentTimeMillis() - chunkStartAt.getOrElse(i) { 0L }) / 1000
+            DiagLog.log("DARAB ${i + 1}/$chunkTotal kész · ${took}s")
+            chunkState[i] = 2; chunkFrac[i] = 1.0
+        }
         phases.remove(i)
         chunkDone = chunkState.count { it == 2 }
         lastProgressMs = System.currentTimeMillis()

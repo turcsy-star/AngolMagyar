@@ -108,9 +108,11 @@ class FileRecognizer(
         }
         val targets: List<String> = if (needTranslate && polished.isNotEmpty()) {
             prepareTranslator(dir)
-            translateAll(polished.map { it.text }, dir) { done, n ->
-                onProgress?.invoke(70 + 25 * done / n.coerceAtLeast(1), "Fordítás: $done/$n blokk")
+            val prog: (Int, Int) -> Unit = { done, n ->
+                onProgress?.invoke(70 + 25 * done / n.coerceAtLeast(1), "Fordítás: $done/$n mondat")
             }
+            if (SubPrefs.contextTranslate(ctx)) translateGrouped(polished, dir, prog)
+            else translateAll(polished.map { it.text }, dir, prog)
         } else polished.map { "" }
         onProgress?.invoke(97, "Blokkok összeállítása…")
         val out = ArrayList<SrtExporter.Cue>(polished.size)
@@ -404,6 +406,22 @@ class FileRecognizer(
                 "A fordítómodell nincs letöltve, és nem sikerült letölteni (internet?). Nyisd meg a Modellek képernyőt, és töltsd le."
             )
         }
+    }
+
+    /**
+     * Kontextusos fordítás: a mondat közepén vágott blokkokat mondatokká fogjuk, így fordít jól a gépi fordító;
+     * a lefordított mondatot arányosan visszaosztjuk az eredeti időzített blokkokra.
+     */
+    private fun translateGrouped(items: List<Raw>, dir: String, onDone: (Int, Int) -> Unit): List<String> {
+        val groups = SentenceGroups.group(items.map { SentenceGroups.Item(it.startMs, it.endMs, it.text) })
+        val texts = groups.map { g -> g.joinToString(" ") { idx -> items[idx].text.trim() } }
+        val tr = translateAll(texts, dir, onDone)
+        val out = ArrayList<String>(items.size)
+        for ((gi, g) in groups.withIndex()) {
+            val lens = g.map { idx -> items[idx].text.length }
+            out.addAll(SentenceGroups.distribute(tr.getOrElse(gi) { "" }, lens))
+        }
+        return out
     }
 
     /** Az összes blokk fordítása egyszerre beadva; az előrehaladást a kész darabok számából mutatjuk. */

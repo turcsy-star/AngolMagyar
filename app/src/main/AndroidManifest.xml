@@ -70,6 +70,11 @@
             android:name=".FileSubtitleActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".SrtEditorActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
         <service
             android:name=".TranslateService"
             android:exported="false"
