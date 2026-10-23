@@ -2,22 +2,40 @@ package hu.angolmagyar.fordito
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.content.Context
 import android.media.AudioTrack
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 
 /**
  * Háttérfutás-kényszerítés agresszív energiakezelésű telefonokra (Honor, Oppo, Xiaomi…): a rendszer ezeken
  * zárolt képernyőnél az előtér-szolgáltatást és a wake lockot is lefagyaszthatja, a hangot lejátszó appot viszont
- * nem. Ezért a feldolgozás alatt egy gyakorlatilag néma (±1 LSB), kis mintavételű hangfolyam megy.
+ * nem. Ezért a feldolgozás alatt egy gyakorlatilag néma (≈ -58 dBFS, hallhatatlan), kis mintavételű hangfolyam megy.
  * Nem kér hangfókuszt, így más appok lejátszását nem szakítja meg.
  */
 object KeepAlive {
     @Volatile private var running = false
     private var thread: Thread? = null
+    private var session: MediaSession? = null
 
     @Synchronized
-    fun start() {
+    fun start(ctx: Context) {
         if (running) return
         running = true
+        // aktív „lejátszó” munkamenet: a gyártói energiakezelők a médialejátszó appokat általában nem fagyasztják le
+        try {
+            val ms = MediaSession(ctx.applicationContext, "AngolMagyarKeepAlive")
+            ms.setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(0L)
+                    .setState(PlaybackState.STATE_PLAYING, 0L, 1f)
+                    .build()
+            )
+            ms.isActive = true
+            session = ms
+        } catch (e: Throwable) {
+            DiagLog.log("KEEPALIVE munkamenet hiba: ${e.javaClass.simpleName}: ${e.message}")
+        }
         DiagLog.log("KEEPALIVE: néma hangfolyam indul")
         thread = Thread({ loop() }, "srt-keepalive").also { it.isDaemon = true; it.start() }
     }
@@ -28,6 +46,8 @@ object KeepAlive {
         running = false
         thread?.interrupt()
         thread = null
+        try { session?.isActive = false; session?.release() } catch (_: Throwable) {}
+        session = null
         DiagLog.log("KEEPALIVE: leáll")
     }
 
@@ -55,7 +75,7 @@ object KeepAlive {
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
             track.play()
-            val buf = ShortArray(rate / 4) { if (it % 2 == 0) 1 else -1 }
+            val buf = ShortArray(rate / 4) { if (it % 2 == 0) 40 else -40 }
             while (running) {
                 val n = track.write(buf, 0, buf.size)
                 if (n < 0) {

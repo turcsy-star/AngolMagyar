@@ -295,7 +295,10 @@ class SrtJobService : Service() {
     private fun startAsForeground() {
         val n = runNotif()
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(NOTIF_RUN, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(
+                NOTIF_RUN, n,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
         } else {
             startForeground(NOTIF_RUN, n)
         }
@@ -370,7 +373,7 @@ class SrtJobService : Service() {
     private fun runBatch(o: Opts) {
         cancelFlag.set(false)
         acquireWake()
-        if (SubPrefs.keepAlive(this)) KeepAlive.start()
+        if (SubPrefs.keepAlive(this)) KeepAlive.start(this)
         Perf.load(this)
         worker = Thread {
             try {
