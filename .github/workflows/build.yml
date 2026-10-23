@@ -12,6 +12,15 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: NDK telepítése (a runner beépített NDK-ja hiányos)
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          rm -rf "$SDK/ndk/27.0.12077973" 2>/dev/null || sudo rm -rf "$SDK/ndk/27.0.12077973" || true
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses > /dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --install "ndk;27.2.12479018" "cmake;3.22.1" || \
+            sudo -E "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --install "ndk;27.2.12479018" "cmake;3.22.1"
+          ls "$SDK/ndk"
+          test -f "$SDK/ndk/27.2.12479018/source.properties"
       - run: chmod +x gradlew
       - name: Unit tesztek (hiba nem akasztja meg az APK-t)
         continue-on-error: true

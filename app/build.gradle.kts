@@ -6,13 +6,15 @@ plugins {
 android {
     namespace = "hu.angolmagyar.fordito"
     compileSdk = 35
+    // Rögzített NDK: a GitHub runner előtelepített 27.0.12077973 mappája hiányos (nincs source.properties)
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2163
-        versionName = "2.16.3"
+        versionCode = 2164
+        versionName = "2.16.4"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
