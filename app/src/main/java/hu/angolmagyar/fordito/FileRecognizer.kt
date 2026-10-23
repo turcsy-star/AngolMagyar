@@ -173,9 +173,13 @@ class FileRecognizer(
         var prev1 = ""
         var prev2 = ""
         for (sg in w.segments()) {
-            if (sg.noSpeech > 0.8f) continue
+            // Szigorúbb no_speech: zajon / csenden a Whisper gyakran 0.5–0.8 közé esik
+            if (sg.noSpeech > 0.55f) continue
             val t = sg.text.trim()
             if (t.isBlank()) continue
+            // nagyon rövid szelet + rövid szöveg = tipikus zaj-hallucináció
+            val dur = sg.endMs - sg.startMs
+            if (dur < 280 && t.split(Regex("\\s+")).size <= 2 && TextPolish.isNoise(t)) continue
             // zajra gyakori ismétlődő "hallucináció" kiszűrése
             if (t == prev1 && t == prev2) continue
             prev2 = prev1; prev1 = t

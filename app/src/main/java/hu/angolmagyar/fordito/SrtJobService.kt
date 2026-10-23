@@ -607,7 +607,7 @@ class SrtJobService : Service() {
                     maxGapMs = gapMs,
                     padMs = 450,
                     maxChunkMs = chunkMs,
-                    minSpeechMs = 250
+                    minSpeechMs = 350
                 )
                 val speechMs = ranges.sumOf { (it.end - it.start).toLong() } / 16L
                 SrtJob.progress(

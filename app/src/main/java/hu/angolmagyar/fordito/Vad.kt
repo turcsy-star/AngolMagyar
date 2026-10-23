@@ -17,7 +17,7 @@ object Vad {
      * Gyors energia-ellenőrzés: van-e érdemi beszéd a szeletben.
      * Csendes (vagy nagyon halk) chunkoknál true → a Whisper-t ki lehet hagyni.
      */
-    fun isMostlySilent(pcm: ShortArray, rate: Int = 16000, minSpeechMs: Int = 400): Boolean {
+    fun isMostlySilent(pcm: ShortArray, rate: Int = 16000, minSpeechMs: Int = 500): Boolean {
         if (pcm.size < rate / 2) return true
         val frame = rate / 50 // 20 ms
         val n = pcm.size / frame
@@ -33,8 +33,9 @@ object Vad {
             rms[f] = sqrt(s / frame)
         }
         val sorted = rms.sortedArray()
-        val floor = sorted[(n * 0.15).toInt().coerceIn(0, n - 1)]
-        val thr = maxOf(floor * 2.8, 70.0)
+        // Szigorúbb: háttérzaj ne számítson beszédnek (korábban túl sok zaj-szelet ment a Whisper-nek)
+        val floor = sorted[(n * 0.20).toInt().coerceIn(0, n - 1)]
+        val thr = maxOf(floor * 3.5, 110.0)
         var speechFrames = 0
         for (v in rms) if (v > thr) speechFrames++
         return speechFrames * 20 < minSpeechMs
@@ -55,9 +56,9 @@ object Vad {
         maxGapMs: Int = 2500,
         padMs: Int = 400,
         maxChunkMs: Int = 180_000,
-        minSpeechMs: Int = 250
+        minSpeechMs: Int = 350
     ): List<Seg> {
-        val fine = segments(pcm, rate, minSilenceMs = 280, maxSegMs = 15_000, minSegMs = minSpeechMs)
+        val fine = segments(pcm, rate, minSilenceMs = 320, maxSegMs = 15_000, minSegMs = minSpeechMs)
         if (fine.isEmpty()) return emptyList()
 
         val maxGapSamp = rate * maxGapMs / 1000
@@ -108,7 +109,7 @@ object Vad {
         maxGapMs: Int = 2500,
         padMs: Int = 400,
         maxChunkMs: Int = 180_000,
-        minSpeechMs: Int = 250
+        minSpeechMs: Int = 350
     ): List<Seg> {
         if (totalSamples <= 0) return emptyList()
         // ~90 mp-es ablak, 10 mp átfedés – a határon levő beszéd ne vesszen el
@@ -120,7 +121,7 @@ object Vad {
             val end = (pos + win).coerceAtMost(totalSamples)
             val slice = ParallelChunker.readPcmRange(pcmFile, pos, end)
             if (slice.isNotEmpty()) {
-                val local = segments(slice, rate, minSilenceMs = 280, maxSegMs = 15_000, minSegMs = minSpeechMs)
+                val local = segments(slice, rate, minSilenceMs = 320, maxSegMs = 15_000, minSegMs = minSpeechMs)
                 for (s in local) {
                     allFine.add(Seg(s.start + pos, s.end + pos))
                 }
@@ -165,9 +166,9 @@ object Vad {
     fun segments(
         pcm: ShortArray,
         rate: Int = 16000,
-        minSilenceMs: Int = 350,
+        minSilenceMs: Int = 380,
         maxSegMs: Int = 12_000,
-        minSegMs: Int = 300
+        minSegMs: Int = 350
     ): List<Seg> {
         val frame = rate / 50 // 20 ms
         val n = pcm.size / frame
@@ -183,8 +184,9 @@ object Vad {
             rms[f] = sqrt(s / frame)
         }
         val sorted = rms.sortedArray()
-        val floor = sorted[(n * 0.15).toInt().coerceIn(0, n - 1)]
-        val thr = maxOf(floor * 3.0, 90.0)
+        // Szigorúbb energia-küszöb: háttérzaj / halk zörej ne legyen beszédszelet
+        val floor = sorted[(n * 0.20).toInt().coerceIn(0, n - 1)]
+        val thr = maxOf(floor * 3.8, 130.0)
 
         val minSilFrames = (minSilenceMs / 20).coerceAtLeast(1)
         val padBefore = 8

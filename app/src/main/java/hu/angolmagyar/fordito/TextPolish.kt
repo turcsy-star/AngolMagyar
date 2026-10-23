@@ -5,10 +5,14 @@ package hu.angolmagyar.fordito
  */
 object TextPolish {
 
-    /** Gyakori angol zaj / töltelékszavak – alacsony információ, eldobható short finalnél. */
+    /** Gyakori angol zaj / töltelékszavak + Whisper csend-hallucinációk – eldobható. */
     private val NOISE = setOf(
-        "uh", "um", "ah", "eh", "hm", "hmm", "mhm", "mm", "er", "oh", "huh",
-        "the", "a", "an", "to", "of", "and"
+        "uh", "um", "ah", "eh", "hm", "hmm", "mhm", "mm", "mmm", "er", "oh", "huh",
+        "the", "a", "an", "to", "of", "and",
+        // gyakori zajon / csenden produkált rövid törmelék
+        "here", "there", "you", "me", "yeah", "yep", "bye", "okay", "ok", "so",
+        "thank you", "thanks", "thanks for watching", "subscribe", "goodbye",
+        "music", "applause", "laughter", "silence", "inaudible", "[music]", "[silence]"
     )
 
     /** Rövid, de értelmes szavak: ezeket sosem dobjuk el (igen/nem/oké…). */
@@ -46,8 +50,13 @@ object TextPolish {
 
     fun isNoise(text: String): Boolean {
         val t = text.trim().lowercase()
+            .replace(Regex("[.,!?;:\"'\\[\\]()…]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
         if (t.isEmpty()) return true
-        val words = t.split(Regex("\\s+"))
+        // több szavas tipikus hallucinációk (pl. "thank you", "thanks for watching")
+        if (t in NOISE) return true
+        val words = t.split(" ")
         if (words.size == 1) {
             val w = words[0]
             if (w in SHORT_OK) return false
@@ -55,6 +64,8 @@ object TextPolish {
             // egybetűs / kétbetűs maradék: valószínűleg felismerési zaj
             if (w.length <= 2 && w.all { it.isLetter() }) return true
         }
+        // 2–3 szavas, csak zaj-szavakból álló törmelék
+        if (words.size in 2..3 && words.all { it in NOISE || it.length <= 2 }) return true
         return false
     }
 

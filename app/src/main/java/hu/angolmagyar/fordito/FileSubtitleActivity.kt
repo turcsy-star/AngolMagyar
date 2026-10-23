@@ -1249,7 +1249,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         // "megállt a háttérben?" jelzés
         val stalled = !job.cooling && job.running && now - job.lastProgressMs > SrtJobService.STALL_WARN_MS
         stallBanner.visibility = if (stalled) View.VISIBLE else View.GONE
-        stallReport.visibility = if (stalled) View.VISIBLE else View.GONE
+        stallReport.visibility = if (stalled || job.running) View.VISIBLE else View.GONE
         if (stalled) {
             stallBanner.text = "⚠ Már ${fmtDur(now - job.lastProgressMs)} ideje nincs új haladás. " +
                 "Ha a telefon a háttérben lelassította az appot, kapcsold ki az akkumulátor-optimalizálást (lent), " +
