@@ -557,25 +557,88 @@ class SrtJobService : Service() {
                 }
             }
 
-            val result = chunk.run(
-                pcm = shorts, chunkMs = chunkMs, overlapMs = overlapMs,
-                sequentialOnly = sequential, events = events
-            ) { slice, offsetMs, idx ->
-                val sliceMs = slice.size / 16L
-                var segs = globalSegs
-                var base0 = 0.0
-                if (perChunkDiar) {
-                    SrtJob.chunkProgress(idx, 0.01, "beszélők elkülönítése…", sliceMs, audioMs)
-                    val raw = DiarizerFactory.create(this, preferOnnx = preferOnnx).diarize(slice, 16000)
-                    segs = raw.map { it.copy(startMs = it.startMs + offsetMs, endMs = it.endMs + offsetMs) }
-                    base0 = 0.1
+            // Whisper: intelligens darabolás – a csendeket kidobjuk, csak a beszédrészeket dolgozzuk fel
+            // (felirat, átirat és tárgyalási felvétel egyaránt – hosszú szüneteknél nagy a nyereség)
+            val useSmartChunks = asr.kind == Engines.K_WHISPER
+            val speechRanges = if (useSmartChunks) {
+                SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
+                // Tárgyalásnál kicsit nagyobb gap: a gondolkodási szünetek ne vágják szét a mondatokat
+                val gapMs = if (meeting) 4000 else 2500
+                val ranges = Vad.speechChunks(
+                    shorts,
+                    maxGapMs = gapMs,
+                    padMs = 450,
+                    maxChunkMs = chunkMs,
+                    minSpeechMs = 250
+                )
+                val speechMs = ranges.sumOf { (it.end - it.start).toLong() } / 16L
+                SrtJob.progress(
+                    0,
+                    "Intelligens darabolás: ${ranges.size} darab, " +
+                        "beszéd ${SrtJob.fmtDur(speechMs)} / ${SrtJob.fmtDur(audioMs)}"
+                )
+                // ETA-t a tényleges beszédhosszra igazítjuk
+                if (ratio > 0f && speechMs > 0) {
+                    SrtJob.histEstMs = (ratio * speechMs).toLong()
+                    SrtJob.setEta(recogStart + SrtJob.histEstMs, "beszédhossz alapján")
                 }
-                SrtJob.chunkProgress(idx, base0, "felismerés indul…", sliceMs, audioMs)
-                recognizer.recognize(
-                    slice, sourceLang, asr, needTranslate, dir, offsetMs,
-                    { t -> speakerAt(prefs, segs, t) }
-                ) { pct, msg ->
-                    SrtJob.chunkProgress(idx, base0 + (1.0 - base0) * pct / 100.0, msg, sliceMs, audioMs)
+                ranges
+            } else emptyList()
+
+            val result = if (useSmartChunks && speechRanges.isNotEmpty()) {
+                chunk.runRanges(
+                    pcm = shorts,
+                    ranges = speechRanges,
+                    sequentialOnly = sequential,
+                    events = events
+                ) { slice, offsetMs, idx ->
+                    val sliceMs = slice.size / 16L
+                    var segs = globalSegs
+                    var base0 = 0.0
+                    if (perChunkDiar) {
+                        SrtJob.chunkProgress(idx, 0.01, "beszélők elkülönítése…", sliceMs, audioMs)
+                        val raw = DiarizerFactory.create(this, preferOnnx = preferOnnx).diarize(slice, 16000)
+                        segs = raw.map { it.copy(startMs = it.startMs + offsetMs, endMs = it.endMs + offsetMs) }
+                        base0 = 0.1
+                    }
+                    SrtJob.chunkProgress(idx, base0, "felismerés indul…", sliceMs, audioMs)
+                    recognizer.recognize(
+                        slice, sourceLang, asr, needTranslate, dir, offsetMs,
+                        { t -> speakerAt(prefs, segs, t) }
+                    ) { pct, msg ->
+                        SrtJob.chunkProgress(idx, base0 + (1.0 - base0) * pct / 100.0, msg, sliceMs, audioMs)
+                    }
+                }
+            } else if (useSmartChunks && speechRanges.isEmpty()) {
+                // teljesen néma felvétel
+                SrtJob.progress(100, "Nincs felismerhető beszéd")
+                ParallelChunker.Result(emptyList(), 0, 0, false)
+            } else {
+                // régi fix darabolás (Vosk)
+                chunk.run(
+                    pcm = shorts, chunkMs = chunkMs, overlapMs = overlapMs,
+                    sequentialOnly = sequential, events = events
+                ) { slice, offsetMs, idx ->
+                    val sliceMs = slice.size / 16L
+                    if (asr.kind == Engines.K_WHISPER && Vad.isMostlySilent(slice)) {
+                        SrtJob.chunkProgress(idx, 1.0, "csend – kihagyva", sliceMs, audioMs)
+                        return@run emptyList()
+                    }
+                    var segs = globalSegs
+                    var base0 = 0.0
+                    if (perChunkDiar) {
+                        SrtJob.chunkProgress(idx, 0.01, "beszélők elkülönítése…", sliceMs, audioMs)
+                        val raw = DiarizerFactory.create(this, preferOnnx = preferOnnx).diarize(slice, 16000)
+                        segs = raw.map { it.copy(startMs = it.startMs + offsetMs, endMs = it.endMs + offsetMs) }
+                        base0 = 0.1
+                    }
+                    SrtJob.chunkProgress(idx, base0, "felismerés indul…", sliceMs, audioMs)
+                    recognizer.recognize(
+                        slice, sourceLang, asr, needTranslate, dir, offsetMs,
+                        { t -> speakerAt(prefs, segs, t) }
+                    ) { pct, msg ->
+                        SrtJob.chunkProgress(idx, base0 + (1.0 - base0) * pct / 100.0, msg, sliceMs, audioMs)
+                    }
                 }
             }
             if (cancelFlag.get() && result.stoppedEarly) throw InterruptedException("Megszakítva")

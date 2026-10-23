@@ -6,9 +6,96 @@ import kotlin.math.sqrt
  * Egyszerű energia-alapú beszéd-szegmentálás: a hangot mondatnyi szeletekre vágja a csendeknél.
  * A rendszer-felismerős (magyar) fájl-átirat ezekre a szeletekre épül, a szelet eleje/vége adja
  * a felirat időzítését.
+ *
+ * Emellett a Whisper útvonalhoz intelligens darabolást is ad: a csendeket kidobja, csak a
+ * beszédrészeket dolgoztatja fel (speechChunks).
  */
 object Vad {
     data class Seg(val start: Int, val end: Int)
+
+    /**
+     * Gyors energia-ellenőrzés: van-e érdemi beszéd a szeletben.
+     * Csendes (vagy nagyon halk) chunkoknál true → a Whisper-t ki lehet hagyni.
+     */
+    fun isMostlySilent(pcm: ShortArray, rate: Int = 16000, minSpeechMs: Int = 400): Boolean {
+        if (pcm.size < rate / 2) return true
+        val frame = rate / 50 // 20 ms
+        val n = pcm.size / frame
+        if (n < 10) return true
+        val rms = DoubleArray(n)
+        for (f in 0 until n) {
+            var s = 0.0
+            val o = f * frame
+            for (k in 0 until frame) {
+                val v = pcm[o + k].toDouble()
+                s += v * v
+            }
+            rms[f] = sqrt(s / frame)
+        }
+        val sorted = rms.sortedArray()
+        val floor = sorted[(n * 0.15).toInt().coerceIn(0, n - 1)]
+        val thr = maxOf(floor * 2.8, 70.0)
+        var speechFrames = 0
+        for (v in rms) if (v > thr) speechFrames++
+        return speechFrames * 20 < minSpeechMs
+    }
+
+    /**
+     * Intelligens darabolás Whisper-hez: a csendeket kidobja, a beszédrészeket
+     * összevonja ha közel vannak, és max. [maxChunkMs] hosszú munkadarabokra vágja.
+     * Visszaadott szegmensek sample-indexek (start inkluzív, end exkluzív).
+     *
+     * @param maxGapMs  ennél rövidebb csendet nem vág szét (összevon)
+     * @param padMs     beszédrész eleje/vége plusz padding
+     * @param maxChunkMs egy munkadarab maximális hossza (Whisper-barát)
+     */
+    fun speechChunks(
+        pcm: ShortArray,
+        rate: Int = 16000,
+        maxGapMs: Int = 2500,
+        padMs: Int = 400,
+        maxChunkMs: Int = 180_000,
+        minSpeechMs: Int = 250
+    ): List<Seg> {
+        val fine = segments(pcm, rate, minSilenceMs = 280, maxSegMs = 15_000, minSegMs = minSpeechMs)
+        if (fine.isEmpty()) return emptyList()
+
+        val maxGapSamp = rate * maxGapMs / 1000
+        val padSamp = rate * padMs / 1000
+        val maxChunkSamp = rate * (maxChunkMs / 1000.0).toInt().coerceAtLeast(rate * 30)
+
+        // 1) közeli finom szegmensek összevonása
+        val merged = ArrayList<Seg>()
+        var curS = fine[0].start
+        var curE = fine[0].end
+        for (i in 1 until fine.size) {
+            val s = fine[i]
+            if (s.start - curE <= maxGapSamp) {
+                curE = s.end
+            } else {
+                merged.add(Seg(curS, curE))
+                curS = s.start
+                curE = s.end
+            }
+        }
+        merged.add(Seg(curS, curE))
+
+        // 2) padding + max hossz szerinti vágás
+        val out = ArrayList<Seg>()
+        for (m in merged) {
+            var a = (m.start - padSamp).coerceAtLeast(0)
+            val b = (m.end + padSamp).coerceAtMost(pcm.size)
+            var pos = a
+            while (pos < b) {
+                val end = (pos + maxChunkSamp).coerceAtMost(b)
+                if (end - pos >= rate * minSpeechMs / 1000) {
+                    out.add(Seg(pos, end))
+                }
+                pos = end
+            }
+        }
+        return out
+    }
 
     fun segments(
         pcm: ShortArray,

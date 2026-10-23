@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *  - a párhuzamos chunkok száma és a pihenők a [Perf] szintből jönnek, FUTÁS KÖZBEN is változtathatók
  *  - melegedés / alacsony akku esetén a következő chunk várakozik (a már futók befejezik)
  *  - az átfedő határokat a felezőpontnál vágja, így nincs duplikált / elveszett mondat
+ *  - támogatja az előre meghatározott tartományokat is (VAD-alapú intelligens darabolás)
  */
 class ParallelChunker(private val ctx: Context, private val strictThermal: Boolean) {
 
@@ -26,6 +27,7 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
     fun cancel() = cancel.set(true)
 
     private lateinit var starts: IntArray
+    private lateinit var ends: IntArray
     private var samplesPerChunk = 0
     private var overlapSamples = 0
     private var total = 0
@@ -51,6 +53,38 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         val step = (samplesPerChunk - overlapSamples).coerceAtLeast(sampleRate * 30)
         total = if (pcm.isEmpty()) 1 else ((pcm.size - overlapSamples + step - 1) / step).coerceAtLeast(1)
         starts = IntArray(total) { it * step }
+        ends = IntArray(total) { minOf(starts[it] + samplesPerChunk, pcm.size) }
+        return runInternal(pcm, sampleRate, sequentialOnly, events, process)
+    }
+
+    /**
+     * Előre meghatározott tartományokkal (pl. VAD-alapú intelligens darabolás után).
+     * A [ranges] elemei: (startSample, endSample) – end exkluzív.
+     */
+    fun runRanges(
+        pcm: ShortArray,
+        ranges: List<Vad.Seg>,
+        sequentialOnly: Boolean,
+        sampleRate: Int = 16000,
+        events: Events,
+        process: (slice: ShortArray, offsetMs: Long, idx: Int) -> List<SrtExporter.Cue>
+    ): Result {
+        total = ranges.size.coerceAtLeast(0)
+        if (total == 0) {
+            return Result(emptyList(), 0, 0, false)
+        }
+        starts = IntArray(total) { ranges[it].start }
+        ends = IntArray(total) { ranges[it].end.coerceAtMost(pcm.size) }
+        samplesPerChunk = 0
+        overlapSamples = 0
+        return runInternal(pcm, sampleRate, sequentialOnly, events, process)
+    }
+
+    private fun runInternal(
+        pcm: ShortArray, sampleRate: Int, sequentialOnly: Boolean,
+        events: Events,
+        process: (slice: ShortArray, offsetMs: Long, idx: Int) -> List<SrtExporter.Cue>
+    ): Result {
         results = arrayOfNulls(total)
         next = 0; active = 0; failure = null
 
@@ -79,7 +113,7 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
             if (idx < 0) return
             try {
                 val start = starts[idx]
-                val end = minOf(start + samplesPerChunk, pcm.size)
+                val end = ends[idx]
                 val slice = pcm.copyOfRange(start, end)
                 val offsetMs = start.toLong() * 1000L / sr
                 events.onChunkStart(idx, total)
@@ -136,12 +170,19 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         val sr = 16000L
         for (i in res.indices) {
             val cues = res[i] ?: continue
-            val half = overlapSamples * 1000L / sr / 2
-            val lo = if (i == 0) Long.MIN_VALUE else starts[i] * 1000L / sr + half
-            val hi = if (i == res.size - 1 || res[i + 1] == null) Long.MAX_VALUE
-            else starts[i + 1] * 1000L / sr + half
-            for (c in cues) if (c.startMs >= lo && c.startMs < hi) out.add(c)
+            if (overlapSamples <= 0) {
+                // intelligens (VAD) darabolás: nincs átfedés, minden cue bent marad
+                out.addAll(cues)
+            } else {
+                val half = overlapSamples * 1000L / sr / 2
+                val lo = if (i == 0) Long.MIN_VALUE else starts[i] * 1000L / sr + half
+                val hi = if (i == res.size - 1 || res[i + 1] == null) Long.MAX_VALUE
+                else starts[i + 1] * 1000L / sr + half
+                for (c in cues) if (c.startMs >= lo && c.startMs < hi) out.add(c)
+            }
         }
+        // időrendbe
+        out.sortBy { it.startMs }
         return out
     }
 
