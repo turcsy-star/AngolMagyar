@@ -29,6 +29,9 @@ class FileRecognizer(
 ) {
     private data class Raw(val startMs: Long, val endMs: Long, val text: String)
 
+    /** Állapotüzenetek a hívónak (pl. fordítómodell letöltése közben). */
+    var onStatus: ((String) -> Unit)? = null
+
     private var translator: Translator? = null
     private var translatorKey = ""
     private var translatorOk = false
@@ -383,7 +386,14 @@ class FileRecognizer(
         t.downloadModelIfNeeded(DownloadConditions.Builder().build())
             .addOnSuccessListener(direct) { ok = true; latch.countDown() }
             .addOnFailureListener(direct) { latch.countDown() }
-        latch.await(90, TimeUnit.SECONDS)
+        // a letöltés hosszabb is lehet (lassú net): másodpercenként jelzünk, legfeljebb 15 percig várunk
+        val t0 = System.currentTimeMillis()
+        while (!latch.await(2, TimeUnit.SECONDS)) {
+            if (cancel.get()) { t.close(); throw InterruptedException("Megszakítva") }
+            val el = (System.currentTimeMillis() - t0) / 1000
+            onStatus?.invoke("Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}")
+            if (el > 900) break
+        }
         translatorKey = key
         if (ok) {
             translator = t
@@ -391,7 +401,7 @@ class FileRecognizer(
         } else {
             t.close()
             throw IllegalStateException(
-                "A fordítómodell nincs letöltve, és most nem érhető el. Nyisd meg a Modellek képernyőt."
+                "A fordítómodell nincs letöltve, és nem sikerült letölteni (internet?). Nyisd meg a Modellek képernyőt, és töltsd le."
             )
         }
     }

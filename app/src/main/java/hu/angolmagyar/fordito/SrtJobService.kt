@@ -466,6 +466,7 @@ class SrtJobService : Service() {
             val recognizer = FileRecognizer(this, prefs, cancelFlag)
             fr = recognizer
             recRef = recognizer
+            recognizer.onStatus = { m -> SrtJob.progress(45, m) }
             SrtJob.progress(40, "Felismerő modell betöltése: ${asr.label}…")
             recognizer.prepare(asr, needTranslate, dir)
             if (cancelFlag.get()) throw InterruptedException("Megszakítva")

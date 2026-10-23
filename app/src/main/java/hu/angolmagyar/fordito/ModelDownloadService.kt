@@ -176,7 +176,7 @@ class ModelDownloadService : Service() {
                     var lastBytes = 0L
                     if (id == "mlkit") {
                         post(-1, "($idx/$queueTotal) Fordítómodell…", false)
-                        downloadMlKit()
+                        downloadMlKit("($idx/$queueTotal)")
                     } else {
                         val spec = ModelManager.byId(id)
                         ModelManager.download(
@@ -307,21 +307,53 @@ class ModelDownloadService : Service() {
         }
     }
 
-    private fun downloadMlKit() {
-        val opts = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-            .setSourceLanguage(com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH)
-            .setTargetLanguage(com.google.mlkit.nl.translate.TranslateLanguage.HUNGARIAN)
-            .build()
-        val tr = com.google.mlkit.nl.translate.Translation.getClient(opts)
+    /** Igaz, ha a magyar fordítómodell ténylegesen letöltött állapotban van (az angol beépített). */
+    private fun huModelPresent(): Boolean {
+        return try {
+            val mgr = com.google.mlkit.common.model.RemoteModelManager.getInstance()
+            val m = com.google.mlkit.nl.translate.TranslateRemoteModel.Builder(
+                com.google.mlkit.nl.translate.TranslateLanguage.HUNGARIAN).build()
+            val l = java.util.concurrent.CountDownLatch(1)
+            var r = false
+            val direct = java.util.concurrent.Executor { it.run() }
+            mgr.isModelDownloaded(m)
+                .addOnSuccessListener(direct) { r = it == true; l.countDown() }
+                .addOnFailureListener(direct) { l.countDown() }
+            l.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            r
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * A magyar fordítómodell letöltése. Korábban az időtúllépés is "sikernek" számított, ezért a rendszer
+     * késznek jelezte a letöltést, miközben a modell nem volt meg. Most a végén ellenőrizzük, hogy tényleg letöltődött-e.
+     */
+    private fun downloadMlKit(label: String) {
+        if (huModelPresent()) return
+        val mgr = com.google.mlkit.common.model.RemoteModelManager.getInstance()
+        val model = com.google.mlkit.nl.translate.TranslateRemoteModel.Builder(
+            com.google.mlkit.nl.translate.TranslateLanguage.HUNGARIAN).build()
+        val direct = java.util.concurrent.Executor { it.run() }
         val latch = java.util.concurrent.CountDownLatch(1)
         var err: Exception? = null
-        val cond = com.google.mlkit.common.model.DownloadConditions.Builder().build()
-        tr.downloadModelIfNeeded(cond)
-            .addOnSuccessListener { latch.countDown() }
-            .addOnFailureListener { e -> err = e; latch.countDown() }
-        latch.await(30, java.util.concurrent.TimeUnit.MINUTES)
-        try { tr.close() } catch (_: Exception) {}
-        if (err != null) throw err!!
+        mgr.download(model, com.google.mlkit.common.model.DownloadConditions.Builder().build())
+            .addOnSuccessListener(direct) { latch.countDown() }
+            .addOnFailureListener(direct) { e -> err = e; latch.countDown() }
+        val t0 = SystemClock.elapsedRealtime()
+        while (!latch.await(3, java.util.concurrent.TimeUnit.SECONDS)) {
+            if (cancelFlag.get()) return
+            if (ctl.paused) throw ModelManager.PausedException()
+            val el = (SystemClock.elapsedRealtime() - t0) / 1000
+            post(-1, "$label Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}", false)
+            if (huModelPresent()) break
+            if (el > 20 * 60) throw IllegalStateException("A fordítómodell letöltése nem fejeződött be (időtúllépés). Ellenőrizd az internetet.")
+        }
+        err?.let { throw it }
+        if (!huModelPresent()) {
+            throw IllegalStateException("A fordítómodell letöltése nem sikerült. Ellenőrizd az internetet, majd próbáld újra.")
+        }
     }
 
     private fun ensureChannel() {

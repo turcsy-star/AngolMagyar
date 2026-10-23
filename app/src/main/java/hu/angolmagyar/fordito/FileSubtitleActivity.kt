@@ -864,26 +864,34 @@ class FileSubtitleActivity : AppCompatActivity() {
         status.text = job.message
         status.setTextColor(Ui.color(this, if (job.cooling) R.color.warn else R.color.textSecondary))
 
+        // Hátralévő idő és várható befejezés: eltelt idő és haladás alapján (lineáris becslés)
+        fun etaText(elapsed: Long, pct: Int): String {
+            if (pct >= 100) return ""
+            if (pct < 1 || elapsed < 2000) return " · Hátra: számítás…"
+            val rem = elapsed * (100 - pct) / pct
+            return " · Hátra: kb. ${fmtDur(rem)} · Kész: ${SrtJob.fmtClock(now + rem)} körül"
+        }
+
         // --- 1. aktuális darab (vagy az aktuális lépés, amíg még nincs darab)
         if (job.curStep == SrtJob.ST_RECOG && job.chunkTotal > 0 && job.curChunkNo > 0) {
             val el = if (job.curChunkStartMs > 0) now - job.curChunkStartMs else 0L
             val pc = job.curChunkPct
-            val rem = if (pc >= 3 && el > 0) el * (100 - pc) / pc else -1L
             barChunk.color(SrtJob.COLORS[SrtJob.ST_RECOG])
             barChunk.set(
                 "Aktuális darab · ${job.curChunkNo}/${job.chunkTotal}",
                 pc,
-                "Eltelt: ${fmtDur(el)}" + (if (rem >= 0) " · Hátra: kb. ${fmtDur(rem)}" else "")
+                "Eltelt: ${fmtDur(el)}" + etaText(el, pc)
             )
         } else {
             val idx = job.curStep.coerceAtLeast(0)
             val st = job.steps[idx]
             barChunk.color(SrtJob.COLORS[idx.coerceIn(0, SrtJob.COLORS.size - 1)])
             val p = if (st.state == SrtJob.DONE) 100 else st.pct
+            val el = now - job.stepStartMs
             barChunk.set(
                 "Aktuális lépés · ${job.label(idx)}",
                 p,
-                "Eltelt: ${fmtDur(now - job.stepStartMs)}"
+                "Eltelt: ${fmtDur(el)}" + (if (p >= 0) etaText(el, p) else "")
             )
         }
 
@@ -894,23 +902,31 @@ class FileSubtitleActivity : AppCompatActivity() {
             SrtJob.ACTIVE -> rs.pct.coerceAtLeast(0)
             else -> 0
         }
+        val recEta = when {
+            rs.state != SrtJob.ACTIVE -> ""
+            job.etaAtMs > 0 -> " · Hátra: kb. ${fmtDur(job.etaMs)} · Kész: ${SrtJob.fmtClock(job.etaAtMs)} körül"
+            else -> etaText(now - job.stepStartMs, rp)
+        }
         barRecog.set(
             job.label(SrtJob.ST_RECOG),
             rp,
-            if (job.chunkTotal > 0) "Kész: ${job.chunkDone}/${job.chunkTotal} darab" else
-                if (rs.state == SrtJob.PENDING) "még nem indult" else ""
+            (if (job.chunkTotal > 0) "Kész: ${job.chunkDone}/${job.chunkTotal} darab" else
+                if (rs.state == SrtJob.PENDING) "még nem indult" else "") + recEta
         )
 
-        // --- 3. teljes folyamat
-        val end = now
+        // --- 3. teljes folyamat: a felismerés mért tempója, előtte a teljes haladásból becsülve
+        val elapsedAll = now - job.startMs
         val etaPart = when {
-            job.etaAtMs > 0 ->
+            job.etaAtMs > 0 && job.curStep >= SrtJob.ST_RECOG ->
                 " · Hátra: kb. ${fmtDur(job.etaMs)} · Kész: ${SrtJob.fmtClock(job.etaAtMs)} körül"
-            job.curStep >= SrtJob.ST_RECOG -> " · Hátra: számítás…"
+            else -> etaText(elapsedAll, job.overall)
+        }
+        val basis = when {
+            job.etaAtMs > 0 && job.curStep >= SrtJob.ST_RECOG && job.etaBasis.isNotEmpty() -> "\n(${job.etaBasis})"
+            job.curStep < SrtJob.ST_RECOG && job.overall >= 1 -> "\n(durva becslés, a felismerés indulása után pontosodik)"
             else -> ""
         }
-        barTotal.set("Teljes folyamat", job.overall, "Eltelt: ${fmtDur(end - job.startMs)}$etaPart" +
-            (if (job.etaAtMs > 0 && job.etaBasis.isNotEmpty()) "\n(${job.etaBasis})" else ""))
+        barTotal.set("Teljes folyamat", job.overall, "Eltelt: ${fmtDur(elapsedAll)}$etaPart$basis")
 
         // --- lépéslista
         for (i in stepViews.indices) {
