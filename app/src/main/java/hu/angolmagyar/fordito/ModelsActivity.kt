@@ -267,6 +267,17 @@ class ModelsActivity : AppCompatActivity() {
                     else if (part > 0) append("  ⏸ félbehagyva, folytatható")
                 }
                 minHeight = dp(48)
+                textSize = 15f
+                setTextColor(android.content.res.ColorStateList(
+                    arrayOf(
+                        intArrayOf(android.R.attr.state_enabled),
+                        intArrayOf(-android.R.attr.state_enabled)
+                    ),
+                    intArrayOf(
+                        Ui.color(this@ModelsActivity, R.color.textPrimary),
+                        Ui.color(this@ModelsActivity, R.color.textSecondary)
+                    )
+                ))
                 isChecked = installed || selected.contains(it.spec.id)
                 isEnabled = !installed && !downloading
                 setOnCheckedChangeListener { _, c ->
@@ -325,6 +336,17 @@ class ModelsActivity : AppCompatActivity() {
                         else if (part > 0) append("  ⏸ félbehagyva, folytatható")
                     }
                     minHeight = dp(48)
+                    textSize = 15f
+                    setTextColor(android.content.res.ColorStateList(
+                        arrayOf(
+                            intArrayOf(android.R.attr.state_enabled),
+                            intArrayOf(-android.R.attr.state_enabled)
+                        ),
+                        intArrayOf(
+                            Ui.color(this@ModelsActivity, R.color.textPrimary),
+                            Ui.color(this@ModelsActivity, R.color.textSecondary)
+                        )
+                    ))
                     isChecked = installed || selected.contains(spec.id)
                     isEnabled = !installed && !downloading
                     setOnCheckedChangeListener { _, c ->

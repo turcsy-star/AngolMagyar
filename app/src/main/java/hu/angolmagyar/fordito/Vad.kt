@@ -97,6 +97,71 @@ object Vad {
         return out
     }
 
+    /**
+     * Ugyanaz, mint [speechChunks], de a PCM fájlból ablakonként olvas (nem tölti be az egészet).
+     * Hosszú filmeknél kötelező – különben OutOfMemoryError.
+     */
+    fun speechChunksFromFile(
+        pcmFile: java.io.File,
+        totalSamples: Int,
+        rate: Int = 16000,
+        maxGapMs: Int = 2500,
+        padMs: Int = 400,
+        maxChunkMs: Int = 180_000,
+        minSpeechMs: Int = 250
+    ): List<Seg> {
+        if (totalSamples <= 0) return emptyList()
+        // ~90 mp-es ablak, 10 mp átfedés – a határon levő beszéd ne vesszen el
+        val win = rate * 90
+        val hop = rate * 80
+        val allFine = ArrayList<Seg>()
+        var pos = 0
+        while (pos < totalSamples) {
+            val end = (pos + win).coerceAtMost(totalSamples)
+            val slice = ParallelChunker.readPcmRange(pcmFile, pos, end)
+            if (slice.isNotEmpty()) {
+                val local = segments(slice, rate, minSilenceMs = 280, maxSegMs = 15_000, minSegMs = minSpeechMs)
+                for (s in local) {
+                    allFine.add(Seg(s.start + pos, s.end + pos))
+                }
+            }
+            if (end >= totalSamples) break
+            pos += hop
+        }
+        if (allFine.isEmpty()) return emptyList()
+        // egyesít / padding – dummy tömb helyett a totalSamples a felső határ
+        val maxGapSamp = rate * maxGapMs / 1000
+        val padSamp = rate * padMs / 1000
+        val maxChunkSamp = rate * (maxChunkMs / 1000.0).toInt().coerceAtLeast(rate * 30)
+        allFine.sortBy { it.start }
+        val merged = ArrayList<Seg>()
+        var curS = allFine[0].start
+        var curE = allFine[0].end
+        for (i in 1 until allFine.size) {
+            val s = allFine[i]
+            if (s.start - curE <= maxGapSamp) {
+                curE = maxOf(curE, s.end)
+            } else {
+                merged.add(Seg(curS, curE))
+                curS = s.start
+                curE = s.end
+            }
+        }
+        merged.add(Seg(curS, curE))
+        val out = ArrayList<Seg>()
+        for (m in merged) {
+            var a = (m.start - padSamp).coerceAtLeast(0)
+            val b = (m.end + padSamp).coerceAtMost(totalSamples)
+            var p = a
+            while (p < b) {
+                val e = (p + maxChunkSamp).coerceAtMost(b)
+                if (e - p >= rate * minSpeechMs / 1000) out.add(Seg(p, e))
+                p = e
+            }
+        }
+        return out
+    }
+
     fun segments(
         pcm: ShortArray,
         rate: Int = 16000,

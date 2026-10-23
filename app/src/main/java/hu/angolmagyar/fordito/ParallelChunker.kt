@@ -3,6 +3,10 @@ package hu.angolmagyar.fordito
 import android.content.Context
 import android.os.BatteryManager
 import android.os.PowerManager
+import java.io.File
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -54,7 +58,7 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         total = if (pcm.isEmpty()) 1 else ((pcm.size - overlapSamples + step - 1) / step).coerceAtLeast(1)
         starts = IntArray(total) { it * step }
         ends = IntArray(total) { minOf(starts[it] + samplesPerChunk, pcm.size) }
-        return runInternal(pcm, sampleRate, sequentialOnly, events, process)
+        return runInternal(null, pcm, sampleRate, sequentialOnly, events, process)
     }
 
     /**
@@ -77,11 +81,46 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         ends = IntArray(total) { ranges[it].end.coerceAtMost(pcm.size) }
         samplesPerChunk = 0
         overlapSamples = 0
-        return runInternal(pcm, sampleRate, sequentialOnly, events, process)
+        return runInternal(null, pcm, sampleRate, sequentialOnly, events, process)
+    }
+
+    /**
+     * Hosszú felvétel: a PCM a lemezen marad, csak az aktuális darab (~néhány MB) kerül memóriába.
+     * Így elkerülhető az OutOfMemoryError hosszú filmeknél.
+     */
+    fun runFromFile(
+        pcmFile: File,
+        totalSamples: Int,
+        chunkMs: Int,
+        overlapMs: Int,
+        sequentialOnly: Boolean,
+        sampleRate: Int = 16000,
+        ranges: List<Vad.Seg>? = null,
+        events: Events,
+        process: (slice: ShortArray, offsetMs: Long, idx: Int) -> List<SrtExporter.Cue>
+    ): Result {
+        if (ranges != null && ranges.isNotEmpty()) {
+            total = ranges.size
+            starts = IntArray(total) { ranges[it].start.coerceIn(0, totalSamples) }
+            ends = IntArray(total) { ranges[it].end.coerceIn(starts[it], totalSamples) }
+            samplesPerChunk = 0
+            overlapSamples = 0
+        } else {
+            samplesPerChunk = (sampleRate * (chunkMs / 1000.0)).toInt().coerceAtLeast(sampleRate * 60)
+            overlapSamples = (sampleRate * (overlapMs / 1000.0)).toInt().coerceIn(sampleRate, samplesPerChunk / 3)
+            val step = (samplesPerChunk - overlapSamples).coerceAtLeast(sampleRate * 30)
+            total = if (totalSamples <= 0) 1 else ((totalSamples - overlapSamples + step - 1) / step).coerceAtLeast(1)
+            starts = IntArray(total) { it * step }
+            ends = IntArray(total) { minOf(starts[it] + samplesPerChunk, totalSamples) }
+        }
+        return runInternal(pcmFile, null, sampleRate, sequentialOnly, events, process)
     }
 
     private fun runInternal(
-        pcm: ShortArray, sampleRate: Int, sequentialOnly: Boolean,
+        pcmFile: File?,
+        pcm: ShortArray?,
+        sampleRate: Int,
+        sequentialOnly: Boolean,
         events: Events,
         process: (slice: ShortArray, offsetMs: Long, idx: Int) -> List<SrtExporter.Cue>
     ): Result {
@@ -92,7 +131,7 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         val threads = (0 until n).map { w ->
             Thread({
                 Perf.applyPriority()
-                worker(pcm, sampleRate, sequentialOnly, events, process)
+                worker(pcmFile, pcm, sampleRate, sequentialOnly, events, process)
             }, "srt-chunk-$w").also { it.start() }
         }
         for (t in threads) {
@@ -103,8 +142,42 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         return Result(merged(), done, total, cancel.get() && done < total)
     }
 
+    companion object {
+        /** Egy sample-tartomány beolvasása a nyers 16-bit LE PCM fájlból. */
+        fun readPcmRange(file: File, startSample: Int, endSample: Int): ShortArray {
+            val n = (endSample - startSample).coerceAtLeast(0)
+            if (n == 0) return ShortArray(0)
+            val out = ShortArray(n)
+            RandomAccessFile(file, "r").use { raf ->
+                val bytePos = startSample.toLong() * 2L
+                val byteLen = n.toLong() * 2L
+                if (bytePos + byteLen > raf.length()) {
+                    val avail = ((raf.length() - bytePos) / 2L).toInt().coerceAtLeast(0)
+                    if (avail == 0) return ShortArray(0)
+                    return readPcmRange(file, startSample, startSample + avail)
+                }
+                raf.seek(bytePos)
+                val buf = ByteArray(n * 2)
+                var off = 0
+                while (off < buf.size) {
+                    val r = raf.read(buf, off, buf.size - off)
+                    if (r <= 0) break
+                    off += r
+                }
+                val bb = ByteBuffer.wrap(buf, 0, off).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+                val got = bb.remaining().coerceAtMost(n)
+                bb.get(out, 0, got)
+            }
+            return out
+        }
+    }
+
     private fun worker(
-        pcm: ShortArray, sr: Int, sequentialOnly: Boolean, events: Events,
+        pcmFile: File?,
+        pcm: ShortArray?,
+        sr: Int,
+        sequentialOnly: Boolean,
+        events: Events,
         process: (ShortArray, Long, Int) -> List<SrtExporter.Cue>
     ) {
         while (!cancel.get() && failure == null) {
@@ -114,7 +187,11 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
             try {
                 val start = starts[idx]
                 val end = ends[idx]
-                val slice = pcm.copyOfRange(start, end)
+                val slice = when {
+                    pcm != null -> pcm.copyOfRange(start, end)
+                    pcmFile != null -> readPcmRange(pcmFile, start, end)
+                    else -> ShortArray(0)
+                }
                 val offsetMs = start.toLong() * 1000L / sr
                 events.onChunkStart(idx, total)
                 val cues = process(slice, offsetMs, idx)
