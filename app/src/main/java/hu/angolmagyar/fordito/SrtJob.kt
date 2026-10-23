@@ -216,7 +216,8 @@ object SrtJob {
     }
 
     // a felismerés haladásának mintái (idő, %) a folyamatos ETA-hoz; a legutóbbi ~60 mp tempója számít
-    private val samples = ArrayList<Pair<Long, Int>>()
+    private val samples = ArrayList<Pair<Long, Double>>()
+    private var pctExact = -1.0
     private var lastEtaMs = 0L
 
     fun label(idx: Int): String = when (idx) {
@@ -325,15 +326,30 @@ object SrtJob {
         overall = (cumBefore(idx) + WEIGHTS[idx] * p / 100).coerceIn(0, 99)
         if (idx == ST_RECOG && now - lastEtaMs >= 1000) {
             lastEtaMs = now
-            samples.add(now to p)
-            while (samples.size > 2 && now - samples[0].first > 60_000) samples.removeAt(0)
+            // tört százalékkal számolunk (az egész %-os lépcső 1–2 perces ablakban hatalmas hibát adna)
+            val pe = if (pctExact >= 0.0) pctExact else p.toDouble()
+            samples.add(now to pe)
+            while (samples.size > 2 && now - samples[0].first > 120_000) samples.removeAt(0)
             val first = samples.first()
             val dt = now - first.first
-            val dp = p - first.second
-            if (p >= 1 && dt >= 8_000 && dp > 0) {
-                val rest = (100 - p).toLong() * dt / dp
+            val dp = pe - first.second
+            val el = now - stepStartMs
+            // (a) átlagos tempó a lépés kezdete óta; (b) friss tempó az utolsó ~2 percből
+            val restLin = if (pe >= 1.0 && el >= 10_000) (el * (100.0 - pe) / pe).toLong() else -1L
+            val restWin = if (dt >= 20_000 && dp >= 0.3) ((100.0 - pe) * dt / dp).toLong() else -1L
+            val rest = when {
+                restLin > 0 && restWin > 0 -> {
+                    // a friss tempó legfeljebb 2,5-szeresen térhet el az átlagtól, majd átlagoljuk
+                    val w = restWin.coerceIn((restLin / 2.5).toLong(), (restLin * 2.5).toLong())
+                    (w + restLin) / 2
+                }
+                restLin > 0 -> restLin
+                restWin > 0 -> restWin
+                else -> -1L
+            }
+            if (rest > 0) {
                 etaAtMs = now + rest
-                etaBasis = "az utolsó percek tempója alapján"
+                etaBasis = "az eddigi és a friss tempó alapján"
             } else if (histEstMs > 0 && etaAtMs == 0L) {
                 etaAtMs = stepStartMs + histEstMs
                 etaBasis = "korábbi futások alapján"
@@ -439,22 +455,27 @@ object SrtJob {
         chunkFrac[i] = frac.coerceIn(0.0, 1.0)
         phases[i] = what
         val lens = chunkLenMs
-        val pct: Int
+        val pctD: Double
         if (lens.size == chunkFrac.size && lens.isNotEmpty() && lens.sum() > 0L) {
             var doneMs = 0.0
             var sumMs = 0.0
             for (k in chunkFrac.indices) { doneMs += chunkFrac[k] * lens[k]; sumMs += lens[k] }
-            pct = (doneMs * 100.0 / sumMs).toInt()
+            pctD = doneMs * 100.0 / sumMs
         } else {
             var doneMs = 0.0
             val per = if (chunkFrac.isNotEmpty()) totalAudioMs.toDouble() / chunkFrac.size else 1.0
             for (f in chunkFrac) doneMs += f * per
-            pct = if (totalAudioMs > 0) (doneMs * 100.0 / totalAudioMs).toInt() else 0
+            pctD = if (totalAudioMs > 0) doneMs * 100.0 / totalAudioMs else 0.0
         }
         refreshCurrent()
         val msg = phases.entries.sortedBy { it.key }.take(4)
             .joinToString("  ·  ") { "#${it.key + 1} ${it.value}" }
-        progress(pct.coerceIn(0, 99), msg.ifBlank { "Feldolgozás…" })
+        pctExact = pctD.coerceIn(0.0, 99.0)
+        try {
+            progress(pctD.toInt().coerceIn(0, 99), msg.ifBlank { "Feldolgozás…" })
+        } finally {
+            pctExact = -1.0
+        }
     }
 
     @Synchronized
