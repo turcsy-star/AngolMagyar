@@ -87,13 +87,14 @@ class FileRecognizer(
         dir: String,
         offsetMs: Long,
         speakerAt: (Long) -> String = { "" },
+        timeMap: TimeMap? = null,
         onProgress: ((Int, String) -> Unit)? = null
     ): List<SrtExporter.Cue> {
         if (pcm.isEmpty()) return emptyList()
         val recEnd = if (needTranslate) 70 else 90
         val rp: (Int, String) -> Unit = { p, m -> onProgress?.invoke(p * recEnd / 100, m) }
         val raws = when (asr.kind) {
-            Engines.K_WHISPER -> rawWhisper(pcm, asr.whisper!!, srcLang, offsetMs, rp)
+            Engines.K_WHISPER -> rawWhisper(pcm, asr.whisper!!, srcLang, offsetMs, rp, timeMap)
             Engines.K_VOSK -> rawVosk(pcm, asr.vosk!!, offsetMs, rp)
             else -> rawSystem(pcm, srcLang, offsetMs, rp)
         }
@@ -144,7 +145,7 @@ class FileRecognizer(
 
     private fun rawWhisper(
         pcm: ShortArray, spec: ModelManager.Spec, lang: String, offsetMs: Long,
-        onProgress: ((Int, String) -> Unit)?
+        onProgress: ((Int, String) -> Unit)?, timeMap: TimeMap? = null
     ): List<Raw> {
         val w = whisperCtx(spec)
         val audio = FloatArray(pcm.size) { pcm[it] / 32768f }
@@ -157,7 +158,9 @@ class FileRecognizer(
         if (cancel.get()) return emptyList()
         var lastPct = -1
         Perf.applyPriority() // a ggml munkaszálak a hívó szál prioritását öröklik
-        val vadPath = VadModel.file(ctx).takeIf { it.exists() && it.length() > 300_000L }?.absolutePath
+        // ha a darab már csak beszédet tartalmaz (összefűzve), a Whisper belső VAD-ja fölösleges
+        val vadPath = if (timeMap != null) null
+            else VadModel.file(ctx).takeIf { it.exists() && it.length() > 300_000L }?.absolutePath
         val rc = synchronized(whisperLock) {
             w.abort(false)
             w.transcribe(audio, lang, Perf.whisperThreads(), AsrPrefs.beam(ctx), prompt,
@@ -182,7 +185,9 @@ class FileRecognizer(
             // zajra gyakori ismétlődő "hallucináció" kiszűrése
             if (t == prev1 && t == prev2) continue
             prev2 = prev1; prev1 = t
-            out.addAll(splitLong(Raw(offsetMs + sg.startMs, offsetMs + sg.endMs, t)))
+            val t0 = if (timeMap != null) timeMap.toOrig(sg.startMs) else offsetMs + sg.startMs
+            val t1 = if (timeMap != null) maxOf(timeMap.toOrig(sg.endMs), t0 + 200) else offsetMs + sg.endMs
+            out.addAll(splitLong(Raw(t0, t1, t)))
         }
         if (out.isNotEmpty()) {
             prevTail = out.joinToString(" ") { it.text }.takeLast(220)

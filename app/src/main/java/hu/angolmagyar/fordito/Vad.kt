@@ -19,6 +19,9 @@ object Vad {
     /** A VAD által beszédnek ítélt hang tiszta hossza (ms) az utolsó darabolásnál – a szünetek nélkül. */
     @Volatile var lastSpeechMs: Long = 0L
 
+    /** A VAD beszédszakaszai (sample-indexek, rendezve) az utolsó darabolásnál. */
+    @Volatile var lastFine: List<Seg> = emptyList()
+
     /** Silero VAD egy szeleten (sample-indexek); null = hiba. */
     fun neuralSegments(pcm: ShortArray, modelPath: String, threads: Int): List<Seg>? {
         val f = FloatArray(pcm.size) { pcm[it] / 32768f }
@@ -138,6 +141,7 @@ object Vad {
     ): List<Seg> {
         if (totalSamples <= 0) return emptyList()
         lastMethod = "hangerő-alapú"
+        lastFine = emptyList()
         var neuralOk = 0
         var neuralFail = 0
         // 1. menet: a TELJES fájl zajszintje és csúcsa – egy közös küszöb, hogy a halk, zajos / zenés
@@ -181,6 +185,7 @@ object Vad {
         val padSamp = rate * padMs / 1000
         val maxChunkSamp = (rate.toLong() * maxChunkMs / 1000L).coerceAtLeast(rate * 30L).coerceAtMost(Int.MAX_VALUE.toLong() / 2).toInt()
         allFine.sortBy { it.start }
+        lastFine = ArrayList(allFine)
         val minChunkSamp = rate.toLong() * minChunkMs / 1000L
         val softGapSamp = rate.toLong() * softGapMs / 1000L
         // 1) természetes csoportok: ahol a szünet hosszú, ott darabhatár van

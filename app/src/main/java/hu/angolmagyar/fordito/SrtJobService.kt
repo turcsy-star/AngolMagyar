@@ -614,27 +614,38 @@ class SrtJobService : Service() {
                 DiagLog.log("VAD mód: ${Vad.lastMethod}")
                 val speechMs = ranges.sumOf { (it.end - it.start).toLong() } / 16L
                 val pureMs = Vad.lastSpeechMs.takeIf { it > 0 } ?: speechMs
-                SrtJob.speechInfo = "Beszéd: ${SrtJob.fmtDur(pureMs)} / ${SrtJob.fmtDur(audioMs)} " +
-                    "(${if (audioMs > 0) pureMs * 100 / audioMs else 0}%) · ${ranges.size} darab (${SrtJob.fmtDur(speechMs)})"
+                SrtJob.speechInfo = "Beszéd a videóban: ${SrtJob.fmtDur(pureMs)} / ${SrtJob.fmtDur(audioMs)} " +
+                    "(${if (audioMs > 0) pureMs * 100 / audioMs else 0}%)\n" +
+                    "Feldolgozásra kerül: ${ranges.size} darab, csak a beszéd (csendek nélkül)"
                 SrtJob.progress(
                     0,
                     "Intelligens darabolás: ${ranges.size} darab, " +
                         "beszéd ${SrtJob.fmtDur(speechMs)} / ${SrtJob.fmtDur(audioMs)}"
                 )
                 // a becslés a tényleges beszédhossz alapján (a csendeket nem számoljuk): külön előzmény-kulcs
-                histBasisKey = "$histKey|sp"
-                histBasisMs = speechMs.coerceAtLeast(1L)
+                histBasisKey = "$histKey|sp2"
+                histBasisMs = pureMs.coerceAtLeast(1L)
                 val spRatio = hist.getFloat("$histBasisKey|p${Perf.level}", 0f).takeIf { it > 0f }
                     ?: hist.getFloat(histBasisKey, 0f)
-                if (spRatio > 0f && speechMs > 0) {
-                    SrtJob.histEstMs = (spRatio * speechMs).toLong()
+                if (spRatio > 0f && pureMs > 0) {
+                    SrtJob.histEstMs = (spRatio * pureMs).toLong()
                     SrtJob.setEta(recogStart + SrtJob.histEstMs, "korábbi futások és a beszédhossz alapján")
                 } else {
                     SrtJob.histEstMs = 0
                     SrtJob.etaAtMs = 0
                 }
                 if (ranges.isNotEmpty()) {
-                    SrtJob.setChunkLens(LongArray(ranges.size) { (ranges[it].end - ranges[it].start) / 16L })
+                    val fine = Vad.lastFine
+                    SrtJob.setChunkLens(LongArray(ranges.size) { ri ->
+                        val r = ranges[ri]
+                        var sum = 0L
+                        for (f in fine) {
+                            if (f.end <= r.start) continue
+                            if (f.start >= r.end) break
+                            sum += (minOf(f.end, r.end) - maxOf(f.start, r.start)).toLong()
+                        }
+                        (if (sum > 0) sum else (r.end - r.start).toLong()) / 16L
+                    })
                 }
                 DiagLog.log("INTELLIGENS DARABOLÁS: ${ranges.size} darab · beszéd ${SrtJob.fmtDur(speechMs)} / ${SrtJob.fmtDur(audioMs)}")
                 ranges
@@ -693,7 +704,7 @@ class SrtJobService : Service() {
                      * Egy (rész)darab felismerése elakadás-őrrel (csak Whisper): ha a felismerés hosszú ideig nem lép előre,
                      * megszakítjuk, és a hívó újra próbálja kisebb darabokkal. Null = elakadt.
                      */
-                    fun part(pcm: ShortArray, off: Long, f0: Double, f1: Double): List<SrtExporter.Cue>? {
+                    fun part(pcm: ShortArray, off: Long, f0: Double, f1: Double, tm: TimeMap? = null): List<SrtExporter.Cue>? {
                         val guard = asr.kind == Engines.K_WHISPER
                         val tick = AtomicLong(System.currentTimeMillis())
                         val inWhisper = AtomicBoolean(true)
@@ -720,7 +731,8 @@ class SrtJobService : Service() {
                         try {
                             val res = recognizer.recognize(
                                 pcm, sourceLang, asr, needTranslate, dir, off,
-                                { t -> speakerAt(prefs, segs, t) }
+                                { t -> speakerAt(prefs, segs, t) },
+                                timeMap = tm
                             ) { pct, msg ->
                                 tick.set(System.currentTimeMillis())
                                 inWhisper.set(msg.startsWith("Whisper"))
@@ -738,15 +750,27 @@ class SrtJobService : Service() {
                         }
                     }
 
-                    val full = part(slice, offsetMs, 0.0, 1.0)
+                    // Whispernél csak a beszédrészeket dolgozzuk fel (csendek nélkül összefűzve); az időket visszaképezzük
+                    val startSample = speechRanges.getOrNull(idx)?.start ?: (offsetMs * 16L).toInt()
+                    val comp = if (asr.kind == Engines.K_WHISPER) Compact.build(slice, startSample, Vad.lastFine) else null
+                    val basePcm = comp?.first ?: slice
+                    val tm = comp?.second
+                    if (comp != null) {
+                        DiagLog.log("DARAB ${idx + 1}: csendek nélkül ${SrtJob.fmtDur(basePcm.size / 16L)} (eredeti ${SrtJob.fmtDur(sliceMs)})")
+                    }
+                    val full = part(basePcm, offsetMs, 0.0, 1.0, tm)
                     if (full != null) return@runFromFile full
 
                     // elakadt: két félre bontva újra
                     SrtJob.message = "Elakadt darab újrapróbálása kisebb részekben…"
                     SrtJob.changed()
-                    val half = slice.size / 2
-                    val a = part(slice.copyOfRange(0, half), offsetMs, 0.0, 0.5)
-                    val b = part(slice.copyOfRange(half, slice.size), offsetMs + half / 16L, 0.5, 1.0)
+                    val half = basePcm.size / 2
+                    val a = part(basePcm.copyOfRange(0, half), offsetMs, 0.0, 0.5, tm)
+                    val b = part(
+                        basePcm.copyOfRange(half, basePcm.size),
+                        if (tm == null) offsetMs + half / 16L else offsetMs, 0.5, 1.0,
+                        tm?.shifted(half / 16L)
+                    )
                     if (a == null || b == null) {
                         DiagLog.log("ELAKADÁS-ŐR: darab ${idx + 1} részben kihagyva (${if (a == null) "első" else "második"} fele elakadt)")
                         SrtJob.skippedParts++
