@@ -164,6 +164,8 @@ object SrtJob {
     private var chunkLenMs = LongArray(0)
     @Volatile var waitReason = ""
     @Volatile var engineLabel = ""
+    /** pl. "beszéd 6:27 / 30:37 (21%) · 12 darab" – a csendkiszűrés eredménye */
+    @Volatile var speechInfo = ""
     /** Felismerés nyelve (pl. "angol") – a képernyőn is látszik, hogy nem tévedhet a program. */
     @Volatile var langLabel = ""
     @Volatile var message = ""
@@ -252,6 +254,7 @@ object SrtJob {
         phases.clear()
         waitReason = ""
         engineLabel = ""
+        speechInfo = ""
         langLabel = ""
         message = "Indítás…"
         chunkCur = 0

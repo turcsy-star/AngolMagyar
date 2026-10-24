@@ -1064,6 +1064,9 @@ class FileSubtitleActivity : AppCompatActivity() {
                 append("nyelv: ${job.langLabel}")
             }
         }
+        if (job.speechInfo.isNotEmpty()) {
+            langLine.text = langLine.text.toString() + (if (langLine.text.isEmpty()) "" else "\n") + job.speechInfo
+        }
         langLine.visibility = if (langLine.text.isEmpty()) View.GONE else View.VISIBLE
         status.text = job.message
         status.setTextColor(Ui.color(this, if (job.cooling) R.color.warn else R.color.textSecondary))

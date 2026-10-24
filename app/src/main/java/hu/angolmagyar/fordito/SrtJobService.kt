@@ -594,21 +594,28 @@ class SrtJobService : Service() {
             val useSmartChunks = asr.kind == Engines.K_WHISPER
             val speechRanges = if (useSmartChunks) {
                 SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
-                val gapMs = if (meeting) 4000 else 2500
                 val vadModel = VadModel.ensure(this) { SrtJob.progress(0, it) }
+                val vadReady = vadModel != null
+                // ha a Whisper maga is kihagyja a darabon belüli csendet, nagy darabok kellenek (kontextus)
+                val gapMs = if (vadReady) 30_000 else if (meeting) 10_000 else 8000
                 SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
                 val ranges = Vad.speechChunksFromFile(
                     pcmTmp,
                     totalSamples,
                     maxGapMs = gapMs,
-                    padMs = 450,
-                    maxChunkMs = chunkMs,
+                    padMs = 1000,
+                    maxChunkMs = if (vadReady) maxOf(chunkMs, 5 * 60 * 1000) else chunkMs,
                     minSpeechMs = 250,
                     neuralModel = vadModel?.absolutePath,
-                    threads = 4
+                    threads = 4,
+                    minChunkMs = if (vadReady) 90_000 else 25_000,
+                    softGapMs = if (vadReady) 90_000 else 20_000
                 )
                 DiagLog.log("VAD mód: ${Vad.lastMethod}")
                 val speechMs = ranges.sumOf { (it.end - it.start).toLong() } / 16L
+                val pureMs = Vad.lastSpeechMs.takeIf { it > 0 } ?: speechMs
+                SrtJob.speechInfo = "Beszéd: ${SrtJob.fmtDur(pureMs)} / ${SrtJob.fmtDur(audioMs)} " +
+                    "(${if (audioMs > 0) pureMs * 100 / audioMs else 0}%) · ${ranges.size} darab (${SrtJob.fmtDur(speechMs)})"
                 SrtJob.progress(
                     0,
                     "Intelligens darabolás: ${ranges.size} darab, " +

@@ -13,10 +13,10 @@ class WhisperNative private constructor(private var handle: Long) {
 
     /** 0 = rendben. */
     fun transcribe(pcm: FloatArray, lang: String, threads: Int, beam: Int,
-                   prompt: String?, listener: Listener?): Int {
+                   prompt: String?, listener: Listener?, vadModel: String? = null): Int {
         val h = handle
         if (h == 0L) return -101
-        return nTranscribe(h, threads, pcm, lang, prompt, beam, listener)
+        return nTranscribe(h, threads, pcm, lang, prompt, beam, vadModel, listener)
     }
 
     fun segments(): List<Seg> {
@@ -89,7 +89,7 @@ class WhisperNative private constructor(private var handle: Long) {
         @JvmStatic private external fun nFree(h: Long)
         @JvmStatic private external fun nAbort(h: Long, on: Boolean)
         @JvmStatic private external fun nTranscribe(h: Long, threads: Int, audio: FloatArray, lang: String,
-                                                    prompt: String?, beam: Int, listener: Listener?): Int
+                                                    prompt: String?, beam: Int, vadPath: String?, listener: Listener?): Int
         @JvmStatic private external fun nSegCount(h: Long): Int
         @JvmStatic private external fun nSegT0(h: Long, i: Int): Long
         @JvmStatic private external fun nSegT1(h: Long, i: Int): Long

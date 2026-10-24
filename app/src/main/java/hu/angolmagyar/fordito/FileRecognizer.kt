@@ -149,12 +149,15 @@ class FileRecognizer(
         val w = whisperCtx(spec)
         val audio = FloatArray(pcm.size) { pcm[it] / 32768f }
         val out = ArrayList<Raw>()
-        val prompt = if (lang == "hu") "Ez egy magyar nyelvű felvétel, helyes központozással." else null
+        // az előző darab utolsó mondatai kontextusként (folyamatos nevek, stílus, mondatfolytatás)
+        val prompt = if (lang == "hu") "Ez egy magyar nyelvű felvétel, helyes központozással."
+        else prevTail.trim().takeIf { it.length >= 20 }
         val cb = onProgress
         cb?.invoke(0, "Whisper: felismerés indul…")
         if (cancel.get()) return emptyList()
         var lastPct = -1
         Perf.applyPriority() // a ggml munkaszálak a hívó szál prioritását öröklik
+        val vadPath = VadModel.file(ctx).takeIf { it.exists() && it.length() > 300_000L }?.absolutePath
         val rc = synchronized(whisperLock) {
             w.abort(false)
             w.transcribe(audio, lang, Perf.whisperThreads(), AsrPrefs.beam(ctx), prompt,
@@ -166,7 +169,7 @@ class FileRecognizer(
                         }
                     }
                     override fun onSegment(t0: Long, t1: Long, text: ByteArray) {}
-                })
+                }, vadModel = vadPath)
         }
         if (cancel.get()) return emptyList()
         if (rc != 0) throw IllegalStateException("A Whisper hibával leállt (kód $rc).")
@@ -181,8 +184,14 @@ class FileRecognizer(
             prev2 = prev1; prev1 = t
             out.addAll(splitLong(Raw(offsetMs + sg.startMs, offsetMs + sg.endMs, t)))
         }
+        if (out.isNotEmpty()) {
+            prevTail = out.joinToString(" ") { it.text }.takeLast(220)
+        }
         return finishTiming(out)
     }
+
+    /** Az előző felismert darab szövegének vége (Whisper kontextus a következő darabhoz). */
+    private var prevTail = ""
 
     // ------------------------------------------------------------------- Vosk
 

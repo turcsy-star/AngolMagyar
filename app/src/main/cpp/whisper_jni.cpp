@@ -134,7 +134,7 @@ Java_hu_angolmagyar_fordito_WhisperNative_nAbort(JNIEnv *, jclass, jlong handle,
 JNIEXPORT jint JNICALL
 Java_hu_angolmagyar_fordito_WhisperNative_nTranscribe(
         JNIEnv * env, jclass, jlong handle, jint threads, jfloatArray audio,
-        jstring lang, jstring prompt, jint beam, jobject listener) {
+        jstring lang, jstring prompt, jint beam, jstring vadPath, jobject listener) {
     auto * h = reinterpret_cast<Handle *>(handle);
     if (!h || !h->ctx) return -100;
 
@@ -149,6 +149,13 @@ Java_hu_angolmagyar_fordito_WhisperNative_nTranscribe(
         const char * pc = env->GetStringUTFChars(prompt, nullptr);
         if (pc) prompt_s = pc;
         env->ReleaseStringUTFChars(prompt, pc);
+    }
+
+    std::string vad_s;
+    if (vadPath) {
+        const char * vc = env->GetStringUTFChars(vadPath, nullptr);
+        if (vc) vad_s = vc;
+        env->ReleaseStringUTFChars(vadPath, vc);
     }
 
     whisper_full_params p = whisper_full_default_params(
@@ -171,6 +178,16 @@ Java_hu_angolmagyar_fordito_WhisperNative_nTranscribe(
     p.suppress_nst = true;
     p.no_speech_thold = 0.6f;
     p.initial_prompt = prompt_s.empty() ? nullptr : prompt_s.c_str();
+    // beépített Silero VAD: a darabon belüli csendeket kihagyja, az időbélyegeket visszaszámolja az eredeti idővonalra
+    if (!vad_s.empty()) {
+        p.vad = true;
+        p.vad_model_path = vad_s.c_str();
+        p.vad_params = whisper_vad_default_params();
+        p.vad_params.threshold = 0.5f;
+        p.vad_params.min_speech_duration_ms = 250;
+        p.vad_params.min_silence_duration_ms = 500;
+        p.vad_params.speech_pad_ms = 200;
+    }
 
     h->abort_flag.store(false);
     h->env = env;
@@ -189,7 +206,7 @@ Java_hu_angolmagyar_fordito_WhisperNative_nTranscribe(
     p.abort_callback = abort_cb;
     p.abort_callback_user_data = h;
 
-    LOGI("whisper_full: %d minta, %d szál, nyelv=%s, beam=%d", (int) n, (int) p.n_threads, lang_s.c_str(), (int) beam);
+    LOGI("whisper_full: %d minta, %d szál, nyelv=%s, beam=%d, vad=%d", (int) n, (int) p.n_threads, lang_s.c_str(), (int) beam, (int) p.vad);
     int rc = whisper_full(h->ctx, p, samples, (int) n);
 
     h->env = nullptr;

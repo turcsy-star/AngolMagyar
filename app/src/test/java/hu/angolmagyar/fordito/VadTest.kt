@@ -60,4 +60,15 @@ class VadTest {
             f.delete()
         }
     }
+
+    /** Hosszú csoportot a legnagyobb szünetnél vágunk, nem a megtelt darab végén. */
+    @Test fun splitsAtLongestPause() {
+        val r = 16000
+        // 4 mondat: 0–40 s, 41–80 s (kis szünet 1 s), 90–130 s (nagy szünet 10 s), 131–170 s
+        val segs = listOf(Vad.Seg(0, 40 * r), Vad.Seg(41 * r, 80 * r), Vad.Seg(90 * r, 130 * r), Vad.Seg(131 * r, 170 * r))
+        val out = Vad.splitAtPauses(segs, 100 * r)
+        assertEquals(2, out.size)
+        assertEquals(80 * r, out[0].end)   // a 10 s-os szünetnél vág
+        assertEquals(90 * r, out[1].start)
+    }
 }

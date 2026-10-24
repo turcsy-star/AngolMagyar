@@ -16,6 +16,9 @@ object Vad {
     /** Az utolsó darabolás módja (naplózáshoz): "neurális (Silero)" vagy "hangerő-alapú". */
     @Volatile var lastMethod: String = ""
 
+    /** A VAD által beszédnek ítélt hang tiszta hossza (ms) az utolsó darabolásnál – a szünetek nélkül. */
+    @Volatile var lastSpeechMs: Long = 0L
+
     /** Silero VAD egy szeleten (sample-indexek); null = hiba. */
     fun neuralSegments(pcm: ShortArray, modelPath: String, threads: Int): List<Seg>? {
         val f = FloatArray(pcm.size) { pcm[it] / 32768f }
@@ -129,7 +132,9 @@ object Vad {
         maxChunkMs: Int = 180_000,
         minSpeechMs: Int = 250,
         neuralModel: String? = null,
-        threads: Int = 4
+        threads: Int = 4,
+        minChunkMs: Int = 0,
+        softGapMs: Int = 0
     ): List<Seg> {
         if (totalSamples <= 0) return emptyList()
         lastMethod = "hangerő-alapú"
@@ -169,36 +174,98 @@ object Vad {
             neuralOk > 0 -> "vegyes (Silero + hangerő)"
             else -> "hangerő-alapú"
         }
+        lastSpeechMs = allFine.sumOf { (it.end - it.start).toLong() } / (rate / 1000L)
         if (allFine.isEmpty()) return emptyList()
         // egyesít / padding – dummy tömb helyett a totalSamples a felső határ
         val maxGapSamp = rate * maxGapMs / 1000
         val padSamp = rate * padMs / 1000
         val maxChunkSamp = (rate.toLong() * maxChunkMs / 1000L).coerceAtLeast(rate * 30L).coerceAtMost(Int.MAX_VALUE.toLong() / 2).toInt()
         allFine.sortBy { it.start }
-        val merged = ArrayList<Seg>()
+        val minChunkSamp = rate.toLong() * minChunkMs / 1000L
+        val softGapSamp = rate.toLong() * softGapMs / 1000L
+        // 1) természetes csoportok: ahol a szünet hosszú, ott darabhatár van
+        val groups = ArrayList<ArrayList<Seg>>()
+        var cur = arrayListOf(allFine[0])
         var curS = allFine[0].start
         var curE = allFine[0].end
         for (i in 1 until allFine.size) {
             val s = allFine[i]
-            if (s.start - curE <= maxGapSamp) {
+            val gap = s.start - curE
+            // közeli beszédrészek egy darabba; a túl rövid darabot nagyobb szünettel is összevonjuk (kontextus)
+            val canJoin = gap <= maxGapSamp || ((curE - curS).toLong() < minChunkSamp && gap.toLong() <= softGapSamp)
+            if (canJoin) {
+                cur.add(s)
                 curE = maxOf(curE, s.end)
             } else {
-                merged.add(Seg(curS, curE))
+                groups.add(cur)
+                cur = arrayListOf(s)
                 curS = s.start
                 curE = s.end
             }
         }
-        merged.add(Seg(curS, curE))
+        groups.add(cur)
+        // 2) a túl hosszú csoportot a LEGHOSSZABB SZÜNETNÉL vágjuk, nem beszéd közben
+        val pieces = ArrayList<Seg>()
+        for (g in groups) pieces.addAll(splitAtPauses(g, maxChunkSamp))
+        // 3) padding a szünetbe; a szomszédos darabok nem lóghatnak egymásba (nincs kettős felismerés)
         val out = ArrayList<Seg>()
-        for (m in merged) {
-            var a = (m.start - padSamp).coerceAtLeast(0)
-            val b = (m.end + padSamp).coerceAtMost(totalSamples)
-            var p = a
-            while (p < b) {
-                val e = (p + maxChunkSamp).coerceAtMost(b)
-                if (e - p >= rate * minSpeechMs / 1000) out.add(Seg(p, e))
-                p = e
+        for (m in pieces) {
+            val a2 = (m.start - padSamp).coerceAtLeast(0)
+            val b2 = (m.end + padSamp).coerceAtMost(totalSamples)
+            if (b2 - a2 >= rate * minSpeechMs / 1000) out.add(Seg(a2, b2))
+        }
+        for (i in 0 until out.size - 1) {
+            if (out[i].end > out[i + 1].start) {
+                val mid = (out[i].end + out[i + 1].start) / 2
+                out[i] = Seg(out[i].start, mid)
+                out[i + 1] = Seg(mid, out[i + 1].end)
             }
+        }
+        return out
+    }
+
+    /**
+     * Egy beszédrész-csoport darabolása legfeljebb [maxSamp] hosszú darabokra úgy, hogy a vágás a
+     * legnagyobb szünetben legyen (a darab felső felében), ne beszéd közben.
+     */
+    fun splitAtPauses(segs: List<Seg>, maxSamp: Int): List<Seg> {
+        val out = ArrayList<Seg>()
+        if (segs.isEmpty()) return out
+        var i = 0
+        while (i < segs.size) {
+            val start = segs[i].start
+            var last = i
+            while (last + 1 < segs.size && segs[last + 1].end.toLong() - start <= maxSamp) last++
+            if (last == segs.size - 1) {
+                out.add(Seg(start, segs.subList(i, last + 1).maxOf { it.end }))
+                break
+            }
+            if (last == i && segs[i].end.toLong() - start > maxSamp) {
+                // egyetlen, óriási folyamatos beszédrész: kényszervágás (nagyon ritka)
+                out.add(Seg(start, start + maxSamp))
+                i++
+                continue
+            }
+            // vágáspont: a darab felső felében a legnagyobb szünet (ha nincs ilyen, bárhol a legnagyobb)
+            var best = -1
+            var bestGap = -1
+            for (k in i..last) {
+                if (k + 1 >= segs.size) break
+                val len = segs[k].end.toLong() - start
+                if (len < maxSamp / 2) continue
+                val gap = segs[k + 1].start - segs[k].end
+                if (gap >= bestGap) { bestGap = gap; best = k }
+            }
+            if (best < 0) {
+                for (k in i..last) {
+                    if (k + 1 >= segs.size) break
+                    val gap = segs[k + 1].start - segs[k].end
+                    if (gap >= bestGap) { bestGap = gap; best = k }
+                }
+            }
+            if (best < 0) best = last
+            out.add(Seg(start, segs.subList(i, best + 1).maxOf { it.end }))
+            i = best + 1
         }
         return out
     }
