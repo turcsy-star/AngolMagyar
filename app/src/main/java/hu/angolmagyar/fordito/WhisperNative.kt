@@ -76,6 +76,15 @@ class WhisperNative private constructor(private var handle: Long) {
 
         fun systemInfo(): String = if (available()) nSystemInfo() else ""
 
+        /** Silero VAD: beszédszakaszok (t0,t1 párok, centiszekundum); null = hiba / nincs natív könyvtár. */
+        fun vadSegments(modelPath: String, audio: FloatArray, threads: Int): FloatArray? {
+            if (!available()) return null
+            return try { nVad(modelPath, audio, threads, 0.5f, 100) } catch (_: Throwable) { null }
+        }
+
+        @JvmStatic private external fun nVad(path: String, audio: FloatArray, threads: Int,
+                                             threshold: Float, minSilenceMs: Int): FloatArray?
+
         @JvmStatic private external fun nInit(path: String): Long
         @JvmStatic private external fun nFree(h: Long)
         @JvmStatic private external fun nAbort(h: Long, on: Boolean)

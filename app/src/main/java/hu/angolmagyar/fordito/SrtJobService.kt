@@ -594,15 +594,20 @@ class SrtJobService : Service() {
             val useSmartChunks = asr.kind == Engines.K_WHISPER
             val speechRanges = if (useSmartChunks) {
                 SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
-                val gapMs = if (meeting) 2500 else 1500
+                val gapMs = if (meeting) 4000 else 2500
+                val vadModel = VadModel.ensure(this) { SrtJob.progress(0, it) }
+                SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
                 val ranges = Vad.speechChunksFromFile(
                     pcmTmp,
                     totalSamples,
                     maxGapMs = gapMs,
-                    padMs = 300,
+                    padMs = 450,
                     maxChunkMs = chunkMs,
-                    minSpeechMs = 250
+                    minSpeechMs = 250,
+                    neuralModel = vadModel?.absolutePath,
+                    threads = 4
                 )
+                DiagLog.log("VAD mód: ${Vad.lastMethod}")
                 val speechMs = ranges.sumOf { (it.end - it.start).toLong() } / 16L
                 SrtJob.progress(
                     0,

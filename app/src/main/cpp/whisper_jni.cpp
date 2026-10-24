@@ -82,6 +82,40 @@ Java_hu_angolmagyar_fordito_WhisperNative_nInit(JNIEnv * env, jclass, jstring pa
     return reinterpret_cast<jlong>(h);
 }
 
+// Silero VAD (whisper.cpp): beszédszakaszok [t0,t1,...] centiszekundumban; null = hiba.
+JNIEXPORT jfloatArray JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nVad(JNIEnv * env, jclass, jstring path, jfloatArray audio,
+        jint threads, jfloat threshold, jint minSilenceMs) {
+    const char * p = env->GetStringUTFChars(path, nullptr);
+    whisper_vad_context_params cp = whisper_vad_default_context_params();
+    cp.n_threads = threads;
+    cp.use_gpu = false;
+    whisper_vad_context * v = whisper_vad_init_from_file_with_params(p, cp);
+    env->ReleaseStringUTFChars(path, p);
+    if (!v) return nullptr;
+    jsize n = env->GetArrayLength(audio);
+    jfloat * a = env->GetFloatArrayElements(audio, nullptr);
+    whisper_vad_params vp = whisper_vad_default_params();
+    vp.threshold = threshold;
+    vp.min_speech_duration_ms = 250;
+    vp.min_silence_duration_ms = minSilenceMs;
+    vp.speech_pad_ms = 100;
+    whisper_vad_segments * segs = whisper_vad_segments_from_samples(v, vp, a, (int) n);
+    env->ReleaseFloatArrayElements(audio, a, JNI_ABORT);
+    if (!segs) { whisper_vad_free(v); return nullptr; }
+    int k = whisper_vad_segments_n_segments(segs);
+    std::vector<float> tmp((size_t) k * 2);
+    for (int i = 0; i < k; i++) {
+        tmp[(size_t) i * 2]     = whisper_vad_segments_get_segment_t0(segs, i);
+        tmp[(size_t) i * 2 + 1] = whisper_vad_segments_get_segment_t1(segs, i);
+    }
+    whisper_vad_free_segments(segs);
+    whisper_vad_free(v);
+    jfloatArray out = env->NewFloatArray(k * 2);
+    if (out && k > 0) env->SetFloatArrayRegion(out, 0, k * 2, tmp.data());
+    return out;
+}
+
 JNIEXPORT void JNICALL
 Java_hu_angolmagyar_fordito_WhisperNative_nFree(JNIEnv *, jclass, jlong handle) {
     auto * h = reinterpret_cast<Handle *>(handle);

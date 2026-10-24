@@ -13,6 +13,25 @@ import kotlin.math.sqrt
 object Vad {
     data class Seg(val start: Int, val end: Int)
 
+    /** Az utolsó darabolás módja (naplózáshoz): "neurális (Silero)" vagy "hangerő-alapú". */
+    @Volatile var lastMethod: String = ""
+
+    /** Silero VAD egy szeleten (sample-indexek); null = hiba. */
+    fun neuralSegments(pcm: ShortArray, modelPath: String, threads: Int): List<Seg>? {
+        val f = FloatArray(pcm.size) { pcm[it] / 32768f }
+        val r = WhisperNative.vadSegments(modelPath, f, threads) ?: return null
+        val out = ArrayList<Seg>()
+        var i = 0
+        while (i + 1 < r.size) {
+            // centiszekundum → 16 kHz sample (1 cs = 160 sample)
+            val a = (r[i] * 160f).toInt().coerceIn(0, pcm.size)
+            val b = (r[i + 1] * 160f).toInt().coerceIn(0, pcm.size)
+            if (b > a) out.add(Seg(a, b))
+            i += 2
+        }
+        return out
+    }
+
     /**
      * Gyors energia-ellenőrzés: van-e érdemi beszéd a szeletben.
      * Csendes (vagy nagyon halk) chunkoknál true → a Whisper-t ki lehet hagyni.
@@ -108,28 +127,47 @@ object Vad {
         maxGapMs: Int = 2500,
         padMs: Int = 400,
         maxChunkMs: Int = 180_000,
-        minSpeechMs: Int = 250
+        minSpeechMs: Int = 250,
+        neuralModel: String? = null,
+        threads: Int = 4
     ): List<Seg> {
         if (totalSamples <= 0) return emptyList()
+        lastMethod = "hangerő-alapú"
+        var neuralOk = 0
+        var neuralFail = 0
         // 1. menet: a TELJES fájl zajszintje és csúcsa – egy közös küszöb, hogy a halk, zajos / zenés
         // részeket ne tekintse beszédnek (ablakonként a „relatív” küszöb a csendes ablakokban mindent beszédnek vett)
-        val thr = globalThreshold(pcmFile, totalSamples, rate)
-        // ~90 mp-es ablak, 10 mp átfedés – a határon levő beszéd ne vesszen el
-        val win = rate * 90
-        val hop = rate * 80
+        val thr = if (neuralModel == null) globalThreshold(pcmFile, totalSamples, rate) else 0.0
+        var thrLazy: Double? = if (neuralModel == null) thr else null
+        // energia-alapú: ~90 mp-es ablak, 10 mp átfedés; neurális: 5 perces, átfedés nélküli ablak
+        val win = if (neuralModel != null) rate * 300 else rate * 90
+        val hop = if (neuralModel != null) win else rate * 80
         val allFine = ArrayList<Seg>()
         var pos = 0
         while (pos < totalSamples) {
             val end = (pos + win).coerceAtMost(totalSamples)
             val slice = ParallelChunker.readPcmRange(pcmFile, pos, end)
             if (slice.isNotEmpty()) {
-                val local = segments(slice, rate, minSilenceMs = 280, maxSegMs = 15_000, minSegMs = minSpeechMs, thrOverride = thr)
+                var local: List<Seg>? = null
+                if (neuralModel != null) {
+                    local = neuralSegments(slice, neuralModel, threads)
+                    if (local != null) neuralOk++ else neuralFail++
+                }
+                if (local == null) {
+                    if (thrLazy == null) thrLazy = globalThreshold(pcmFile, totalSamples, rate)
+                    local = segments(slice, rate, minSilenceMs = 280, maxSegMs = 15_000, minSegMs = minSpeechMs, thrOverride = thrLazy)
+                }
                 for (s in local) {
                     allFine.add(Seg(s.start + pos, s.end + pos))
                 }
             }
             if (end >= totalSamples) break
             pos += hop
+        }
+        lastMethod = when {
+            neuralOk > 0 && neuralFail == 0 -> "neurális (Silero)"
+            neuralOk > 0 -> "vegyes (Silero + hangerő)"
+            else -> "hangerő-alapú"
         }
         if (allFine.isEmpty()) return emptyList()
         // egyesít / padding – dummy tömb helyett a totalSamples a felső határ
