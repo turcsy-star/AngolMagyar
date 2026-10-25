@@ -11,8 +11,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 30
         targetSdk = 35
-        versionCode = 29
-        versionName = "2.9"
+        versionCode = 2220
+        versionName = "2.22.0"
     }
 
     buildTypes {
