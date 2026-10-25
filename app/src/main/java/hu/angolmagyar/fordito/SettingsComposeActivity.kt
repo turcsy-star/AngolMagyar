@@ -93,6 +93,7 @@ class SettingsComposeActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
+    val ctx = LocalContext.current
     var themeMode by remember { mutableIntStateOf(prefs.themeMode) }
     var oled by remember { mutableStateOf(prefs.oledBlack) }
     var haptics by remember { mutableStateOf(prefs.haptics) }
@@ -151,7 +152,7 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
                 ) {
                     haptics = it
                     prefs.haptics = it
-                    if (it) Haptics.click(LocalContext.current)
+                    if (it) Haptics.click(ctx)
                 }
             }
 

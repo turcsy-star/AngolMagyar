@@ -86,6 +86,19 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun dp(v: Int) = Ui.dp(this, v)
 
+    /** OLED fekete háttér azonnali be-/kikapcsolása ezen a képernyőn (v2.22.3: a függvény hiányzott). */
+    private fun applyOledBackground() {
+        App.oledBlack = prefs.oledBlack
+        if (prefs.oledBlack) {
+            App.applyOledToWindow(this)
+        } else {
+            val bg = Ui.color(this, R.color.bg)
+            window.statusBarColor = bg
+            window.navigationBarColor = bg
+            window.decorView.setBackgroundColor(bg)
+        }
+    }
+
     private fun downloadHu(spec: ModelManager.Spec) {
         Toast.makeText(this, "Letöltés: ${spec.label}…", Toast.LENGTH_SHORT).show()
         Executors.newSingleThreadExecutor().execute {
