@@ -11,7 +11,7 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 30
         targetSdk = 35
-        versionCode = 2220
+        versionCode = 2220220
         versionName = "2.22.0"
     }
 
