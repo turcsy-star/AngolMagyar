@@ -68,6 +68,14 @@ object SrtJob {
         @Volatile var srtName = ""
         @Volatile var saved = false
         @Volatile var cueCount = 0
+        /** A kész blokkok (angol eredeti + fordítás) az ellenőrző nézethez; null = nincs (régi / részleges). */
+        @Volatile var cues: List<SrtExporter.Cue>? = null
+        /** A hallucináció-szűrő által kivett blokkok (visszaállíthatók). */
+        @Volatile var dropped: List<SrtExporter.Cue> = emptyList()
+        @Volatile var mode: SrtExporter.Mode = SrtExporter.Mode.TARGET_ONLY
+        @Volatile var dir: String = Prefs.DIR_EN_HU
+        /** A belső tárba mentett SRT fájlneve (előzményekhez, lejátszóban megnyitáshoz). */
+        @Volatile var localFile: String = ""
     }
 
     val queue = CopyOnWriteArrayList<QItem>()
@@ -155,6 +163,21 @@ object SrtJob {
     @Volatile var etaBasis = ""
     /** Chunkonként: 0 = vár, 1 = dolgozik, 2 = kész. */
     @Volatile var chunkState = IntArray(0)
+    /** Egy darab adatai a képernyő darab-listájához (a haladás-állapotot a chunkState / chunkFrac őrzi). */
+    class ChunkInfo {
+        /** A darab eredeti hossza a csendekkel együtt (ms). */
+        @Volatile var spanMs = 0L
+        /** Csendek nélküli hossz (ms) – amit a felismerő tényleg feldolgoz. */
+        @Volatile var speechMs = 0L
+        @Volatile var startMs = 0L
+        /** Ennyi ideig tartott a darab (ms); 0 = még nem kész. */
+        @Volatile var tookMs = 0L
+        /** Feliratblokkok száma a darabban; -1 = még nem ismert. */
+        @Volatile var cues = -1
+        /** 0..1 haladás (csak kijelzéshez). */
+        @Volatile var frac = 0.0
+    }
+    @Volatile var chunkInfo: Array<ChunkInfo> = emptyArray()
     /** Az aktív chunkok pillanatnyi tevékenysége (chunk sorszám → szöveg). */
     val phases = java.util.concurrent.ConcurrentHashMap<Int, String>()
     /** Chunkonkénti haladás 0..1 (a teljes felismerési %-hoz). */
@@ -169,6 +192,8 @@ object SrtJob {
     /** Felismerés nyelve (pl. "angol") – a képernyőn is látszik, hogy nem tévedhet a program. */
     @Volatile var langLabel = ""
     @Volatile var message = ""
+    /** A fordításról szóló tájékoztató / figyelmeztetés (pl. online hiba, tartalék használata). */
+    @Volatile var translateNote = ""
     @Volatile var chunkCur = 0
     @Volatile var chunkTotal = 0
     @Volatile var cooling = false
@@ -181,11 +206,19 @@ object SrtJob {
     @Volatile var curChunkStartMs = 0L
     /** Az utolsó felismert sorok élő előnézete. */
     @Volatile var preview: List<String> = emptyList()
+    /** Hullámforma-nézet: a hang burkolója (0..1), a teljes hossz és a darabok időtartományai (kezdet, vég – ms). */
+    @Volatile var waveEnv: FloatArray = FloatArray(0)
+    @Volatile var waveTotalMs = 0L
+    @Volatile var waveRanges: LongArray = LongArray(0)
+    /** Darabonkénti haladás (másolat) a hullámformához. */
+    @Synchronized fun chunkFracCopy(): DoubleArray = chunkFrac.copyOf()
     /** Hová mentette a szolgáltatás az eredményt (null = még nincs mentve, a képernyő kérdez). */
     @Volatile var savedWhere: String? = null
     @Volatile var partialWhere: String? = null
     /** Korábbi futások alapján becsült felismerési idő (ms), 0 = nincs adat. */
     @Volatile var histEstMs = 0L
+    /** Korábbi futásokból: egy 30 mp-es Whisper-ablak átlagos ideje (ms); 0 = nincs adat. */
+    @Volatile var histMsPerWindow = 0L
     /** Az utolsó észlelt haladás ideje (a "megállt a háttérben?" jelzéshez). */
     @Volatile var lastProgressMs = 0L
     /** Hány darabot (részt) kellett kihagyni, mert a felismerés elakadt (elakadás-őr). */
@@ -251,12 +284,14 @@ object SrtJob {
         chunkFrac = DoubleArray(0)
         chunkStartAt = LongArray(0)
         chunkLenMs = LongArray(0)
+        chunkInfo = emptyArray()
         phases.clear()
         waitReason = ""
         engineLabel = ""
         speechInfo = ""
         langLabel = ""
         message = "Indítás…"
+        translateNote = ""
         chunkCur = 0
         chunkTotal = 0
         cooling = false
@@ -266,6 +301,9 @@ object SrtJob {
         curChunkPct = 0
         curChunkStartMs = 0
         preview = emptyList()
+        waveEnv = FloatArray(0)
+        waveTotalMs = 0L
+        waveRanges = LongArray(0)
         savedWhere = null
         partialWhere = null
         histEstMs = 0
@@ -350,7 +388,11 @@ object SrtJob {
                 restWin > 0 -> restWin
                 else -> -1L
             }
-            if (rest > 0) {
+            val byWin = windowEtaMs(now)
+            if (byWin > 0) {
+                etaAtMs = now + byWin
+                etaBasis = "a 30 mp-es Whisper-ablakok mért ideje alapján"
+            } else if (rest > 0) {
                 etaAtMs = now + rest
                 etaBasis = "az eddigi és a friss tempó alapján"
             } else if (histEstMs > 0 && etaAtMs == 0L) {
@@ -359,6 +401,20 @@ object SrtJob {
             }
         }
         changed(false)
+    }
+
+    /** Ablak-alapú hátralévő idő a darabok állapotából (EtaModel); -1 = még nem becsülhető. */
+    private fun windowEtaMs(now: Long): Long {
+        val n = chunkState.size
+        if (n == 0 || chunkLenMs.size != n || chunkFrac.size != n || chunkInfo.size != n) return -1L
+        val st = chunkState.copyOf()
+        val frac = chunkFrac.copyOf()
+        val took = LongArray(n) { chunkInfo[it].tookMs }
+        val el = LongArray(n) { if (st[it] == 1) now - chunkStartAt.getOrElse(it) { now } else 0L }
+        val total = EtaModel.remainingMs(chunkLenMs.copyOf(), st, frac, took, el, histMsPerWindow)
+        if (total < 0) return -1L
+        val parallel = st.count { it == 1 }.coerceAtLeast(1)
+        return (total - EtaModel.TAIL_MS) / parallel + EtaModel.TAIL_MS
     }
 
     @Synchronized
@@ -422,9 +478,19 @@ object SrtJob {
         chunkState = IntArray(n)
         chunkFrac = DoubleArray(n)
         chunkStartAt = LongArray(n)
+        chunkInfo = Array(n) { ChunkInfo() }
         chunkTotal = n
         chunkDone = 0
         changed()
+    }
+
+    /** A darab hossza: [speechMs] csendek nélkül, [spanMs] az eredeti (csendekkel). */
+    @Synchronized
+    fun chunkSize(i: Int, speechMs: Long, spanMs: Long) {
+        val ci = chunkInfo.getOrNull(i) ?: return
+        ci.speechMs = speechMs
+        ci.spanMs = spanMs
+        changed(false)
     }
 
     /** Az "aktuális darab" (legkisebb sorszámú dolgozó chunk) adatainak frissítése. */
@@ -443,6 +509,7 @@ object SrtJob {
             chunkState[i] = 1
             chunkFrac[i] = 0.0
             chunkStartAt[i] = System.currentTimeMillis()
+            chunkInfo.getOrNull(i)?.let { it.startMs = chunkStartAt[i]; it.tookMs = 0L; it.cues = -1; it.frac = 0.0 }
         }
         chunkCur = i + 1
         lastProgressMs = System.currentTimeMillis()
@@ -456,6 +523,7 @@ object SrtJob {
     fun chunkProgress(i: Int, frac: Double, what: String, chunkAudioMs: Long, totalAudioMs: Long) {
         if (i !in chunkFrac.indices) return
         chunkFrac[i] = frac.coerceIn(0.0, 1.0)
+        chunkInfo.getOrNull(i)?.frac = chunkFrac[i]
         phases[i] = what
         val lens = chunkLenMs
         val pctD: Double
@@ -482,11 +550,12 @@ object SrtJob {
     }
 
     @Synchronized
-    fun chunkFinish(i: Int) {
+    fun chunkFinish(i: Int, cues: Int = -1) {
         if (i in chunkState.indices) {
-            val took = (System.currentTimeMillis() - chunkStartAt.getOrElse(i) { 0L }) / 1000
-            DiagLog.log("DARAB ${i + 1}/$chunkTotal kész · ${took}s")
+            val tookMs = System.currentTimeMillis() - chunkStartAt.getOrElse(i) { 0L }
+            DiagLog.log("DARAB ${i + 1}/$chunkTotal kész · ${tookMs / 1000}s")
             chunkState[i] = 2; chunkFrac[i] = 1.0
+            chunkInfo.getOrNull(i)?.let { it.tookMs = tookMs.coerceAtLeast(1L); it.cues = cues; it.frac = 1.0 }
         }
         phases.remove(i)
         chunkDone = chunkState.count { it == 2 }

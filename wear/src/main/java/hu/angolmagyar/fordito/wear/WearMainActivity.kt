@@ -1,216 +1,270 @@
 package hu.angolmagyar.fordito.wear
 
-import android.graphics.Color
+import android.content.Context
 import android.os.Build
 import android.os.Bundle
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.view.Gravity
-import android.view.View
-import android.widget.Button
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.ButtonDefaults
+import androidx.wear.compose.material.Chip
+import androidx.wear.compose.material.ChipDefaults
+import androidx.wear.compose.material.MaterialTheme
+import androidx.wear.compose.material.Scaffold
+import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.TimeText
 import com.google.android.gms.wearable.DataClient
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
+import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 /**
- * Wear OS companion: a telefon állapotától függő gombok (indítás / szünet / irány / leállítás),
- * színes állapotsor, az utolsó felirat nagyban, rezgés új figyelmeztetésnél.
- * Protokoll: /am/cmd, /am/status (lásd telefon WearBridge).
+ * v2.21.1 – Wear OS felület: valódi Data Layer szinkron a telefonnal.
+ *
+ * Protocol (megegyezik a telefon WearBridge-ével):
+ *  - /am/cmd     üzenet: "start_mic" | "stop" | "toggle_pause"
+ *  - /am/status  DataItem: running, paused, mode, lastHu, lastEn, warn
  */
-class WearMainActivity : AppCompatActivity(), DataClient.OnDataChangedListener {
-
-    companion object {
-        const val PATH_CMD = "/am/cmd"
-        const val PATH_STATUS = "/am/status"
-    }
-
-    private lateinit var statusView: TextView
-    private lateinit var warnView: TextView
-    private lateinit var captionView: TextView
-    private lateinit var idleButtons: LinearLayout
-    private lateinit var runButtons: LinearLayout
-    private lateinit var pauseBtn: Button
-
-    private var phoneNodeId: String? = null
-    private var lastWarn = ""
-
-    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
-
-    private fun btn(label: String, cmd: String) = Button(this).apply {
-        text = label
-        isAllCaps = false
-        minHeight = dp(44)
-        setOnClickListener { sendCmd(cmd) }
-    }
-
+class WearMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(14), dp(18), dp(14), dp(24))
-        }
-
-        statusView = TextView(this).apply {
-            text = getString(R.string.w_connecting)
-            textSize = 15f
-            gravity = Gravity.CENTER
-            setTextColor(Color.LTGRAY)
-        }
-        warnView = TextView(this).apply {
-            textSize = 12f
-            gravity = Gravity.CENTER
-            setTextColor(0xFFFFB454.toInt())
-            visibility = View.GONE
-        }
-        captionView = TextView(this).apply {
-            text = "—"
-            textSize = 18f
-            gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
-            setPadding(0, dp(10), 0, dp(10))
-        }
-
-        idleButtons = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(btn(getString(R.string.w_start_mic), "start_mic"))
-            addView(btn(getString(R.string.w_start_ptt), "start_ptt"))
-        }
-        pauseBtn = btn(getString(R.string.w_pause), "toggle_pause")
-        runButtons = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-            addView(pauseBtn)
-            addView(btn(getString(R.string.w_switch), "switch_dir"))
-            addView(btn(getString(R.string.w_stop), "stop"))
-        }
-
-        col.addView(statusView)
-        col.addView(warnView)
-        col.addView(captionView)
-        col.addView(idleButtons)
-        col.addView(runButtons)
-        setContentView(ScrollView(this).apply { addView(col) })
-
-        resolvePhoneNode()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        try {
-            Wearable.getDataClient(this).addListener(this)
-        } catch (_: Exception) {
-        }
-        resolvePhoneNode()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        try {
-            Wearable.getDataClient(this).removeListener(this)
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun resolvePhoneNode() {
-        try {
-            Wearable.getNodeClient(this).connectedNodes
-                .addOnSuccessListener { nodes: List<Node> ->
-                    phoneNodeId = nodes.firstOrNull { it.isNearby }?.id ?: nodes.firstOrNull()?.id
-                    statusView.text = getString(if (phoneNodeId != null) R.string.w_phone_ok else R.string.w_no_phone)
-                }
-                .addOnFailureListener {
-                    statusView.text = getString(R.string.w_api_error)
-                }
-        } catch (_: Exception) {
-            statusView.text = getString(R.string.w_unavailable)
-        }
-    }
-
-    private fun buzz(ms: Long = 40) {
-        try {
-            val v: Vibrator? = if (Build.VERSION.SDK_INT >= 31) {
-                getSystemService(VibratorManager::class.java)?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                getSystemService(VIBRATOR_SERVICE) as? Vibrator
+        setContent {
+            MaterialTheme {
+                WearApp()
             }
-            v?.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
-        } catch (_: Exception) {
         }
     }
+}
 
-    private fun sendCmd(cmd: String) {
-        val node = phoneNodeId
-        if (node == null) {
-            Toast.makeText(this, R.string.w_no_phone, Toast.LENGTH_SHORT).show()
-            resolvePhoneNode()
-            return
+private const val TAG = "WearAM"
+private const val PATH_CMD = "/am/cmd"
+private const val PATH_STATUS = "/am/status"
+
+data class PhoneStatus(
+    val running: Boolean = false,
+    val paused: Boolean = false,
+    val mode: String = "",
+    val lastHu: String = "",
+    val lastEn: String = "",
+    val warn: String = "",
+    val connected: Boolean = false
+)
+
+private fun wearHaptic(ctx: Context) {
+    try {
+        val v = if (Build.VERSION.SDK_INT >= 31) {
+            ctx.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            ctx.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        } ?: return
+        if (Build.VERSION.SDK_INT >= 29) {
+            v.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+        } else if (Build.VERSION.SDK_INT >= 26) {
+            v.vibrate(VibrationEffect.createOneShot(30, 80))
         }
+    } catch (_: Exception) {}
+}
+
+@Composable
+fun WearApp() {
+    val context = LocalContext.current
+    var status by remember { mutableStateOf(PhoneStatus()) }
+    var busy by remember { mutableStateOf(false) }
+
+    // Data Layer figyelés
+    DisposableEffect(Unit) {
+        val client = Wearable.getDataClient(context)
+        val listener = DataClient.OnDataChangedListener { buffer: DataEventBuffer ->
+            for (event in buffer) {
+                if (event.type != DataEvent.TYPE_CHANGED) continue
+                val path = event.dataItem.uri.path ?: continue
+                if (path != PATH_STATUS) continue
+                try {
+                    val map = DataMapItem.fromDataItem(event.dataItem).dataMap
+                    status = PhoneStatus(
+                        running = map.getBoolean("running", false),
+                        paused = map.getBoolean("paused", false),
+                        mode = map.getString("mode", "") ?: "",
+                        lastHu = map.getString("lastHu", "") ?: "",
+                        lastEn = map.getString("lastEn", "") ?: "",
+                        warn = map.getString("warn", "") ?: "",
+                        connected = true
+                    )
+                    // Complication frissítéshez
+                    context.getSharedPreferences("wear_status", Context.MODE_PRIVATE).edit()
+                        .putBoolean("running", status.running)
+                        .putBoolean("paused", status.paused)
+                        .apply()
+                } catch (e: Exception) {
+                    Log.w(TAG, "status parse: ${e.message}")
+                }
+            }
+        }
+        client.addListener(listener)
+        onDispose { client.removeListener(listener) }
+    }
+
+    // Első csatlakozás ellenőrzés
+    LaunchedEffect(Unit) {
         try {
-            Wearable.getMessageClient(this)
-                .sendMessage(node, PATH_CMD, cmd.toByteArray(Charsets.UTF_8))
-                .addOnSuccessListener { buzz(30) }
-                .addOnFailureListener {
-                    Toast.makeText(this, R.string.w_send_failed, Toast.LENGTH_SHORT).show()
-                }
+            val nodes = withContext(Dispatchers.IO) {
+                Wearable.getNodeClient(context).connectedNodes.await()
+            }
+            if (nodes.isNotEmpty()) {
+                status = status.copy(connected = true)
+            }
         } catch (e: Exception) {
-            Toast.makeText(this, e.message ?: "", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "nodes: ${e.message}")
         }
     }
 
-    override fun onDataChanged(buffer: DataEventBuffer) {
-        for (event in buffer) {
-            if (event.type != DataEvent.TYPE_CHANGED) continue
-            val path = event.dataItem.uri.path ?: continue
-            if (path != PATH_STATUS) continue
-            val map = DataMapItem.fromDataItem(event.dataItem).dataMap
-            val running = map.getBoolean("running", false)
-            val paused = map.getBoolean("paused", false)
-            val mode = map.getString("mode") ?: ""
-            val hu = map.getString("lastHu") ?: ""
-            val en = map.getString("lastEn") ?: ""
-            val warn = map.getString("warn") ?: ""
+    fun sendCmd(cmd: String) {
+        if (busy) return
+        wearHaptic(context)
+        busy = true
+        // fire-and-forget a UI szálon (Wearable API main-safe)
+        Wearable.getNodeClient(context).connectedNodes
+            .addOnSuccessListener { nodes: List<Node> ->
+                if (nodes.isEmpty()) {
+                    status = status.copy(connected = false)
+                    busy = false
+                    return@addOnSuccessListener
+                }
+                val msgClient: MessageClient = Wearable.getMessageClient(context)
+                var remaining = nodes.size
+                for (node in nodes) {
+                    msgClient.sendMessage(node.id, PATH_CMD, cmd.toByteArray(Charsets.UTF_8))
+                        .addOnCompleteListener {
+                            remaining--
+                            if (remaining <= 0) busy = false
+                        }
+                }
+            }
+            .addOnFailureListener {
+                status = status.copy(connected = false)
+                busy = false
+            }
+    }
 
-            runOnUiThread {
-                statusView.text = when {
-                    !running -> getString(R.string.w_idle)
-                    paused -> getString(R.string.w_paused, mode)
-                    else -> getString(R.string.w_running, mode)
-                }
-                statusView.setTextColor(
-                    when {
-                        !running -> Color.LTGRAY
-                        paused -> 0xFFFBBF24.toInt()
-                        else -> 0xFF34D399.toInt()
-                    }
+    Scaffold(timeText = { TimeText() }) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Állapot
+            Text(
+                text = when {
+                    !status.connected -> "Telefon?"
+                    status.running && status.paused -> "Szünet"
+                    status.running -> "Fut"
+                    else -> "Angol-Magyar"
+                },
+                style = MaterialTheme.typography.title3,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Felirat előnézet
+            val caption = status.lastHu.ifBlank { status.lastEn }
+            if (caption.isNotBlank()) {
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.body2,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 4.dp)
                 )
-                idleButtons.visibility = if (running) View.GONE else View.VISIBLE
-                runButtons.visibility = if (running) View.VISIBLE else View.GONE
-                pauseBtn.text = getString(if (paused) R.string.w_resume else R.string.w_pause)
-                captionView.text = when {
-                    hu.isNotBlank() -> hu
-                    en.isNotBlank() -> en
-                    else -> "—"
+                Spacer(modifier = Modifier.height(8.dp))
+            } else if (status.warn.isNotBlank()) {
+                Text(
+                    text = status.warn,
+                    style = MaterialTheme.typography.caption2,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Gombok
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(
+                    onClick = {
+                        if (status.running) sendCmd("stop") else sendCmd("start_mic")
+                    },
+                    modifier = Modifier.size(56.dp),
+                    colors = if (status.running) {
+                        ButtonDefaults.buttonColors(
+                            backgroundColor = MaterialTheme.colors.error
+                        )
+                    } else {
+                        ButtonDefaults.primaryButtonColors()
+                    }
+                ) {
+                    Text(if (status.running) "Stop" else "Rec")
                 }
-                if (warn.isBlank()) {
-                    warnView.visibility = View.GONE
-                } else {
-                    warnView.text = warn
-                    warnView.visibility = View.VISIBLE
-                    if (warn != lastWarn) buzz(120) // új figyelmeztetés: hosszabb rezgés
+
+                if (status.running) {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Button(
+                        onClick = { sendCmd("toggle_pause") },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Text(if (status.paused) "▶" else "❚❚")
+                    }
                 }
-                lastWarn = warn
+            }
+
+            if (!status.connected) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Nincs kapcsolat a telefonnal",
+                    style = MaterialTheme.typography.caption3,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }

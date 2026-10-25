@@ -268,11 +268,12 @@ class TranslateService : Service(), Overlay.Callbacks {
         AppState.running = true
         AppState.paused = false
         AppState.mode = mode
-        AppState.level = 0f
+        AppState.updateLevel(0f)
         AppState.hint = null
         AppState.sessionStartedAt = SystemClock.elapsedRealtime()
         AppState.lastCaptionHu = ""
         AppState.lastCaptionEn = ""
+        AppState.notifyListeners()
         AppState.notifyTile(this)
         if (!isTest) prefs.lastMode = mode
 
@@ -433,6 +434,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         if (!active) return
         paused = !paused
         AppState.paused = paused
+        AppState.notifyListeners()
         overlay?.setPaused(paused)
         main.removeCallbacks(clearRunnable)
         if (paused) {
@@ -639,6 +641,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         main.postDelayed(clearRunnable, CLEAR_AFTER_MS)
         AppState.lastCaptionHu = lines.lastOrNull() ?: ""
         AppState.lastCaptionEn = curEn.ifBlank { lastEn }
+        AppState.notifyListeners()
         WearBridge.pushStatus(this, AppState.lastCaptionHu, AppState.lastCaptionEn)
     }
 
@@ -729,6 +732,7 @@ class TranslateService : Service(), Overlay.Callbacks {
             var modelHu: Model? = null
             var recHu: Recognizer? = null
             var sys: LiveSystemAsr? = null
+            var liveWhisper: LiveWhisperAsr? = null
             var audio: AudioRecord? = null
             try {
                 LibVosk.setLogLevel(LogLevel.WARNINGS)
@@ -745,24 +749,42 @@ class TranslateService : Service(), Overlay.Callbacks {
                     recOther = Recognizer(mdl, 16000f)
                 }
                 if (sides.hu) {
-                    val hs = Engines.voskSpecFor(this@TranslateService, prefs, "hu")
-                    if (hs != null) {
-                        val mdl = Model(ModelManager.dir(this@TranslateService, hs).absolutePath)
-                        modelHu = mdl
-                        recHu = Recognizer(mdl, 16000f)
-                    } else {
-                        val s2 = LiveSystemAsr(
-                            this@TranslateService, "hu-HU", prefs.allowOnlineAsr,
-                            object : LiveSystemAsr.Callback {
-                                override fun onPartial(text: String) = asrPartial(true, text)
-                                override fun onFinal(text: String) = asrFinal(true, text)
-                                override fun onFatal(message: String) {
-                                    main.post { if (active) fail(AppState.ERR_NO_MODEL, message) }
+                    when (Engines.liveHuKind(this@TranslateService, prefs)) {
+                        Engines.K_VOSK -> {
+                            val hs = Engines.voskSpecFor(this@TranslateService, prefs, "hu")!!
+                            val mdl = Model(ModelManager.dir(this@TranslateService, hs).absolutePath)
+                            modelHu = mdl
+                            recHu = Recognizer(mdl, 16000f)
+                        }
+                        Engines.K_WHISPER -> {
+                            // Whisper élő mód – elkerüli a rendszer ASR „kliens hiba” hibáját
+                            val lw = LiveWhisperAsr(
+                                this@TranslateService, "hu",
+                                object : LiveWhisperAsr.Callback {
+                                    override fun onPartial(text: String) = asrPartial(true, text)
+                                    override fun onFinal(text: String) = asrFinal(true, text)
+                                    override fun onFatal(message: String) {
+                                        main.post { if (active) fail(AppState.ERR_NO_MODEL, message) }
+                                    }
                                 }
-                            }
-                        )
-                        sys = s2
-                        s2.start()
+                            )
+                            liveWhisper = lw
+                            lw.start()
+                        }
+                        else -> {
+                            val s2 = LiveSystemAsr(
+                                this@TranslateService, "hu-HU", prefs.allowOnlineAsr,
+                                object : LiveSystemAsr.Callback {
+                                    override fun onPartial(text: String) = asrPartial(true, text)
+                                    override fun onFinal(text: String) = asrFinal(true, text)
+                                    override fun onFatal(message: String) {
+                                        main.post { if (active) fail(AppState.ERR_NO_MODEL, message) }
+                                    }
+                                }
+                            )
+                            sys = s2
+                            s2.start()
+                        }
                     }
                 }
                 val aud = createAudioRecord(mode)
@@ -827,7 +849,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                     val rms = sqrt(sq / len)
                     val raw = (sqrt(rms / 32768.0) * 2.5).coerceAtMost(1.0).toFloat()
                     smooth = maxOf(raw, smooth * 0.85f)
-                    AppState.level = smooth
+                    AppState.updateLevel(smooth)
                     if (smooth > maxLevel) maxLevel = smooth
                     val lvl = smooth
                     main.post { overlay?.setLevel(lvl) }
@@ -866,9 +888,13 @@ class TranslateService : Service(), Overlay.Callbacks {
                     val huNow = conversationHuToEn
                     val feedHu = sides.hu && (huNow || autoDual)
                     val feedOther = sides.other && (!huNow || autoDual)
-                    if (feedHu) sys?.feed(data, len)
+                    if (feedHu) {
+                        sys?.feed(data, len)
+                        liveWhisper?.feed(data, len)
+                    }
                     if (!voiceLikely) {
                         // hangszint frissült, de nincs beszéd – ne rontsa a partialt
+                        // (a Whisper VAD saját maga is figyeli a csendet)
                         continue
                     }
                     if (wasPaused) {
@@ -954,6 +980,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                 }
                 audio?.release()
                 sys?.stop()
+                liveWhisper?.stop()
                 recOther?.close()
                 modelOther?.close()
                 recHu?.close()
@@ -1082,8 +1109,9 @@ class TranslateService : Service(), Overlay.Callbacks {
         projection = null
         AppState.running = false
         AppState.paused = false
+        AppState.notifyListeners()
         AppState.mode = null
-        AppState.level = 0f
+        AppState.updateLevel(0f)
         AppState.hint = null
         AppState.sessionStartedAt = 0L
         AppState.notifyTile(applicationContext)

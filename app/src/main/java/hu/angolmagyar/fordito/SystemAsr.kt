@@ -153,6 +153,22 @@ class LiveSystemAsr(
                 }
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> endSession(100)
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> endSession(600)
+                SpeechRecognizer.ERROR_CLIENT -> {
+                    // Gyakori ideiglenes hiba (nincs offline csomag / Google szolgáltatás).
+                    // Többszöri ismétlődés után adunk értelmes üzenetet, és Whisper-t javasolunk.
+                    val now = System.currentTimeMillis()
+                    quickErrors = if (now - lastErrorAt < 5000) quickErrors + 1 else 1
+                    lastErrorAt = now
+                    if (quickErrors >= 12) {
+                        running = false
+                        cb.onFatal(
+                            "Magyar felismerés: kliens hiba. Töltsd le a Whisper modellt a Modellek " +
+                                "képernyőn (ajánlott), vagy telepítsd a Google offline magyar csomagját."
+                        )
+                    } else {
+                        endSession(500)
+                    }
+                }
                 else -> {
                     val now = System.currentTimeMillis()
                     quickErrors = if (now - lastErrorAt < 4000) quickErrors + 1 else 1

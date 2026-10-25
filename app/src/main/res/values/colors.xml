@@ -17,4 +17,7 @@
     <color name="ic_launcher_bg">#312E81</color>
     <color name="overlayScrim">#CC000000</color>
     <color name="chipBg">#33FFFFFF</color>
+    <color name="bgOled">#000000</color>
+    <color name="bgElevatedOled">#0A0A0A</color>
+    <color name="cardOled">#111111</color>
 </resources>

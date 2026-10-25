@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "AngolMagyar"
 include(":app")
 include(":wear")
+include(":core")

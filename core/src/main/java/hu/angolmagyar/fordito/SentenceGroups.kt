@@ -12,7 +12,7 @@ object SentenceGroups {
     private const val SENTENCE_END = ".?!…\"”)"
 
     fun group(
-        items: List<Item>, maxChars: Int = 220, maxGapMs: Long = 1500, maxItems: Int = 4
+        items: List<Item>, maxChars: Int = 260, maxGapMs: Long = 1500, maxItems: Int = 6
     ): List<IntRange> {
         val out = ArrayList<IntRange>()
         if (items.isEmpty()) return out
@@ -26,8 +26,14 @@ object SentenceGroups {
             if (!last) {
                 val ends = t.isNotEmpty() && t.last() in SENTENCE_END
                 val gap = items[i + 1].startMs - items[i].endMs
-                val nextLen = items[i + 1].text.trim().length
-                cut = ends || gap > maxGapMs || chars + nextLen > maxChars || (i - start + 1) >= maxItems
+                val next = items[i + 1].text.trim()
+                val nextLower = next.isNotEmpty() && next[0].isLowerCase()
+                // a mondat közepén vágott blokk (vessző / nincs záró írásjel + kisbetűs folytatás) kicsit hosszabb szünetet is áthidal;
+                // a "…" végű blokk kisbetűs folytatással szintén egy mondat
+                val ellipsis = t.endsWith("...") || t.endsWith("…")
+                val sentenceEnd = ends && !(ellipsis && nextLower)
+                val gapLimit = if (!ends && nextLower) maxOf(maxGapMs, 3000L) else maxGapMs
+                cut = sentenceEnd || gap > gapLimit || chars + next.length > maxChars || (i - start + 1) >= maxItems
             }
             if (cut) {
                 out.add(start..i)

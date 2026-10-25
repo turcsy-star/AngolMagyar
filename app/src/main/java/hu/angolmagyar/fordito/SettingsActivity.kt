@@ -111,8 +111,31 @@ class SettingsActivity : AppCompatActivity() {
         val column = Ui.column(this).apply {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
+
+        // --- Megjelenés (OLED + téma) ---
+        val appearanceCard = Ui.card(this)
+        appearanceCard.addView(Ui.title(this, "Megjelenés", 17f))
+        appearanceCard.addView(Ui.button(this, "Compose megjelenés beállítások", false) {
+            NavTransitions.open(this, SettingsComposeActivity::class.java)
+        })
+        appearanceCard.addView(SwitchCompat(this).apply {
+            text = "OLED pure black (sötét téma)"
+            isChecked = prefs.oledBlack
+            minHeight = dp(52)
+            setOnCheckedChangeListener { _, c ->
+                prefs.oledBlack = c
+                applyOledBackground()
+                Toast.makeText(this@SettingsActivity,
+                    if (c) "OLED fekete bekapcsolva" else "OLED fekete kikapcsolva",
+                    Toast.LENGTH_SHORT).show()
+            }
+        })
+        appearanceCard.addView(Ui.small(this,
+            "Energiatakarékos true-black háttér OLED kijelzőkön. A váltás azonnal él."))
+        column.addView(appearanceCard)
         val scroll = Ui.scrollOf(this, column)
         setContentView(scroll)
+        if (prefs.oledBlack) applyOledBackground()
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { v, insets ->
             val b = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(b.left, b.top, b.right, b.bottom)

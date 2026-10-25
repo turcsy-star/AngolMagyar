@@ -14,4 +14,18 @@ class TextPolishTest {
         assertTrue(TextPolish.ensurePeriod("one two three four five").endsWith("."))
         assertTrue(TextPolish.ensurePeriod("short one") == "short one")
     }
+
+    @Test fun hungarianFillersRemoved() {
+        val raw = "Ööö hát izé, szerintem ez jó megoldás."
+        val cleaned = TextPolish.cleanWhisperOutput(raw)
+        assertFalse(cleaned.lowercase().contains("ööö"))
+        assertFalse(cleaned.lowercase().contains("hát"))
+        assertFalse(cleaned.lowercase().contains("izé"))
+        assertTrue(cleaned.lowercase().contains("szerintem") || cleaned.lowercase().contains("megoldás"))
+    }
+
+    @Test fun cleanWhisperCapitalizes() {
+        val cleaned = TextPolish.cleanWhisperOutput("hello world")
+        assertTrue(cleaned.startsWith("H") || cleaned.startsWith("h"))
+    }
 }

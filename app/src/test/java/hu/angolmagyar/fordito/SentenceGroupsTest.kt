@@ -23,7 +23,7 @@ class SentenceGroupsTest {
         val items = (0 until 25).map { item(it * 1000L, it * 1000L + 900, "part $it") }
         val g = SentenceGroups.group(items)
         assertEquals((0 until 25).toList(), g.flatMap { it.toList() })
-        assertTrue(g.all { it.count() <= 4 })
+        assertTrue(g.all { it.count() <= 6 })
     }
 
     @Test fun distributeKeepsAllWordsInOrder() {
@@ -37,5 +37,20 @@ class SentenceGroupsTest {
         assertEquals(listOf("Szia világ"), SentenceGroups.distribute("Szia világ", listOf(10)))
         assertEquals(listOf("", ""), SentenceGroups.distribute("", listOf(5, 5)))
         assertTrue(SentenceGroups.distribute("x", emptyList()).isEmpty())
+    }
+
+    @Test fun fragmentWithLowercaseContinuationBridgesLongerGap() {
+        val g = SentenceGroups.group(listOf(item(0, 1000, "And then we went to"), item(3500, 4500, "the old house.")))
+        assertEquals(listOf(0..1), g)
+    }
+
+    @Test fun capitalizedNextBlockAfterLongGapStillBreaks() {
+        val g = SentenceGroups.group(listOf(item(0, 1000, "And then we went to"), item(3500, 4500, "The house.")))
+        assertEquals(2, g.size)
+    }
+
+    @Test fun ellipsisWithLowercaseContinuationIsOneSentence() {
+        val g = SentenceGroups.group(listOf(item(0, 1000, "I thought…"), item(1100, 2000, "maybe we could go."), item(2100, 3000, "Sure.")))
+        assertEquals(listOf(0..1, 2..2), g)
     }
 }

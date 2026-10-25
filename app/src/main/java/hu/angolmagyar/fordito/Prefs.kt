@@ -238,6 +238,11 @@ class Prefs(ctx: Context) {
         get() = p.getInt("themeMode", 2)
         set(v) { p.edit().putInt("themeMode", v.coerceIn(0, 2)).apply() }
 
+    /** OLED pure black sötét téma (energiatakarékos, true black háttér). */
+    var oledBlack: Boolean
+        get() = p.getBoolean("oledBlack", false)
+        set(v) { p.edit().putBoolean("oledBlack", v).apply() }
+
     /** A hang tömörített mentése az átirat mellé (visszajátszáshoz). Alapból ki. */
     var saveAudio: Boolean
         get() = p.getBoolean("saveAudio", false)

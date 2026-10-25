@@ -31,7 +31,23 @@ object Ui {
 
     fun dp(ctx: Context, v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
 
-    fun color(ctx: Context, res: Int) = ContextCompat.getColor(ctx, res)
+    /** Android 12+: a háttérképből képzett rendszer-kiemelőszín (Beállítások → Haladó → Dinamikus színek). */
+    fun dynamicColors(ctx: Context): Boolean = try {
+        android.os.Build.VERSION.SDK_INT >= 31 && Prefs(ctx).raw().getBoolean("dynColors", false)
+    } catch (_: Exception) { false }
+
+    fun setDynamicColors(ctx: Context, on: Boolean) { Prefs(ctx).raw().edit().putBoolean("dynColors", on).apply() }
+
+    fun color(ctx: Context, res: Int): Int {
+        if (android.os.Build.VERSION.SDK_INT >= 31 && (res == R.color.primary || res == R.color.accentGlow || res == R.color.primaryDim) && dynamicColors(ctx)) {
+            val night = (ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+                android.content.res.Configuration.UI_MODE_NIGHT_YES
+            return try {
+                ContextCompat.getColor(ctx, if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
+            } catch (_: Exception) { ContextCompat.getColor(ctx, res) }
+        }
+        return ContextCompat.getColor(ctx, res)
+    }
 
     /** Függőleges oszlop, amely széles képernyőn nem nyúlik szét. */
     private class MaxWidthColumn(ctx: Context, private val maxPx: Int) : LinearLayout(ctx) {
@@ -68,11 +84,14 @@ object Ui {
             orientation = LinearLayout.VERTICAL
             val pad = dp(ctx, 18)
             setPadding(pad, pad, pad, pad)
-            background = GradientDrawable().apply {
-                setColor(color(ctx, R.color.card))
-                cornerRadius = dp(ctx, 18).toFloat()
-                setStroke(dp(ctx, 1), color(ctx, R.color.stroke))
+            // finom, üveges hatás: a kártya színe enyhén a kiemelőszín felé árnyalódik
+            val base = color(ctx, R.color.card)
+            val tint = androidx.core.graphics.ColorUtils.blendARGB(base, color(ctx, R.color.primary), 0.06f)
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(base, tint)).apply {
+                cornerRadius = dp(ctx, 20).toFloat()
+                setStroke(dp(ctx, 1), androidx.core.graphics.ColorUtils.setAlphaComponent(color(ctx, R.color.stroke), 200))
             }
+            elevation = dp(ctx, 2).toFloat()
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT

@@ -9,7 +9,7 @@ class WhisperNative private constructor(private var handle: Long) {
         fun onSegment(t0: Long, t1: Long, text: ByteArray)
     }
 
-    class Seg(val startMs: Long, val endMs: Long, val text: String, val noSpeech: Float)
+    class Seg(val startMs: Long, val endMs: Long, val text: String, val noSpeech: Float, val avgLogProb: Float = 1f)
 
     /** 0 = rendben. */
     fun transcribe(pcm: FloatArray, lang: String, threads: Int, beam: Int,
@@ -27,7 +27,8 @@ class WhisperNative private constructor(private var handle: Long) {
         for (i in 0 until n) {
             val t = String(nSegText(h, i), Charsets.UTF_8).trim()
             if (t.isEmpty()) continue
-            out.add(Seg(nSegT0(h, i) * 10, nSegT1(h, i) * 10, t, nSegNoSpeech(h, i)))
+            val lp = try { nSegAvgLogProb(h, i) } catch (_: Throwable) { 1f }
+            out.add(Seg(nSegT0(h, i) * 10, nSegT1(h, i) * 10, t, nSegNoSpeech(h, i), lp))
         }
         return out
     }
@@ -95,6 +96,7 @@ class WhisperNative private constructor(private var handle: Long) {
         @JvmStatic private external fun nSegT1(h: Long, i: Int): Long
         @JvmStatic private external fun nSegText(h: Long, i: Int): ByteArray
         @JvmStatic private external fun nSegNoSpeech(h: Long, i: Int): Float
+        @JvmStatic private external fun nSegAvgLogProb(h: Long, i: Int): Float
         @JvmStatic private external fun nSystemInfo(): String
     }
 }

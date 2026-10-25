@@ -6,16 +6,31 @@ import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
-/** Gyorsbeállítás-csempe: egy koppintás az indításhoz/leállításhoz. */
+/**
+ * Gyorsbeállítás-csempe: egy koppintás az indításhoz/leállításhoz.
+ * v2.21.1 – AppState listener alapú azonnali állapotfrissítés.
+ */
 class QuickTile : TileService() {
 
+    private val stateListener: () -> Unit = { refresh() }
+
     override fun onStartListening() {
+        AppState.addListener(stateListener)
         refresh()
+    }
+
+    override fun onStopListening() {
+        AppState.removeListener(stateListener)
+        super.onStopListening()
     }
 
     override fun onClick() {
         if (AppState.running) {
-            startService(Intent(this, TranslateService::class.java).setAction(TranslateService.ACTION_STOP))
+            startService(
+                Intent(this, TranslateService::class.java)
+                    .setAction(TranslateService.ACTION_STOP)
+            )
+            // A listener automatikusan frissít, de azonnali visszajelzéshez:
             refresh()
             return
         }
@@ -27,7 +42,8 @@ class QuickTile : TileService() {
         }
         if (Build.VERSION.SDK_INT >= 34) {
             val pi = PendingIntent.getActivity(
-                this, 1, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                this, 1, intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
             startActivityAndCollapse(pi)
         } else {
@@ -40,7 +56,11 @@ class QuickTile : TileService() {
         val tile = qsTile ?: return
         tile.state = if (AppState.running) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         tile.label = getString(R.string.tile_label)
-        tile.subtitle = if (AppState.running) "Fut – koppints a leállításhoz" else "Koppints az indításhoz"
+        tile.subtitle = if (AppState.running) {
+            "Fut – koppints a leállításhoz"
+        } else {
+            "Koppints az indításhoz"
+        }
         tile.updateTile()
     }
 }

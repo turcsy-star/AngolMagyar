@@ -27,10 +27,13 @@ class FileRecognizer(
     private val prefs: Prefs,
     private val cancel: AtomicBoolean
 ) {
-    private data class Raw(val startMs: Long, val endMs: Long, val text: String)
+    private data class Raw(val startMs: Long, val endMs: Long, val text: String, val lp: Float = 1f)
 
     /** Állapotüzenetek a hívónak (pl. fordítómodell letöltése közben). */
     var onStatus: ((String) -> Unit)? = null
+
+    /** Tájékoztató megjegyzés a fordításról (pl. online hiba, tartalék használata) – nem módosítja a haladást. */
+    var onNote: ((String) -> Unit)? = null
 
     private var translator: Translator? = null
     private var translatorKey = ""
@@ -48,7 +51,9 @@ class FileRecognizer(
     private val direct = java.util.concurrent.Executor { it.run() }
 
     private val enRules by lazy { Fixes.parse(prefs.enFixes) }
-    private val huRules by lazy { Fixes.parse(prefs.huFixes) }
+    private val huRules by lazy { Fixes.parse(Projects.huRules(ctx)) }
+    /** A projekt szereplői / nevei: a felismerés kezdőszövege és a névjavítás alapja. */
+    private val castNames by lazy { Projects.names(ctx) }
 
     fun close() {
         try { translator?.close() } catch (_: Exception) {}
@@ -71,7 +76,15 @@ class FileRecognizer(
             Engines.K_WHISPER -> whisperCtx(asr.whisper!!)
             else -> {}
         }
-        if (needTranslate) prepareTranslator(dir)
+        if (needTranslate) {
+            // csak online módban nem kell az offline modell; "auto" módban nem végzetes, ha nincs meg
+            val mode = if (OnlinePrefs.usable(ctx)) OnlinePrefs.mode(ctx) else OnlinePrefs.OFF
+            when (mode) {
+                OnlinePrefs.ONLINE -> {}
+                OnlinePrefs.AUTO -> try { prepareTranslator(dir) } catch (e: IllegalStateException) { onNote?.invoke("Offline tartalék nem elérhető: ${e.message}") }
+                else -> prepareTranslator(dir)
+            }
+        }
     }
 
     /**
@@ -103,22 +116,20 @@ class FileRecognizer(
         val polished = ArrayList<Raw>(raws.size)
         for (r in raws) {
             var src = Fixes.apply(r.text, if (srcLang == "en") enRules else huRules)
+            if (castNames.isNotEmpty()) src = NameFix.apply(src, castNames)
             if (TextPolish.isNoise(src)) continue
             src = if (srcLang == "en") TextPolish.polishEnglish(src) else TextPolish.polishHungarian(src)
-            polished.add(Raw(r.startMs, r.endMs, src))
+            polished.add(Raw(r.startMs, r.endMs, src, r.lp))
         }
         val targets: List<String> = if (needTranslate && polished.isNotEmpty()) {
-            prepareTranslator(dir)
-            val prog: (Int, Int) -> Unit = { done, n ->
-                onProgress?.invoke(70 + 25 * done / n.coerceAtLeast(1), "Fordítás: $done/$n mondat")
-            }
-            if (SubPrefs.contextTranslate(ctx)) translateGrouped(polished, dir, prog)
-            else translateAll(polished.map { it.text }, dir, prog)
+            translateCore(
+                polished.map { it.text }, polished.map { it.startMs to it.endMs }, null, null, dir, null
+            ) { done, n, label -> onProgress?.invoke(70 + 25 * done / n.coerceAtLeast(1), "$label: $done/$n blokk") }
         } else polished.map { "" }
         onProgress?.invoke(97, "Blokkok összeállítása…")
         val out = ArrayList<SrtExporter.Cue>(polished.size)
         for ((i, r) in polished.withIndex()) {
-            out.add(SrtExporter.Cue(r.startMs, r.endMs, r.text, targets.getOrElse(i) { "" }, speakerAt(r.startMs)))
+            out.add(SrtExporter.Cue(r.startMs, r.endMs, r.text, targets.getOrElse(i) { "" }, speakerAt(r.startMs), r.lp))
         }
         onProgress?.invoke(100, "Kész (${out.size} blokk)")
         return out
@@ -145,14 +156,18 @@ class FileRecognizer(
 
     private fun rawWhisper(
         pcm: ShortArray, spec: ModelManager.Spec, lang: String, offsetMs: Long,
-        onProgress: ((Int, String) -> Unit)?, timeMap: TimeMap? = null
+        onProgress: ((Int, String) -> Unit)?, timeMap: TimeMap? = null, beamOverride: Int = 0
     ): List<Raw> {
         val w = whisperCtx(spec)
         val audio = FloatArray(pcm.size) { pcm[it] / 32768f }
         val out = ArrayList<Raw>()
-        // az előző darab utolsó mondatai kontextusként (folyamatos nevek, stílus, mondatfolytatás)
-        val prompt = if (lang == "hu") "Ez egy magyar nyelvű felvétel, helyes központozással."
-        else prevTail.trim().takeIf { it.length >= 20 }
+        // v2.21.1 – központi kontextuális prompt (nevek + stílus + előző mondatok)
+        val prompt = WhisperPrompt.build(
+            lang = lang,
+            castNames = castNames,
+            prevTail = prevTail,
+            domain = "subtitle"
+        )
         val cb = onProgress
         cb?.invoke(0, "Whisper: felismerés indul…")
         if (cancel.get()) return emptyList()
@@ -163,7 +178,7 @@ class FileRecognizer(
             else VadModel.file(ctx).takeIf { it.exists() && it.length() > 300_000L }?.absolutePath
         val rc = synchronized(whisperLock) {
             w.abort(false)
-            w.transcribe(audio, lang, Perf.whisperThreads(), AsrPrefs.beam(ctx), prompt,
+            w.transcribe(audio, lang, Perf.whisperThreads(), if (beamOverride > 0) beamOverride else AsrPrefs.beam(ctx), prompt,
                 object : WhisperNative.Listener {
                     override fun onProgress(percent: Int) {
                         if (percent != lastPct) {
@@ -187,7 +202,7 @@ class FileRecognizer(
             prev2 = prev1; prev1 = t
             val t0 = if (timeMap != null) timeMap.toOrig(sg.startMs) else offsetMs + sg.startMs
             val t1 = if (timeMap != null) maxOf(timeMap.toOrig(sg.endMs), t0 + 200) else offsetMs + sg.endMs
-            out.addAll(splitLong(Raw(t0, t1, t)))
+            out.addAll(splitLong(Raw(t0, t1, t, sg.avgLogProb)))
         }
         if (out.isNotEmpty()) {
             prevTail = out.joinToString(" ") { it.text }.takeLast(220)
@@ -347,7 +362,7 @@ class FileRecognizer(
             val s = r.startMs + dur * used / total
             used += txt.length + 1
             val e = r.startMs + dur * used.coerceAtMost(total) / total
-            res.add(Raw(s, e, txt))
+            res.add(Raw(s, e, txt, r.lp))
         }
         return res
     }
@@ -358,7 +373,7 @@ class FileRecognizer(
         for ((i, r) in list.withIndex()) {
             var end = maxOf(r.endMs, r.startMs + 1000)
             if (i + 1 < list.size) end = minOf(end, maxOf(list[i + 1].startMs - 40, r.startMs + 400))
-            out.add(Raw(r.startMs, end, r.text))
+            out.add(Raw(r.startMs, end, r.text, r.lp))
         }
         return out
     }
@@ -426,8 +441,8 @@ class FileRecognizer(
      * Kontextusos fordítás: a mondat közepén vágott blokkokat mondatokká fogjuk, így fordít jól a gépi fordító;
      * a lefordított mondatot arányosan visszaosztjuk az eredeti időzített blokkokra.
      */
-    private fun translateGrouped(items: List<Raw>, dir: String, onDone: (Int, Int) -> Unit): List<String> {
-        val groups = SentenceGroups.group(items.map { SentenceGroups.Item(it.startMs, it.endMs, it.text) })
+    private fun translateGrouped(items: List<SentenceGroups.Item>, dir: String, onDone: (Int, Int) -> Unit): List<String> {
+        val groups = SentenceGroups.group(items)
         val texts = groups.map { g -> g.joinToString(" ") { idx -> items[idx].text.trim() } }
         val tr = translateAll(texts, dir, onDone)
         val out = ArrayList<String>(items.size)
@@ -436,6 +451,132 @@ class FileRecognizer(
             out.addAll(SentenceGroups.distribute(tr.getOrElse(gi) { "" }, lens))
         }
         return out
+    }
+
+    /** A fordított szöveg utómunkája: szótár-javítások, központozás, (magyarnál) tegezés. */
+    private fun postTarget(res: String, toHu: Boolean): String =
+        if (toHu) {
+            val hu = TextPolish.polishHungarian(Fixes.apply(res, huRules))
+            if (SubPrefs.informalHu(ctx)) TextPolish.informalHungarian(hu) else hu
+        } else TextPolish.polishEnglish(Fixes.apply(res, enRules))
+
+    private fun isToHu(dir: String) = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
+
+    /**
+     * A blokkok fordítása a beállított móddal (offline ML Kit / online LLM / online + offline tartalék).
+     * @param huInit meglévő fordítások (kontextus és a nem érintett sorok); null = üres
+     * @param indices a lefordítandó sorok; null = mind
+     * @param modeOverride [OnlinePrefs] mód felülbírálása (pl. az ellenőrző nézet gombjai); null = beállítás szerint
+     * @return minden sor célszövege (az érintetlen sorok a [huInit] értékével)
+     */
+    private fun translateCore(
+        en: List<String>, times: List<Pair<Long, Long>>, huInit: List<String>?, indices: List<Int>?,
+        dir: String, modeOverride: Int?, prog: (done: Int, total: Int, label: String) -> Unit
+    ): List<String> {
+        val n = en.size
+        val hu = (huInit ?: List(n) { "" }).toMutableList()
+        var idx = indices ?: (0 until n).toList()
+        if (indices == null && modeOverride == null && TranslationMemoryStore.enabled(ctx)) {
+            // ugyanaz az angol mondat mindig ugyanúgy forduljon (fordítási memória)
+            val tm = TranslationMemoryStore.get(ctx)
+            idx = idx.filter { i ->
+                val h = tm.lookup(en[i])
+                if (h != null && hu[i].isBlank()) { hu[i] = h; false } else true
+            }
+        }
+        if (idx.isEmpty()) return hu
+        val toHu = isToHu(dir)
+        val mode = modeOverride ?: OnlinePrefs.mode(ctx)
+        var todo = idx
+        if (mode != OnlinePrefs.OFF) {
+            val cfg = OnlinePrefs.config(
+                ctx, SrtJobService.langName(dir.substringBefore("_", "en")), SrtJobService.langName(dir.substringAfter("_", "hu"))
+            )
+            if (cfg != null) {
+                val ot = OnlineTranslator(cfg)
+                val failed = ot.translate(en, hu, idx, { d, t -> prog(d, t, "Fordítás (online)") }, { cancel.get() })
+                val failedSet = failed.toHashSet()
+                for (i in idx) if (i !in failedSet) hu[i] = postTarget(hu[i], toHu)
+                todo = failed
+                if (failed.isNotEmpty()) {
+                    onNote?.invoke("Online fordítás: ${failed.size} sor nem sikerült" +
+                        (if (ot.lastError.isNotBlank()) " – ${ot.lastError}" else ""))
+                }
+                if (mode == OnlinePrefs.ONLINE) {
+                    // nincs offline tartalék: a sikertelen sor forrásszövege marad, az ellenőrző nézet jelöli
+                    for (i in failed) if (hu[i].isBlank()) hu[i] = en[i]
+                    return hu
+                }
+            } else {
+                onNote?.invoke("Az online fordítás nincs (teljesen) beállítva – offline fordítás készül.")
+            }
+        }
+        if (todo.isNotEmpty() && !cancel.get()) {
+            try {
+                prepareTranslator(dir)
+                val sub = todo.map { en[it] }
+                val off = if (indices == null && SubPrefs.contextTranslate(ctx)) {
+                    translateGrouped(
+                        todo.map { SentenceGroups.Item(times[it].first, times[it].second, en[it]) }, dir
+                    ) { d, t -> prog(d, t, "Fordítás") }
+                } else translateAll(sub, dir) { d, t -> prog(d, t, "Fordítás") }
+                for ((k, i) in todo.withIndex()) hu[i] = off.getOrElse(k) { "" }
+            } catch (e: IllegalStateException) {
+                if (mode == OnlinePrefs.OFF) throw e
+                onNote?.invoke("Offline tartalék sem elérhető: ${e.message}")
+                for (i in todo) if (hu[i].isBlank()) hu[i] = en[i]
+            }
+        }
+        return hu
+    }
+
+    /**
+     * Bizonytalan szakaszok második menete: a megadott időtartományokat nagyobb nyalábbal újra felismeri.
+     * @return szakaszonként a talált blokkok (csak forrásszöveg, megbízhatósággal); null = nem sikerült
+     */
+    fun refine(
+        pcmFile: java.io.File, spans: List<Pair<Long, Long>>, spec: ModelManager.Spec, lang: String, beam: Int,
+        prog: (done: Int, total: Int) -> Unit
+    ): List<List<SrtExporter.Cue>?> {
+        val out = ArrayList<List<SrtExporter.Cue>?>()
+        val keepTail = prevTail
+        try {
+            for ((k, sp) in spans.withIndex()) {
+                if (cancel.get()) { out.add(null); continue }
+                prog(k, spans.size)
+                val a = (sp.first * 16L).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+                val b = (sp.second * 16L).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+                val pcm = ParallelChunker.readPcmRange(pcmFile, a, b)
+                if (pcm.size < 8000) { out.add(null); continue }
+                prevTail = ""
+                val raws = try { rawWhisper(pcm, spec, lang, sp.first, null, null, beam) } catch (_: Exception) { null }
+                out.add(raws?.map { r ->
+                    val src = if (lang == "en") TextPolish.polishEnglish(
+                        NameFix.apply(Fixes.apply(r.text, enRules), castNames)
+                    ) else TextPolish.polishHungarian(Fixes.apply(r.text, huRules))
+                    SrtExporter.Cue(r.startMs, r.endMs, src, "", "", r.lp)
+                })
+            }
+            prog(spans.size, spans.size)
+        } finally {
+            prevTail = keepTail
+        }
+        return out
+    }
+
+    /**
+     * Meglévő blokkok (újra)fordítása – az ellenőrző nézetből.
+     * @param indices a lefordítandó blokkok indexei; null = mind
+     * @param modeOverride [OnlinePrefs.OFF] / [OnlinePrefs.ONLINE] / [OnlinePrefs.AUTO]; null = a beállítás
+     */
+    fun retranslate(
+        cues: List<SrtExporter.Cue>, indices: List<Int>?, dir: String, modeOverride: Int?,
+        prog: (done: Int, total: Int, label: String) -> Unit
+    ): List<SrtExporter.Cue> {
+        val hu = translateCore(
+            cues.map { it.source }, cues.map { it.startMs to it.endMs }, cues.map { it.target }, indices, dir, modeOverride, prog
+        )
+        return cues.mapIndexed { i, c -> if (indices == null || i in indices) c.copy(target = hu[i]) else c }
     }
 
     /** Az összes blokk fordítása egyszerre beadva; az előrehaladást a kész darabok számából mutatjuk. */
@@ -457,9 +598,7 @@ class FileRecognizer(
         }
         return tasks.map { k ->
             if (k.isComplete && k.isSuccessful) {
-                val res = k.result ?: ""
-                if (toHu) TextPolish.polishHungarian(Fixes.apply(res, huRules))
-                else TextPolish.polishEnglish(Fixes.apply(res, enRules))
+                postTarget(k.result ?: "", toHu)
             } else ""
         }
     }

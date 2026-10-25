@@ -93,16 +93,26 @@ object Engines {
             }
         }
         if (s.hu && voskSpecFor(ctx, prefs, "hu") == null) {
+            // Whisper telepítve → élő magyar is megy (LiveWhisperAsr), nincs szükség rendszer ASR-re
+            if (whisperSpec(ctx) != null) return null
             if (!SystemAsrSupport.audioSourceSupported()) {
-                return "A magyar felismeréshez Android 13 vagy újabb kell (vagy egy saját magyar Vosk ZIP)."
+                return "A magyar felismeréshez Android 13 vagy újabb kell, vagy töltsd le a Whisper modellt."
             }
             if (!SystemAsrSupport.onDeviceAvailable(ctx) &&
                 !(prefs.allowOnlineAsr && SystemAsrSupport.anyAvailable(ctx))
             ) {
-                return "Nincs eszközön futó magyar felismerő. Nyisd meg a Modellek képernyőt."
+                return "Nincs magyar felismerő. Töltsd le a Whisper modellt (ajánlott) a Modellek képernyőn."
             }
         }
         return null
+    }
+
+    /** Élő magyar oldalhoz használt motor: whisper / vosk / system. */
+    fun liveHuKind(ctx: Context, prefs: Prefs): Int {
+        val vosk = voskSpecFor(ctx, prefs, "hu")
+        if (vosk != null && ModelManager.isInstalled(ctx, vosk)) return K_VOSK
+        if (whisperSpec(ctx) != null) return K_WHISPER
+        return K_SYSTEM
     }
 
     // ------------------------------------------------------------ készülék-felmérés

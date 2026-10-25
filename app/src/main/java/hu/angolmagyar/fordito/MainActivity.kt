@@ -114,6 +114,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        App.applyOledToWindow(this)
         prefs = Prefs(this)
         publishShortcuts()
 
@@ -266,7 +267,7 @@ class MainActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         )
         header.addView(Ui.iconButton(this, R.drawable.ic_settings, getString(R.string.m_settings)) {
-            startActivity(Intent(this, SettingsActivity::class.java))
+            NavTransitions.open(this, SettingsActivity::class.java)
         })
         column.addView(header)
 
@@ -279,10 +280,15 @@ class MainActivity : AppCompatActivity() {
             else -> getString(R.string.m_dir_none)
         }
         val sidesNow = Engines.sides(prefs)
+        val huLabel = when (Engines.liveHuKind(this, prefs)) {
+            Engines.K_WHISPER -> "Magyar (Whisper)"
+            Engines.K_VOSK -> "Magyar (Vosk)"
+            else -> "Magyar (Android)"
+        }
         val modelLabel = when {
-            sidesNow.hu && !sidesNow.other -> "Magyar (Android)"
+            sidesNow.hu && !sidesNow.other -> huLabel
             sidesNow.hu && sidesNow.other ->
-                prefs.effectiveSpec(this).label.substringBefore("(").trim() + " + magyar"
+                prefs.effectiveSpec(this).label.substringBefore("(").trim() + " + " + huLabel
             else -> prefs.effectiveSpec(this).label.substringBefore("(").trim()
         }
         val extras = buildList {
@@ -320,14 +326,14 @@ class MainActivity : AppCompatActivity() {
             ).apply { topMargin = dp(16) }
         }
         tools.addView(Ui.button(this, getString(R.string.tr_title), false) {
-            startActivity(Intent(this, TranscriptActivity::class.java))
+            NavTransitions.open(this, TranscriptActivity::class.java)
         }.apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginEnd = dp(6)
             }
         })
         tools.addView(Ui.button(this, getString(R.string.m_srt_from_file), true) {
-            startActivity(Intent(this, FileSubtitleActivity::class.java))
+            NavTransitions.open(this, FileSubtitleActivity::class.java)
         }.apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                 marginStart = dp(6)
@@ -394,7 +400,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         card.addView(Ui.button(this, "Előkészítés ellenőrzése", false) {
-            startActivity(Intent(this, DiagnosticsActivity::class.java))
+            NavTransitions.open(this, DiagnosticsActivity::class.java)
         })
         column.addView(card)
     }
@@ -438,7 +444,7 @@ class MainActivity : AppCompatActivity() {
             when {
                 !modelsOk -> {
                     toast("Előbb töltsd le a modelleket.")
-                    startActivity(Intent(this, ModelsActivity::class.java))
+                    NavTransitions.open(this, ModelsActivity::class.java)
                 }
                 needsLive && (!hasMic() || !hasOverlay()) ->
                     startActivity(Intent(this, SetupWizardActivity::class.java))
@@ -549,8 +555,11 @@ class MainActivity : AppCompatActivity() {
         if (s.other) parts.add(prefs.effectiveSpec(this).label.substringBefore("(").trim())
         if (s.hu) {
             parts.add(
-                if (Engines.voskSpecFor(this, prefs, "hu") != null) "magyar: saját modell"
-                else "magyar: Android"
+                when (Engines.liveHuKind(this, prefs)) {
+                    Engines.K_WHISPER -> "magyar: Whisper"
+                    Engines.K_VOSK -> "magyar: saját modell"
+                    else -> "magyar: Android"
+                }
             )
         }
         val dir = when {
@@ -634,7 +643,7 @@ class MainActivity : AppCompatActivity() {
                 })
         }
         card.addView(Ui.button(this, "Önellenőrzés", false) {
-            startActivity(Intent(this, DiagnosticsActivity::class.java))
+            NavTransitions.open(this, DiagnosticsActivity::class.java)
         })
         card.addView(Ui.button(this, getString(R.string.log_title), false) { LogDialog.show(this) })
         card.addView(Ui.button(this, getString(R.string.m_hide), false) { AppState.lastError = null; rebuild(false) })
@@ -667,7 +676,7 @@ class MainActivity : AppCompatActivity() {
 
     /** A modellek letöltése a külön Modellek képernyőn történik. */
     private fun startDownload() {
-        startActivity(Intent(this, ModelsActivity::class.java))
+        NavTransitions.open(this, ModelsActivity::class.java)
     }
 
     private var rebuildPosted = false

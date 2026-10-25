@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -243,6 +244,24 @@ JNIEXPORT jfloat JNICALL
 Java_hu_angolmagyar_fordito_WhisperNative_nSegNoSpeech(JNIEnv *, jclass, jlong handle, jint i) {
     auto * h = reinterpret_cast<Handle *>(handle);
     return whisper_full_get_segment_no_speech_prob(h->ctx, i);
+}
+
+// A szegmens szöveg-tokenjeinek átlagos naplóvalószínűsége (a speciális tokeneket kihagyva); 1.0 = nem számolható.
+JNIEXPORT jfloat JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nSegAvgLogProb(JNIEnv *, jclass, jlong handle, jint i) {
+    auto * h = reinterpret_cast<Handle *>(handle);
+    if (!h || !h->ctx) return 1.0f;
+    const int n = whisper_full_n_tokens(h->ctx, i);
+    const whisper_token eot = whisper_token_eot(h->ctx);
+    double sum = 0.0;
+    int cnt = 0;
+    for (int j = 0; j < n; j++) {
+        if (whisper_full_get_token_id(h->ctx, i, j) >= eot) continue;
+        const float pr = whisper_full_get_token_p(h->ctx, i, j);
+        if (pr > 1e-6f) { sum += std::log((double) pr); cnt++; }
+        else { sum += std::log(1e-6); cnt++; }
+    }
+    return cnt > 0 ? (jfloat) (sum / cnt) : 1.0f;
 }
 
 JNIEXPORT jstring JNICALL

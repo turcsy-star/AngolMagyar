@@ -15,7 +15,9 @@ object SrtExporter {
         val endMs: Long,
         val source: String,
         val target: String,
-        val speaker: String = "" // pl. S1, S2 vagy "Anna"
+        val speaker: String = "", // pl. S1, S2 vagy "Anna"
+        /** A felismerés átlagos naplóvalószínűsége (Whisper); 1 = ismeretlen, kb. -1 alatt bizonytalan. */
+        val lp: Float = 1f
     )
 
     enum class Mode {

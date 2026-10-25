@@ -2,9 +2,26 @@ package hu.angolmagyar.fordito
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.SystemClock
 import android.service.quicksettings.TileService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class AppError(val code: String, val message: String)
+
+/** Egy pillanatnyi állapot a UI számára (v2.21+ reaktív). */
+data class AppSnapshot(
+    val running: Boolean = false,
+    val paused: Boolean = false,
+    val mode: String? = null,
+    val level: Float = 0f,
+    val hint: String? = null,
+    val lastError: AppError? = null,
+    val sessionStartedAt: Long = 0L,
+    val lastCaptionHu: String = "",
+    val lastCaptionEn: String = ""
+)
 
 /** Folyamaton belüli közös állapot a szolgáltatás és a képernyők között. */
 object AppState {
@@ -17,20 +34,83 @@ object AppState {
     const val ERR_OTHER = "other"
 
     @Volatile var running = false
+        set(v) {
+            if (field == v) return
+            field = v
+            publish()
+        }
     @Volatile var paused = false
+        set(v) {
+            if (field == v) return
+            field = v
+            publish()
+        }
     @Volatile var mode: String? = null
+        set(v) {
+            if (field == v) return
+            field = v
+            publish()
+        }
     @Volatile var level = 0f
     @Volatile var hint: String? = null
+        set(v) {
+            if (field == v) return
+            field = v
+            publish()
+        }
     @Volatile var lastError: AppError? = null
         set(v) {
             field = v
             if (v != null) addLog("ERR/${v.code}: ${v.message}")
+            publish()
         }
     @Volatile var testResult: String? = null
     /** Munkamenet kezdete (elapsedRealtime ms), 0 ha nem fut. */
     @Volatile var sessionStartedAt = 0L
     @Volatile var lastCaptionHu: String = ""
     @Volatile var lastCaptionEn: String = ""
+
+    // v2.21.1 – level throttling (max ~20 fps) a felesleges recomposition elkerülésére
+    private var lastLevelPublishMs = 0L
+    private const val LEVEL_THROTTLE_MS = 50L
+
+    /** Hangszint frissítése throttlinggel. A nyers érték mindig tárolódik. */
+    fun updateLevel(newLevel: Float) {
+        level = newLevel
+        val now = SystemClock.uptimeMillis()
+        if (now - lastLevelPublishMs >= LEVEL_THROTTLE_MS) {
+            lastLevelPublishMs = now
+            publish()
+        }
+    }
+
+    // v2.21.0 – reaktív StateFlow + legacy listener
+    private val _snapshot = MutableStateFlow(AppSnapshot())
+    val snapshot: StateFlow<AppSnapshot> = _snapshot.asStateFlow()
+
+    private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+    fun addListener(l: () -> Unit) { listeners.add(l) }
+    fun removeListener(l: () -> Unit) { listeners.remove(l) }
+
+    /** Frissíti a StateFlow-t és értesíti a legacy listenereket. */
+    fun notifyListeners() {
+        publish()
+        for (l in listeners) try { l() } catch (_: Exception) {}
+    }
+
+    private fun publish() {
+        _snapshot.value = AppSnapshot(
+            running = running,
+            paused = paused,
+            mode = mode,
+            level = level,
+            hint = hint,
+            lastError = lastError,
+            sessionStartedAt = sessionStartedAt,
+            lastCaptionHu = lastCaptionHu,
+            lastCaptionEn = lastCaptionEn
+        )
+    }
 
     /** Hibanapló fájl (az App állítja be). */
     @Volatile var logFile: java.io.File? = null
