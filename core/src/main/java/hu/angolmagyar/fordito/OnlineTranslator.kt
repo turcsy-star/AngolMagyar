@@ -8,7 +8,7 @@ package hu.angolmagyar.fordito
  */
 class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp) {
 
-    enum class Provider { ANTHROPIC, OPENAI }
+    enum class Provider { ANTHROPIC, OPENAI, DEEPL }
 
     data class Config(
         val provider: Provider,
@@ -116,6 +116,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                     parts.filterIsInstance<Map<*, *>>().filter { it["type"] == "text" }
                         .joinToString("") { it["text"]?.toString() ?: "" }.ifBlank { null }
                 }
+                Provider.DEEPL -> body
                 Provider.OPENAI -> {
                     val ch = (root["choices"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: return null
                     ((ch["message"] as? Map<*, *>)?.get("content") as? String)?.ifBlank { null }
@@ -123,8 +124,66 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             }
         }
 
+        // ---------------------------------------------------------------- DeepL
+
+        private val DEEPL_SOURCE = setOf(
+            "AR", "BG", "CS", "DA", "DE", "EL", "EN", "ES", "ET", "FI", "FR", "HU", "ID", "IT", "JA", "KO", "LT",
+            "LV", "NB", "NL", "PL", "PT", "RO", "RU", "SK", "SL", "SV", "TR", "UK", "ZH"
+        )
+
+        /** Nyelvnév (magyar név vagy kód) → DeepL nyelvkód; null, ha a DeepL nem támogatja. */
+        fun deeplCode(name: String, target: Boolean): String? {
+            val n = name.trim().lowercase()
+            val code = LangCatalog.ALL.firstOrNull { it.second == n || it.first == n }?.first
+                ?: (if (n.length in 2..3) n else return null)
+            val up = LangCatalog.norm(code).uppercase().let { if (it == "NO") "NB" else it }
+            if (up !in DEEPL_SOURCE) return null
+            if (!target) return up
+            return when (up) { "EN" -> "EN-GB"; "PT" -> "PT-PT"; "ZH" -> "ZH-HANS"; else -> up }
+        }
+
+        /** A :fx végű kulcs az ingyenes végpontot használja. */
+        fun deeplEndpoint(apiKey: String, baseUrl: String): String =
+            (baseUrl.ifBlank { if (apiKey.trim().endsWith(":fx")) "https://api-free.deepl.com" else "https://api.deepl.com" })
+                .trimEnd('/') + "/v2/translate"
+
+        fun deeplRequest(texts: List<String>, srcCode: String?, tgtCode: String, context: String, informal: Boolean): String {
+            val sb = StringBuilder("{\"text\":[")
+            for ((i, t) in texts.withIndex()) { if (i > 0) sb.append(','); sb.append(MiniJson.quote(t)) }
+            sb.append("],\"target_lang\":").append(MiniJson.quote(tgtCode))
+            if (srcCode != null) sb.append(",\"source_lang\":").append(MiniJson.quote(srcCode))
+            if (context.isNotBlank()) sb.append(",\"context\":").append(MiniJson.quote(context.take(1500)))
+            if (informal) sb.append(",\"formality\":\"prefer_less\"")
+            sb.append(",\"split_sentences\":\"nonumerics\"}")
+            return sb.toString()
+        }
+
+        /** A DeepL válaszából a fordítások; null, ha nem értelmezhető vagy a darabszám nem stimmel. */
+        fun parseDeepL(body: String, expected: Int): List<String>? {
+            val root = try { MiniJson.parse(body) } catch (_: Exception) { return null } as? Map<*, *> ?: return null
+            val list = root["translations"] as? List<*> ?: return null
+            if (list.size != expected) return null
+            val out = ArrayList<String>(expected)
+            for (x in list) out.add(((x as? Map<*, *>)?.get("text") as? String)?.trim() ?: return null)
+            return out
+        }
+
+        /** A kötegekhez adott szöveges kontextus: háttér + az előző és következő sorok forrásszövege. */
+        fun deeplContext(hint: String, en: List<String>, first: Int, last: Int): String {
+            val sb = StringBuilder()
+            if (hint.isNotBlank()) sb.append(hint.trim()).append('\n')
+            val b0 = (first - CTX_BEFORE).coerceAtLeast(0)
+            val before = (b0 until first).map { en[it] }.filter { it.isNotBlank() }
+            val a1 = (last + 1 + CTX_AFTER).coerceAtMost(en.size)
+            val after = (last + 1 until a1).map { en[it] }.filter { it.isNotBlank() }
+            if (before.isNotEmpty()) sb.append(before.joinToString(" ")).append(" … ")
+            if (after.isNotEmpty()) sb.append(" … ").append(after.joinToString(" "))
+            return sb.toString().trim()
+        }
+
         fun errorMessage(body: String): String {
             val root = try { MiniJson.parse(body) } catch (_: Exception) { return body.take(160) } as? Map<*, *> ?: return body.take(160)
+            (root["message"] as? String)?.let { if (root["error"] == null) return it }
             val e = root["error"]
             return when (e) {
                 is Map<*, *> -> e["message"]?.toString() ?: body.take(160)
@@ -137,12 +196,14 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     private fun endpoint(): String = when (cfg.provider) {
         Provider.ANTHROPIC -> (cfg.baseUrl.ifBlank { "https://api.anthropic.com" }).trimEnd('/') + "/v1/messages"
         Provider.OPENAI -> (cfg.baseUrl.ifBlank { DEFAULT_OPENAI_BASE }).trimEnd('/') + "/chat/completions"
+        Provider.DEEPL -> deeplEndpoint(cfg.apiKey, cfg.baseUrl)
     }
 
     private fun requestBody(system: String, user: String): String = when (cfg.provider) {
         Provider.ANTHROPIC ->
             "{\"model\":${MiniJson.quote(cfg.model)},\"max_tokens\":4096,\"system\":${MiniJson.quote(system)}," +
                 "\"messages\":[{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
+        Provider.DEEPL -> user // a kész DeepL kérés-törzs
         Provider.OPENAI ->
             "{\"model\":${MiniJson.quote(cfg.model)},\"temperature\":0.2,\"messages\":[" +
                 "{\"role\":\"system\",\"content\":${MiniJson.quote(system)}}," +
@@ -152,6 +213,9 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     private fun headers(): Map<String, String> = when (cfg.provider) {
         Provider.ANTHROPIC -> mapOf(
             "content-type" to "application/json", "x-api-key" to cfg.apiKey, "anthropic-version" to "2023-06-01"
+        )
+        Provider.DEEPL -> mapOf(
+            "content-type" to "application/json", "authorization" to "DeepL-Auth-Key ${cfg.apiKey.trim()}"
         )
         Provider.OPENAI -> {
             val h = LinkedHashMap<String, String>()
@@ -185,6 +249,11 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                         fatal = true
                         return null
                     }
+                    code == 456 -> {
+                        lastError = "A DeepL havi keret elfogyott (HTTP 456)."
+                        fatal = true
+                        return null
+                    }
                     code == 429 || code >= 500 -> {
                         lastError = "A szolgáltató elfoglalt (HTTP $code), újrapróbálom…"
                         try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) { return null }
@@ -210,6 +279,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     ): List<Int> {
         lastError = ""
         fatal = false
+        if (cfg.provider == Provider.DEEPL) return translateDeepL(en, hu, indices, onDone, cancel)
         val failed = ArrayList<Int>()
         val system = systemPrompt(cfg)
         var done = 0
@@ -233,6 +303,43 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                 for ((k, i) in real.withIndex()) hu[i] = res[k]
             } else {
                 failed.addAll(real)
+            }
+            done += batch.size
+            onDone(done, indices.size)
+        }
+        return failed
+    }
+
+    /** DeepL: kis kötegek, mindegyikhez a környező sorok kontextusként (a kontextus nem számít fordítandó karakternek). */
+    private fun translateDeepL(
+        en: List<String>, hu: MutableList<String>, indices: List<Int>,
+        onDone: (done: Int, total: Int) -> Unit, cancel: () -> Boolean
+    ): List<Int> {
+        val failed = ArrayList<Int>()
+        val tgt = deeplCode(cfg.tgtLang, true)
+        if (tgt == null) {
+            lastError = "A DeepL nem támogatja a célnyelvet (${cfg.tgtLang})."
+            fatal = true
+            return indices
+        }
+        val src = deeplCode(cfg.srcLang, false) // null: a DeepL maga ismeri fel
+        var done = 0
+        onDone(0, indices.size)
+        val batches = indices.chunked(cfg.batchSize.coerceIn(1, 10))
+        for ((bi, batch) in batches.withIndex()) {
+            if (cancel()) { failed.addAll(batches.drop(bi).flatten()); break }
+            if (fatal) { failed.addAll(batch); continue }
+            val real = batch.filter { en[it].isNotBlank() }
+            if (real.isNotEmpty()) {
+                val ctx = deeplContext(cfg.hint, en, real.first(), real.last())
+                val body = deeplRequest(real.map { en[it] }, src, tgt, ctx, cfg.informal)
+                var res: List<String>? = null
+                val text = call("", body, cancel)
+                if (text != null) {
+                    res = parseDeepL(text, real.size)
+                    if (res == null) lastError = "A DeepL válasza nem értelmezhető."
+                }
+                if (res != null) for ((k, i) in real.withIndex()) hu[i] = res[k] else failed.addAll(real)
             }
             done += batch.size
             onDone(done, indices.size)

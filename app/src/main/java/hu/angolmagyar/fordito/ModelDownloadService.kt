@@ -336,28 +336,15 @@ class ModelDownloadService : Service() {
      */
     private fun downloadMlKit(label: String) {
         if (huModelPresent()) return
-        val mgr = com.google.mlkit.common.model.RemoteModelManager.getInstance()
-        val model = com.google.mlkit.nl.translate.TranslateRemoteModel.Builder(
-            com.google.mlkit.nl.translate.TranslateLanguage.HUNGARIAN).build()
-        val direct = java.util.concurrent.Executor { it.run() }
-        val latch = java.util.concurrent.CountDownLatch(1)
-        var err: Exception? = null
-        mgr.download(model, com.google.mlkit.common.model.DownloadConditions.Builder().build())
-            .addOnSuccessListener(direct) { latch.countDown() }
-            .addOnFailureListener(direct) { e -> err = e; latch.countDown() }
-        val t0 = SystemClock.elapsedRealtime()
-        while (!latch.await(3, java.util.concurrent.TimeUnit.SECONDS)) {
-            if (cancelFlag.get()) return
-            if (ctl.paused) throw ModelManager.PausedException()
-            val el = (SystemClock.elapsedRealtime() - t0) / 1000
-            post(-1, "$label Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}", false)
-            if (huModelPresent()) break
-            if (el > 20 * 60) throw IllegalStateException("A fordítómodell letöltése nem fejeződött be (időtúllépés). Ellenőrizd az internetet.")
-        }
-        err?.let { throw it }
-        if (!huModelPresent()) {
-            throw IllegalStateException("A fordítómodell letöltése nem sikerült. Ellenőrizd az internetet, majd próbáld újra.")
-        }
+        MlKitModels.ensure(
+            listOf(com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH, com.google.mlkit.nl.translate.TranslateLanguage.HUNGARIAN),
+            { cancelFlag.get() },
+            { el ->
+                if (ctl.paused) throw ModelManager.PausedException()
+                post(-1, "$label Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}", false)
+            },
+            20 * 60L
+        )
     }
 
     private fun ensureChannel() {

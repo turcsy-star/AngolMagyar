@@ -12,8 +12,8 @@ android {
         applicationId = "hu.angolmagyar.fordito.wear"
         minSdk = 30
         targetSdk = 35
-        versionCode = 2228
-        versionName = "2.22.8"
+        versionCode = 2300
+        versionName = "2.23.0"
     }
 
     compileOptions {

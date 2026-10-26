@@ -30,6 +30,13 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
     private val origScroll: ScrollView
     private val trScroll: ScrollView
     private val trTitle: TextView
+    private val panelViews = ArrayList<View>()
+    private val bubbleBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    private val bubbleScroll = ScrollView(ctx)
+    private class Bubble(val header: TextView, val tr: TextView, val orig: TextView)
+    private val bubbles = HashMap<Long, Bubble>()
+    private var bubbleMode = true
+    private lateinit var modeBtn: TextView
     private var shown: List<LiveLine>? = null
     private var lastCount = 0
     private var lastTr = ""
@@ -38,6 +45,7 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
 
     private fun panel(title: TextView, body: TextView): ScrollView {
         root.addView(title)
+        panelViews.add(title)
         val sv = ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = true
             setPadding(dp(10), dp(8), dp(10), dp(8))
@@ -49,6 +57,7 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
         else LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(170))
         lp.bottomMargin = dp(8)
         root.addView(sv, lp)
+        panelViews.add(sv)
         return sv
     }
 
@@ -66,6 +75,24 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
         origScroll = panel(t1, origText)
         trScroll = panel(trTitle, trText)
         refreshTitle()
+
+        bubbleScroll.apply {
+            setPadding(dp(4), dp(6), dp(4), dp(6))
+            setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
+            addView(bubbleBox)
+        }
+        val blp = if (full) LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
+        else LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(340))
+        blp.bottomMargin = dp(8)
+        root.addView(bubbleScroll, blp)
+        bubbleMode = try { prefs.raw().getBoolean("liveBubbles", true) } catch (_: Exception) { true }
+        modeBtn = Ui.smallButton(ctx, "") {
+            bubbleMode = !bubbleMode
+            try { prefs.raw().edit().putBoolean("liveBubbles", bubbleMode).apply() } catch (_: Exception) {}
+            applyMode()
+        }
+        root.addView(modeBtn, 1)
+        applyMode()
 
         root.addView(Ui.small(ctx, "🎯 Fordítás nyelve (a beszélőt automatikusan felismerem):"))
         val spin = Spinner(ctx)
@@ -96,6 +123,73 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
         trText.textSize = (if (full) 28f else 18f) * k
     }
 
+    private fun applyMode() {
+        modeBtn.text = if (bubbleMode) "▤ Váltás: két panel" else "💬 Váltás: beszélő-buborékok"
+        bubbleScroll.visibility = if (bubbleMode) View.VISIBLE else View.GONE
+        for (v in panelViews) v.visibility = if (bubbleMode) View.GONE else View.VISIBLE
+    }
+
+    private fun speakerHeader(lines: List<LiveLine>, i: Int): String {
+        val l = lines[i]
+        val sb = StringBuilder()
+        sb.append(if (l.speaker > 0) "👤 ${l.speaker}. beszélő" else "👤 ?")
+        if (l.lang.isNotBlank()) sb.append("  ").append(LangCatalog.flag(l.lang)).append(' ').append(LangCatalog.nameHu(l.lang))
+        if (LiveLog.langSwitched(lines, i)) sb.append("  🔀 másik nyelven")
+        return sb.toString()
+    }
+
+    private fun addBubble(lines: List<LiveLine>, i: Int) {
+        val l = lines[i]
+        val col = colorFor(l.speaker)
+        val right = l.speaker > 0 && l.speaker % 2 == 0
+        val maxW = (ctx.resources.displayMetrics.widthPixels * 0.78f).toInt()
+        val box = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                setColor((col and 0x00FFFFFF) or (0x2E shl 24))
+                setStroke(dp(1), (col and 0x00FFFFFF) or (0x90 shl 24))
+            }
+        }
+        val header = Ui.small(ctx, speakerHeader(lines, i)).apply {
+            setTextColor(col); setTypeface(typeface, Typeface.BOLD); textSize = 12f; maxWidth = maxW
+        }
+        val tr = Ui.body(ctx, "").apply { textSize = if (full) 24f else 17f; setTypeface(typeface, Typeface.BOLD); maxWidth = maxW }
+        val orig = Ui.small(ctx, l.original).apply { textSize = if (full) 16f else 13f; maxWidth = maxW }
+        box.addView(header); box.addView(tr); box.addView(orig)
+        val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            gravity = if (right) android.view.Gravity.END else android.view.Gravity.START
+            topMargin = dp(6)
+        }
+        box.alpha = 0f
+        box.translationY = dp(14).toFloat()
+        bubbleBox.addView(box, lp)
+        box.animate().alpha(1f).translationY(0f).setDuration(320).start()
+        bubbles[l.id] = Bubble(header, tr, orig)
+    }
+
+    private fun updateBubbles(lines: List<LiveLine>) {
+        if (bubbles.size > lines.size || (lines.isNotEmpty() && bubbles.isNotEmpty() && !bubbles.containsKey(lines.first().id) && lines.size <= bubbles.size)) {
+            bubbleBox.removeAllViews(); bubbles.clear()
+        }
+        var changed = false
+        for (i in lines.indices) {
+            val l = lines[i]
+            if (!bubbles.containsKey(l.id)) { addBubble(lines, i); changed = true }
+            val b = bubbles[l.id] ?: continue
+            val txt = if (l.translated.isBlank()) "…" else l.translated
+            val cur = b.tr.text.toString()
+            if (cur != txt) {
+                // az új fordítás betűnként "begépelődik"
+                Anim.typeInto(b.tr, txt, if (txt.startsWith(cur) && cur != "…") cur.length else 0, 520L)
+                changed = true
+            }
+            b.header.text = speakerHeader(lines, i)
+        }
+        if (changed) bubbleScroll.post { bubbleScroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
     private fun refreshTitle() {
         trTitle.text = "🌍 Fordítás – ${LangCatalog.nameHu(prefs.polyTarget)}"
     }
@@ -120,6 +214,7 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
             t.append(if (l.translated.isBlank()) "…" else l.translated).append("\n")
         }
         val grew = lines.isNotEmpty() && (lines.size != lastCount || lines.last().translated != lastTr)
+        updateBubbles(lines)
         lastCount = lines.size
         lastTr = lines.lastOrNull()?.translated ?: ""
         origText.text = o

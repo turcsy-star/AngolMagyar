@@ -758,20 +758,9 @@ class ModelsActivity : AppCompatActivity() {
     }
 
     private fun downloadTranslator() {
-        val t = Translation.getClient(
-            TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage(TranslateLanguage.HUNGARIAN)
-                .build()
+        MlKitModels.ensure(
+            listOf(TranslateLanguage.ENGLISH, TranslateLanguage.HUNGARIAN), { cancelled },
+            { el -> post(-1, "Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}") }
         )
-        val latch = CountDownLatch(1)
-        var err: String? = null
-        t.downloadModelIfNeeded(DownloadConditions.Builder().build())
-            .addOnSuccessListener { latch.countDown() }
-            .addOnFailureListener { e -> err = e.message ?: "ismeretlen hiba"; latch.countDown() }
-        val done = latch.await(10, TimeUnit.MINUTES)
-        t.close()
-        if (!done) throw IllegalStateException("időtúllépés")
-        err?.let { throw IllegalStateException(it) }
     }
 }

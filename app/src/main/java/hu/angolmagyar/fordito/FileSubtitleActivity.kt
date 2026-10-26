@@ -151,6 +151,7 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var chunkMore: TextView
     private lateinit var previewBox: LinearLayout
     private lateinit var previewText: TextView
+    private lateinit var flow: TranscriptFlow
     private lateinit var runQueueBox: LinearLayout
     private lateinit var cancelBtn: android.widget.Button
     private lateinit var perfRunCard: LinearLayout
@@ -569,6 +570,8 @@ class FileSubtitleActivity : AppCompatActivity() {
     private fun dp(v: Int) = Ui.dp(this, v)
 
     override fun onDestroy() {
+        try { flow.stop() } catch (_: Exception) {}
+        try { seekPlayer?.release() } catch (_: Exception) {}
         // Ideiglenes tárgyalás mód: kilépéskor visszaállítjuk az eredeti beállításokat.
         if (isFinishing && ::prefs.isInitialized && prefs.meetingMode && prefs.meetingTemporary) {
             MeetingMode.clear(prefs)
@@ -889,6 +892,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(12); bottomMargin = dp(2) })
         // a hullám alatt: melyik hangszakaszon dolgozik éppen
+        wave.onSeek = { ms -> playAudioAt(ms) }
         posText = Ui.small(this, "").apply { gravity = Gravity.CENTER_HORIZONTAL }
         head.addView(posText, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1022,15 +1026,16 @@ class FileSubtitleActivity : AppCompatActivity() {
 
         // élő előnézet: az utoljára felismert sorok (így azonnal látszik, jó nyelven halad-e)
         previewBox = Ui.card(this).apply { visibility = View.GONE }
-        previewBox.addView(Ui.title(this, "Élő előnézet (az utolsó felismert sorok)", 15f))
+        previewBox.addView(Ui.title(this, "Élő átirat – ahogy a hangból szöveg lesz", 15f))
         previewText = TextView(this).apply {
             textSize = 12.5f
-            typeface = Typeface.MONOSPACE
             setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
             setTextIsSelectable(true)
         }
         previewBox.addView(previewText)
-        progressSection.addView(previewBox)
+        flow = TranscriptFlow(previewText)
+        // közvetlenül a hullám pozíciója alá
+        head.addView(previewBox, head.indexOfChild(posText) + 1)
         g.addView(progressSection)
 
         // ---------- kész: összegzés
@@ -1109,6 +1114,28 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     /** Fejlécsor: [lead] üres hely (jelző), a rugalmas első oszlop, majd a fix szélességű oszlopok. */
+    private var seekPlayer: android.media.MediaPlayer? = null
+
+    /** A hullámra koppintva a forrásfájl hangja az adott ponttól ~6 másodpercig megszólal. */
+    private fun playAudioAt(ms: Long) {
+        val q = SrtJob.queue.firstOrNull { it.state == SrtJob.Q_RUN } ?: SrtJob.queue.firstOrNull() ?: return
+        try {
+            seekPlayer?.release()
+            val mp = android.media.MediaPlayer()
+            mp.setDataSource(this, q.uri)
+            mp.setOnPreparedListener { m ->
+                m.seekTo(ms.toInt())
+                m.start()
+                main.postDelayed({ try { if (m.isPlaying) m.pause() } catch (_: Exception) {} }, 6000)
+            }
+            mp.setOnErrorListener { _, _, _ -> true }
+            mp.prepareAsync()
+            seekPlayer = mp
+        } catch (_: Exception) {
+            Toast.makeText(this, "Nem sikerült lejátszani ezt a pontot.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     /** Melyik hangszakaszt dolgozza fel éppen (pl. "Éppen: 4:45 – 10:46 · Darab 1/2"). */
     private fun positionLabel(job: SrtJob): String {
         val st = job.chunkState
@@ -1714,14 +1741,12 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
 
         // élő előnézet
-        val pv = job.preview
-        previewBox.visibility = if (pv.isNotEmpty()) View.VISIBLE else View.GONE
-        val pvText = pv.joinToString("\n")
-        if (pvText != previewText.text.toString()) {
-            // csak az újonnan érkezett rész "gépelődik be"
-            val common = previewText.text.toString().let { old -> if (pvText.startsWith(old)) old.length else 0 }
-            Anim.typeInto(previewText, pvText, common)
-        }
+        val shownFlow = flow.update(
+            job.previewCues,
+            Ui.color(this, R.color.textPrimary),
+            Ui.color(this, R.color.primary)
+        )
+        previewBox.visibility = if (shownFlow) View.VISIBLE else View.GONE
     }
 
     private fun renderResults() {

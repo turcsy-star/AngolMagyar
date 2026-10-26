@@ -54,6 +54,26 @@ class WaveView @JvmOverloads constructor(
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), (96 * d).toInt())
     }
 
+    /** Az i. darab feldolgozási kurzora (ms): a darab kezdete + haladás × hossz. */
+    private fun cursorMs(i: Int): Long {
+        val a = ranges.getOrElse(2 * i) { 0L }
+        val b = ranges.getOrElse(2 * i + 1) { a }
+        return a + ((b - a) * chunkFrac.getOrElse(i) { 0.0 }.coerceIn(0.0, 1.0)).toLong()
+    }
+
+    /** Koppintásra (ms) – a képernyő megszólaltatja a hangot azon a ponton. */
+    var onSeek: ((Long) -> Unit)? = null
+
+    private var lastX = 0f
+
+    init {
+        // csak koppintás: a függőleges görgetés a képernyőé marad
+        setOnTouchListener { _, e -> if (e.action == android.view.MotionEvent.ACTION_DOWN) lastX = e.x; false }
+        setOnClickListener {
+            if (width > 0 && totalMs > 1) onSeek?.invoke((lastX.coerceIn(0f, width.toFloat()) / width * totalMs).toLong())
+        }
+    }
+
     /** 0 = hátralévő (szürke), 1 = éppen dolgozik (zöld), 2 = kész (fehér) az idő (ms) alapján. */
     private fun stateAt(tMs: Long, progress: Float, t: Float): Int {
         if (ranges.size >= 2 && chunkState.size * 2 <= ranges.size) {
@@ -65,6 +85,8 @@ class WaveView @JvmOverloads constructor(
                 i += 2
             }
             if (last < 0) return chunkState.getOrElse(0) { 0 }
+            // az éppen dolgozott szakaszon belül: ami a kurzor előtt van, az már kész (fehér), ami mögötte, az zöld
+            if (chunkState[last] == 1 && tMs < cursorMs(last)) return 2
             return chunkState[last]
         }
         return when {
@@ -102,6 +124,15 @@ class WaveView @JvmOverloads constructor(
                 }
                 val rad = min(bw / 2f, 4f * d)
                 canvas.drawRoundRect(rect, rad, rad, barPaint)
+            }
+            // vékony kurzor az éppen dolgozott pontokon
+            if (ranges.size >= 2 && totalMs > 0) {
+                barPaint.color = Ui.color(context, R.color.textPrimary)
+                for (i in chunkState.indices) if (chunkState[i] == 1 && 2 * i + 1 < ranges.size) {
+                    val x = (cursorMs(i).toFloat() / totalMs) * w
+                    rect.set(x - 1f * d, 2f * d, x + 1f * d, h - 2f * d)
+                    canvas.drawRoundRect(rect, d, d, barPaint)
+                }
             }
         } else {
             barPaint.color = 0x44808080

@@ -37,6 +37,8 @@ class PolyEngine(
     private val failed = HashMap<String, Long>()
     private var asr: LiveWhisperAsr? = null
     private var lastLang = ""
+    /** Az utolsó néhány (eredeti, fordítás) pár – kontextus az online fordításhoz. */
+    private val history = java.util.ArrayDeque<Pair<String, String>>()
 
     @Volatile private var stopped = false
 
@@ -117,9 +119,17 @@ class PolyEngine(
         return try {
             if (OnlinePrefs.mode(ctx) == OnlinePrefs.OFF) return null
             val cfg = OnlinePrefs.config(ctx, LangCatalog.nameHu(src), LangCatalog.nameHu(tgt)) ?: return null
-            val out = mutableListOf("")
-            val bad = OnlineTranslator(cfg).translate(listOf(text), out, listOf(0), { _, _ -> }, { stopped })
-            if (bad.isEmpty() && out[0].isNotBlank()) out[0].trim() else null
+            val prev = history.toList()
+            val en = prev.map { it.first } + text
+            val out = (prev.map { it.second } + "").toMutableList()
+            val last = en.size - 1
+            val bad = OnlineTranslator(cfg).translate(en, out, listOf(last), { _, _ -> }, { stopped })
+            if (bad.isEmpty() && out[last].isNotBlank()) {
+                val res = out[last].trim()
+                history.addLast(text to res)
+                while (history.size > 4) history.removeFirst()
+                res
+            } else null
         } catch (_: Throwable) { null }
     }
 
@@ -144,7 +154,7 @@ class PolyEngine(
             }
             if (key !in ready) {
                 main.post { listener.onNote("Fordítómodell letöltése: ${LangCatalog.nameHu(src)} → ${LangCatalog.nameHu(tgt)}…") }
-                await(tr!!.downloadModelIfNeeded(DownloadConditions.Builder().build()), 180)
+                MlKitModels.ensure(listOf(s, t), { stopped }, { }, 300L)
                 ready.add(key)
                 main.post { listener.onNote(null) }
             }

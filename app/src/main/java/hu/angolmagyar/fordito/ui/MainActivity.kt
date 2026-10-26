@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -45,7 +46,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Pause
@@ -82,6 +86,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import hu.angolmagyar.fordito.Accent
+import hu.angolmagyar.fordito.App
 import hu.angolmagyar.fordito.AppState
 import hu.angolmagyar.fordito.DiagnosticsActivity
 import hu.angolmagyar.fordito.FileSubtitleActivity
@@ -107,7 +113,7 @@ import hu.angolmagyar.fordito.MainActivity as LiveActivity
  * A részletes élő-fordítás képernyő a [LiveActivity] (a manifestben regisztrálva); a Wear, a gyorscsempe, a
  * parancsikonok és a feladat-beállító ennek adják át az `auto_start` / `profile` extrát.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private lateinit var prefs: Prefs
 
@@ -267,6 +273,7 @@ fun HomeScreen(
             Staggered(0, shown) { Header(running = snap.running || jobRunning, error = snap.lastError != null) }
 
             DownloadBanner(onClick = onModels)
+            StateCards(error = snap.lastError?.message, onDiagnostics = onDiagnostics, onModels = onModels)
 
             Staggered(1, shown) {
                 HeroCard(
@@ -321,6 +328,8 @@ fun HomeScreen(
                     }
                 }
             }
+
+            Staggered(4, shown) { ThemePicker() }
 
             Staggered(4, shown) {
                 Column {
@@ -713,5 +722,140 @@ fun DownloadBanner(onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** Téma-választó: kiemelőszín (5 szín) + megjelenés (rendszer / világos / sötét / OLED fekete). Azonnal érvényesül. */
+@Composable
+fun ThemePicker() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { Prefs(ctx) }
+    var accent by remember { mutableStateOf(Accent.id(ctx)) }
+    var mode by remember { mutableStateOf(prefs.themeMode) }
+    var oled by remember { mutableStateOf(prefs.oledBlack) }
+    val activity = ctx as? android.app.Activity
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text("Megjelenés", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            for (t in Accent.ALL) {
+                val sel = t.id == accent
+                val size by animateFloatAsState(if (sel) 40f else 32f, spring(Spring.DampingRatioMediumBouncy), label = "dot")
+                Box(
+                    Modifier.size(size.dp).clip(CircleShape).background(Color(if (Accent.isNight(ctx)) t.dark else t.light))
+                        .clickable {
+                            Accent.set(ctx, t.id); accent = t.id
+                            activity?.recreate()
+                        },
+                    contentAlignment = Alignment.Center
+                ) { if (sel) Text("✓", color = Color.White, fontWeight = FontWeight.Bold) }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val labels = listOf(0 to "Rendszer", 1 to "Világos", 2 to "Sötét")
+            for ((id, label) in labels) {
+                androidx.compose.material3.FilterChip(
+                    selected = mode == id,
+                    onClick = { mode = id; prefs.themeMode = id; App.applyTheme(id) },
+                    label = { Text(label) }
+                )
+            }
+            androidx.compose.material3.FilterChip(
+                selected = oled,
+                onClick = { oled = !oled; prefs.oledBlack = oled; App.oledBlack = oled; activity?.recreate() },
+                label = { Text("OLED") }
+            )
+        }
+    }
+}
+
+/** Üres / hiba állapotok: animált rajzolt ikon + egy gombos megoldás szöveges üzenet helyett. */
+@Composable
+fun StateCards(error: String?, onDiagnostics: () -> Unit, onModels: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var noModel by remember { mutableStateOf(false) }
+    var online by remember { mutableStateOf(true) }
+    var downloading by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            try {
+                noModel = ModelManager.installedSpecs(ctx).none { it in ModelManager.WHISPER }
+                downloading = ModelDownloadService.running
+                val cm = ctx.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+                online = caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            } catch (_: Exception) {}
+            delay(2000)
+        }
+    }
+    AnimatedVisibility(
+        visible = error != null,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { -it / 4 }, exit = fadeOut(tween(200))
+    ) {
+        IllustratedState(Icons.Rounded.ErrorOutline, "Hiba történt", error ?: "", "Diagnosztika", MaterialTheme.colorScheme.error, onDiagnostics)
+    }
+    AnimatedVisibility(
+        visible = error == null && noModel && !downloading && online,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { -it / 4 }, exit = fadeOut(tween(200))
+    ) {
+        IllustratedState(
+            Icons.Rounded.CloudDownload, "Még nincs felismerő modell",
+            "A pontos felismeréshez egyszeri letöltés kell (kb. 1 GB, Wi-Fin ajánlott). Utána internet nélkül is megy.",
+            "Letöltöm", MaterialTheme.colorScheme.primary
+        ) { ModelDownloadService.start(ctx, listOf(ModelManager.WH_LARGE.id, "mlkit")) }
+    }
+    AnimatedVisibility(
+        visible = error == null && noModel && !online,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { -it / 4 }, exit = fadeOut(tween(200))
+    ) {
+        IllustratedState(
+            Icons.Rounded.WifiOff, "Nincs internet",
+            "A modellek letöltéséhez hálózat kell. Csatlakozz Wi-Fi-re, a letöltés utána itt folytatható.",
+            "Modellek", MaterialTheme.colorScheme.outline, onModels
+        )
+    }
+}
+
+@Composable
+private fun IllustratedState(
+    icon: ImageVector, title: String, text: String, button: String, accent: Color, onClick: () -> Unit
+) {
+    val t = rememberInfiniteTransition(label = "state")
+    val bob by t.animateFloat(
+        initialValue = -4f, targetValue = 4f,
+        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob"
+    )
+    val ring by t.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "ring"
+    )
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.matchParentSize()) {
+                val c = Offset(size.width / 2, size.height / 2)
+                for (k in 0 until 2) {
+                    val f = (ring + k * 0.5f) % 1f
+                    drawCircle(accent.copy(alpha = (1f - f) * 0.35f), radius = size.minDimension * (0.34f + 0.16f * f), center = c)
+                }
+                drawCircle(accent.copy(alpha = 0.16f), radius = size.minDimension * 0.34f, center = c)
+            }
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(44.dp).offset(y = bob.dp))
+        }
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        androidx.compose.material3.Button(onClick = onClick, shape = RoundedCornerShape(16.dp)) { Text(button) }
     }
 }

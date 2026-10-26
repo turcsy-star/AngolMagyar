@@ -46,6 +46,12 @@ object Ui {
                 ContextCompat.getColor(ctx, if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
             } catch (_: Exception) { ContextCompat.getColor(ctx, res) }
         }
+        // választott kiemelőszín-téma (az indigó az alap, az nem változtat semmit)
+        if (res == R.color.primary || res == R.color.primaryDim || res == R.color.accentGlow) {
+            if (Accent.id(ctx) != "indigo") {
+                return if (res == R.color.accentGlow) Accent.glow(ctx) else Accent.primary(ctx)
+            }
+        }
         return ContextCompat.getColor(ctx, res)
     }
 

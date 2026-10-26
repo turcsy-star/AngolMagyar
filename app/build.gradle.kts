@@ -15,8 +15,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2228
-        versionName = "2.22.8"
+        versionCode = 2400
+        versionName = "2.24.0"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {

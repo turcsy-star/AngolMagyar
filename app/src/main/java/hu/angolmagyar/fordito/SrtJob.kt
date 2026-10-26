@@ -206,6 +206,8 @@ object SrtJob {
     @Volatile var curChunkStartMs = 0L
     /** Az utolsó felismert sorok élő előnézete. */
     @Volatile var preview: List<String> = emptyList()
+    /** Ugyanez szerkezetesen (átirat-folyam). */
+    @Volatile var previewCues: List<SrtExporter.Cue> = emptyList()
     /** Hullámforma-nézet: a hang burkolója (0..1), a teljes hossz és a darabok időtartományai (kezdet, vég – ms). */
     @Volatile var waveEnv: FloatArray = FloatArray(0)
     @Volatile var waveTotalMs = 0L
@@ -301,6 +303,7 @@ object SrtJob {
         curChunkPct = 0
         curChunkStartMs = 0
         preview = emptyList()
+        previewCues = emptyList()
         waveEnv = FloatArray(0)
         waveTotalMs = 0L
         waveRanges = LongArray(0)

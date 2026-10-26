@@ -19,6 +19,7 @@ class OnlineTranslatorTest {
             val user = when (provider) {
                 OnlineTranslator.Provider.ANTHROPIC -> ((root["messages"] as List<*>)[0] as Map<*, *>)["content"] as String
                 OnlineTranslator.Provider.OPENAI -> ((root["messages"] as List<*>)[1] as Map<*, *>)["content"] as String
+                OnlineTranslator.Provider.DEEPL -> error("nem ide való")
             }
             val payload = MiniJson.parse(user) as Map<*, *>
             val tr = (payload["translate"] as List<*>).map { "HU:" + ((it as Map<*, *>)["text"] as String) }
@@ -27,6 +28,7 @@ class OnlineTranslatorTest {
             return 200 to when (provider) {
                 OnlineTranslator.Provider.ANTHROPIC -> "{\"content\":[{\"type\":\"text\",\"text\":${MiniJson.quote(text)}}]}"
                 OnlineTranslator.Provider.OPENAI -> "{\"choices\":[{\"message\":{\"content\":${MiniJson.quote(text)}}}]}"
+                OnlineTranslator.Provider.DEEPL -> error("nem ide való")
             }
         }
     }

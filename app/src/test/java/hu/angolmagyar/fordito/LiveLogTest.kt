@@ -93,4 +93,11 @@ class LiveLogTest {
         assertEquals(1, st.assign(tone(130.0)))
         assertEquals(1, st.assign(FloatArray(16000)))
     }
+
+    @Test fun flags() {
+        assertEquals("\uD83C\uDDED\uD83C\uDDFA", LangCatalog.flag("hu"))
+        assertEquals("\uD83C\uDDE9\uD83C\uDDEA", LangCatalog.flag("de-AT"))
+        assertEquals("\uD83C\uDF10", LangCatalog.flag("xx"))
+        assertTrue(LangCatalog.codes().all { LangCatalog.flag(it) != "\uD83C\uDF10" })
+    }
 }

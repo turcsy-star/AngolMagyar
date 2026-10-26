@@ -39,20 +39,24 @@ object OnlineSettingsDialog {
 
         col.addView(label("Szolgáltató"))
         val provSpin = Spinner(ctx)
-        val provNames = listOf("Anthropic (Claude)", "OpenAI-kompatibilis")
+        val provNames = listOf("Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
         provSpin.adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, provNames)
-        provSpin.setSelection(if (OnlinePrefs.provider(ctx) == OnlineTranslator.Provider.OPENAI) 1 else 0)
+        provSpin.setSelection(when (OnlinePrefs.provider(ctx)) {
+            OnlineTranslator.Provider.OPENAI -> 1
+            OnlineTranslator.Provider.DEEPL -> 2
+            else -> 0
+        })
         col.addView(provSpin)
 
         col.addView(label("API-kulcs"))
         val key = field("sk-…", OnlinePrefs.apiKey(ctx), true)
         col.addView(key)
 
-        col.addView(label("Modell"))
+        col.addView(label("Modell (DeepL-nél nem kell)"))
         val model = field("üresen: ${OnlineTranslator.DEFAULT_ANTHROPIC_MODEL}", OnlinePrefs.model(ctx))
         col.addView(model)
 
-        col.addView(label("Végpont (csak OpenAI-kompatibilisnél; üresen: ${OnlineTranslator.DEFAULT_OPENAI_BASE})"))
+        col.addView(label("Végpont (OpenAI-kompatibilisnél, DeepL-nél opcionális; üresen: ${OnlineTranslator.DEFAULT_OPENAI_BASE})"))
         val base = field("http://192.168.1.10:11434/v1", OnlinePrefs.baseUrl(ctx))
         col.addView(base)
 
@@ -70,8 +74,11 @@ object OnlineSettingsDialog {
         col.addView(result)
 
         fun saveAll() {
-            OnlinePrefs.setProvider(ctx, if (provSpin.selectedItemPosition == 1) OnlineTranslator.Provider.OPENAI
-            else OnlineTranslator.Provider.ANTHROPIC)
+            OnlinePrefs.setProvider(ctx, when (provSpin.selectedItemPosition) {
+                1 -> OnlineTranslator.Provider.OPENAI
+                2 -> OnlineTranslator.Provider.DEEPL
+                else -> OnlineTranslator.Provider.ANTHROPIC
+            })
             OnlinePrefs.setApiKey(ctx, key.text.toString())
             OnlinePrefs.setModel(ctx, model.text.toString())
             OnlinePrefs.setBaseUrl(ctx, base.text.toString())

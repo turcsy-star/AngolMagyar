@@ -636,6 +636,7 @@ class SrtJobService : Service() {
                 override fun onChunkDone(idx: Int, total: Int, cues: List<SrtExporter.Cue>, audioMs: Long) {
                     SrtJob.chunkFinish(idx, cues.size)
                     SrtJob.preview = (SrtJob.preview + cues.map { previewLine(it) }).takeLast(8)
+                    SrtJob.previewCues = (SrtJob.previewCues + cues).takeLast(6)
                     doneAudio += audioMs
                     if (!savedChunks.containsKey(idx)) ckpt?.append(idx, cues)
                     // részeredmény mentése a belső tárba (megszakításnál / hibánál megmarad)
@@ -911,6 +912,7 @@ class SrtJobService : Service() {
             } catch (_: Exception) {
             }
             SrtJob.preview = cues.takeLast(8).map { previewLine(it) }
+            SrtJob.previewCues = cues.takeLast(6)
 
             // -------------------------------------------------------------- mentés
             SrtJob.begin(SrtJob.ST_SAVE, "SRT összeállítása…")

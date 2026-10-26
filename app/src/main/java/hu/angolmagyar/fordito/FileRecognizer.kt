@@ -411,30 +411,18 @@ class FileRecognizer(
         val t = Translation.getClient(
             TranslatorOptions.Builder().setSourceLanguage(src).setTargetLanguage(tgt).build()
         )
-        val latch = CountDownLatch(1)
-        var ok = false
-        // a visszahívások a háttérszálon futnak (alapból a főszálon: háttérben megakadhatnának)
-        t.downloadModelIfNeeded(DownloadConditions.Builder().build())
-            .addOnSuccessListener(direct) { ok = true; latch.countDown() }
-            .addOnFailureListener(direct) { latch.countDown() }
-        // a letöltés hosszabb is lehet (lassú net): másodpercenként jelzünk, legfeljebb 15 percig várunk
-        val t0 = System.currentTimeMillis()
-        while (!latch.await(2, TimeUnit.SECONDS)) {
-            if (cancel.get()) { t.close(); throw InterruptedException("Megszakítva") }
-            val el = (System.currentTimeMillis() - t0) / 1000
-            onStatus?.invoke("Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}")
-            if (el > 900) break
-        }
         translatorKey = key
-        if (ok) {
-            translator = t
-            translatorOk = true
-        } else {
+        try {
+            MlKitModels.ensure(listOf(src, tgt), { cancel.get() }, { el ->
+                onStatus?.invoke("Fordítómodell letöltése… ${el / 60}:${"%02d".format(el % 60)}")
+            })
+        } catch (e: Exception) {
             t.close()
-            throw IllegalStateException(
-                "A fordítómodell nincs letöltve, és nem sikerült letölteni (internet?). Nyisd meg a Modellek képernyőt, és töltsd le."
-            )
+            throw e
         }
+        if (cancel.get()) { t.close(); throw InterruptedException("Megszakítva") }
+        translator = t
+        translatorOk = true
     }
 
     /**

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.24.0
+- Élő átirat-folyam a hullámforma alatt: a felismert sorok beszélőszínnel; a legfrissebb sor betűnként gépelődik, majd áttűnéssel megjelenik alatta a fordítás; a bizonytalan sorok sárgásan derengenek.
+
+## 2.23.1
+- DeepL mint harmadik online szolgáltató (ingyenes `:fx` kulcs is): a szomszédos sorok kontextusként mennek vele, tegező forma, 456-os keretkimerülés kezelése.
+- Élő mód: az online fordítás megkapja az előző 4 sort (eredeti + fordítás) kontextusként.
+
+## v2.23.0
+- Hibajavítás: a fordítómodell-letöltés megakadt, ha egyszerre több helyről indult (Modellek képernyő, háttér-letöltő, feliratkészítés). Közös letöltő (MlKitModels): ha a modell megvan, nem tölt; egyszerre egy letöltés fut; időtúllépésnél érthető hiba.
+- Egységes megjelenés: a Compose kezdőlap és a régi képernyők ugyanazokat a színeket használják; téma-választó (5 kiemelőszín, rendszer/világos/sötét/OLED) a kezdőlapon.
+- Élő nézet: chat-szerű beszélő-buborékok (színes, váltakozó oldal, zászló + nyelv, 🔀 nyelvváltás jelzés, betűnkénti fordítás), átkapcsolható a két panelre.
+- Folyamat-sor mini-animációkkal (pergő hang, megtelő négyzetek, angol→magyar szóváltás, író dokumentum) és kipattanó "kész" jelzéssel.
+- Hullám: kurzor a feldolgozás pontos helyén (kész = fehér, aktuális szakasz = zöld, hátra = szürke); koppintásra a hang megszólal azon a ponton.
+- Illusztrált üres/hiba állapotok a kezdőlapon (nincs modell, nincs internet, hiba) egy gombos megoldással.
+
 ## v2.22.8
 - Minőség-ellenőrzés: a kész képernyőn "⚠ N gyanús sor átnézése (meghallgatással)" gomb, a szerkesztő csak a gyanús sorokat mutatja.
 - Kétmenetes felismerés: alapból be; a bizonytalan szakaszokat a telepített large-v3 modellel futtatja újra (max. 10 szakasz).

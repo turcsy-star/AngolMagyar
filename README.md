@@ -1,4 +1,4 @@
-# AngolMagyar v2.22.8 – javított, egységesített csomag
+# AngolMagyar v2.23.0 – javított, egységesített csomag
 
 Ez a kiadás a v2.22.2 hibáit javítja, és az újdonságokat a tesztekkel együtt hozza.
 (A mappa és a zip neve mostantól a verziót követi.)

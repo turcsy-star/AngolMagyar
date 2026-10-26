@@ -48,10 +48,17 @@ object OnlinePrefs {
     fun setMode(ctx: Context, v: Int) { p(ctx).edit().putInt("trMode", v).apply() }
 
     fun provider(ctx: Context): OnlineTranslator.Provider =
-        if (p(ctx).getString("trProvider", "anthropic") == "openai") OnlineTranslator.Provider.OPENAI
-        else OnlineTranslator.Provider.ANTHROPIC
+        when (p(ctx).getString("trProvider", "anthropic")) {
+            "openai" -> OnlineTranslator.Provider.OPENAI
+            "deepl" -> OnlineTranslator.Provider.DEEPL
+            else -> OnlineTranslator.Provider.ANTHROPIC
+        }
     fun setProvider(ctx: Context, v: OnlineTranslator.Provider) {
-        p(ctx).edit().putString("trProvider", if (v == OnlineTranslator.Provider.OPENAI) "openai" else "anthropic").apply()
+        p(ctx).edit().putString("trProvider", when (v) {
+            OnlineTranslator.Provider.OPENAI -> "openai"
+            OnlineTranslator.Provider.DEEPL -> "deepl"
+            else -> "anthropic"
+        }).apply()
     }
 
     fun apiKey(ctx: Context): String = p(ctx).getString("trKey", "") ?: ""
@@ -76,7 +83,7 @@ object OnlinePrefs {
         if (!consent(ctx)) return false
         val prov = provider(ctx)
         val keyOk = apiKey(ctx).isNotBlank() || (prov == OnlineTranslator.Provider.OPENAI && baseUrl(ctx).isNotBlank())
-        val modelOk = model(ctx).isNotBlank() || prov == OnlineTranslator.Provider.ANTHROPIC
+        val modelOk = model(ctx).isNotBlank() || prov == OnlineTranslator.Provider.ANTHROPIC || prov == OnlineTranslator.Provider.DEEPL
         return keyOk && modelOk
     }
 
