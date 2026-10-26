@@ -42,4 +42,18 @@ class SrtExporterTest {
         )
         assertTrue(srt.startsWith("1\n00:00:05,000 --> 00:00:07,000\nA"))
     }
+
+    @Test fun speakerLabelOnlyOnChange() {
+        val cues = listOf(
+            SrtExporter.Cue(0, 1000, "a", "Egy", "Anna"),
+            SrtExporter.Cue(1200, 2000, "b", "Kettő", "Anna"),
+            SrtExporter.Cue(2200, 3000, "c", "Három", "Bob"),
+            SrtExporter.Cue(9000, 9500, "d", "Négy", "Bob")
+        )
+        val srt = SrtExporter.build(cues, SrtExporter.Mode.TARGET_ONLY)
+        assertTrue(srt.contains("Anna: Egy"))
+        assertTrue(srt.contains("\nKettő\n"))
+        assertTrue(srt.contains("Bob: Három"))
+        assertTrue(srt.contains("Bob: Négy"))
+    }
 }

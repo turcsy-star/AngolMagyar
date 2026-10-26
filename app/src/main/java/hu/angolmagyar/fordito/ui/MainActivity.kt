@@ -85,6 +85,8 @@ import androidx.compose.ui.unit.dp
 import hu.angolmagyar.fordito.AppState
 import hu.angolmagyar.fordito.DiagnosticsActivity
 import hu.angolmagyar.fordito.FileSubtitleActivity
+import hu.angolmagyar.fordito.ModelDownloadService
+import hu.angolmagyar.fordito.ModelManager
 import hu.angolmagyar.fordito.ModelsActivity
 import hu.angolmagyar.fordito.Prefs
 import hu.angolmagyar.fordito.SettingsActivity
@@ -109,6 +111,28 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var prefs: Prefs
 
+    /**
+     * Első indításkor magától letölti az alap modelleket (Whisper large-v3 + offline fordító), ha még nincs
+     * Whisper-modell és Wi-Fin (nem mobilneten) vagyunk. Egyszer próbálja; a Modellek képernyőn bármikor kézzel is lehet.
+     */
+    private fun autoDownloadModels() {
+        try {
+            if (prefs.raw().getBoolean("autoDlDone", false)) return
+            if (ModelManager.installedSpecs(this).any { it == ModelManager.WH_LARGE || it == ModelManager.WH_TURBO }) {
+                prefs.raw().edit().putBoolean("autoDlDone", true).apply()
+                return
+            }
+            val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+            val unmetered = caps != null &&
+                caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            if (!unmetered || ModelDownloadService.running) return
+            prefs.raw().edit().putBoolean("autoDlDone", true).apply()
+            ModelDownloadService.start(this, listOf(ModelManager.WH_LARGE.id, "mlkit"))
+        } catch (_: Exception) {
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -117,6 +141,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent(this, SetupWizardActivity::class.java))
         }
         forwardLegacyExtras(intent)
+        autoDownloadModels()
 
         setContent {
             AngolMagyarTheme(isTrueBlack = prefs.oledBlack) {
@@ -241,9 +266,11 @@ fun HomeScreen(
         ) {
             Staggered(0, shown) { Header(running = snap.running || jobRunning, error = snap.lastError != null) }
 
+            DownloadBanner(onClick = onModels)
+
             Staggered(1, shown) {
                 HeroCard(
-                    title = "Felirat készítése",
+                    title = "Indítás: felirat készítése",
                     subtitle = "Válassz videót vagy hangfájlt: pontos magyar felirat, egy érintésre.",
                     icon = Icons.Rounded.Movie,
                     onClick = onSubtitles
@@ -650,3 +677,41 @@ fun LiveWaveform(amplitudes: List<Float>) {
     }
 }
 
+/** Az automatikus (vagy kézi) modell-letöltés állapota a kezdőlapon: animált csík, koppintásra a Modellek képernyő. */
+@Composable
+fun DownloadBanner(onClick: () -> Unit) {
+    var running by remember { mutableStateOf(false) }
+    var pct by remember { mutableStateOf(0) }
+    var msg by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        while (true) {
+            running = ModelDownloadService.running
+            pct = ModelDownloadService.pct
+            msg = ModelDownloadService.message
+            delay(600)
+        }
+    }
+    AnimatedVisibility(
+        visible = running,
+        enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { -it / 3 },
+        exit = fadeOut(tween(250))
+    ) {
+        androidx.compose.material3.Card(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("⬇ Modellek letöltése – a háttérben folyik", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                if (msg.isNotBlank()) Text(msg, style = MaterialTheme.typography.bodySmall)
+                if (pct in 1..100) {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { pct / 100f }, modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+    }
+}

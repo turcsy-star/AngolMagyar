@@ -131,7 +131,8 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var fileLabel: TextView
     private lateinit var langLine: TextView
     private lateinit var barTotal: BarRow
-    private lateinit var ring: RingView
+    private lateinit var posText: TextView
+    private lateinit var pipeline: PipelineView
     private lateinit var wave: WaveView
     private lateinit var checkView: CheckView
     private var shownEnv: FloatArray? = null
@@ -147,7 +148,6 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var stallReport: View
     private lateinit var chunkSection: LinearLayout
     private lateinit var chunkTitle: TextView
-    private lateinit var chunkMap: ChunkMapView
     private lateinit var chunkMore: TextView
     private lateinit var previewBox: LinearLayout
     private lateinit var previewText: TextView
@@ -662,6 +662,49 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     private lateinit var quickBtn: android.widget.Button
+    private lateinit var estLine: TextView
+    private var estKey = ""
+    private val durCache = HashMap<String, Long>()
+
+    /** Indítás előtt: becsült futásidő a telepített Whisper-modellenként (a mért sebesség alapján). */
+    private fun updateEstimate() {
+        val items = SrtJob.queue.filter { it.state == SrtJob.Q_WAIT }
+        if (items.isEmpty()) { estKey = ""; estLine.visibility = View.GONE; return }
+        val key = items.joinToString("|") { it.uri.toString() }
+        if (key == estKey) return
+        estKey = key
+        Thread {
+            var total = 0L
+            for (q in items) {
+                total += durCache.getOrPut(q.uri.toString()) {
+                    try {
+                        val r = android.media.MediaMetadataRetriever()
+                        r.setDataSource(this, q.uri)
+                        val d = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                        r.release()
+                        d
+                    } catch (_: Exception) { 0L }
+                }
+            }
+            val sp = getSharedPreferences("srt_hist", MODE_PRIVATE)
+            val measured = HashMap<String, Long>()
+            for ((k, v) in sp.all) if (k.startsWith("mpw_") && v is Long) measured[k.removePrefix("mpw_")] = v
+            val cur = Engines.whisperSpec(this)?.id ?: ""
+            val legacy = sp.getLong("msPerWindow", 0L)
+            if (measured.isEmpty() && legacy > 0 && cur.isNotEmpty()) measured[cur] = legacy
+            val parts = ModelManager.installedSpecs(this).filter { it in ModelManager.WHISPER }.mapNotNull { m ->
+                val ms = TimeEstimate.estimateMs(total, TimeEstimate.msPerWindow(m.id, measured))
+                if (ms < 0) null else (if (m.id == cur) "▶ " else "") + m.label.substringBefore(" (") + ": " + TimeEstimate.label(ms)
+            }
+            runOnUiThread {
+                if (parts.isEmpty() || total <= 0) estLine.visibility = View.GONE
+                else {
+                    estLine.text = "⏱ Becsült idő – " + parts.joinToString(" · ")
+                    estLine.visibility = View.VISIBLE
+                }
+            }
+        }.start()
+    }
 
     private fun buildSetup(meeting: Boolean) {
         val g = setupGroup
@@ -670,6 +713,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             if (SrtJob.queue.any { it.state == SrtJob.Q_WAIT }) startProcess() else pickFiles()
         }
         g.addView(quickBtn)
+        estLine = Ui.small(this, "").apply { visibility = View.GONE }
+        g.addView(estLine)
         g.addView(Ui.small(this, "Hang- vagy videófájlból offline átirat + opcionális fordítás, SRT kimenettel."))
         if (!meeting) {
             g.addView(SwitchCompat(this).apply {
@@ -835,15 +880,20 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(langLine)
 
         // összesítő: egyetlen sáv + eltelt / hátra / kész (a lépés- és darab-sorok ezeket nem ismétlik)
-        ring = RingView(this)
-        head.addView(ring, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(12); bottomMargin = dp(4) })
+        pipeline = PipelineView(this)
+        head.addView(pipeline, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) })
         wave = WaveView(this)
         head.addView(wave, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(4); bottomMargin = dp(8) })
-        // a régi vízszintes sáv helyett a körgyűrű mutatja az összhaladást (a BarRow a becslés-szöveg hordozója marad)
+        ).apply { topMargin = dp(12); bottomMargin = dp(2) })
+        // a hullám alatt: melyik hangszakaszon dolgozik éppen
+        posText = Ui.small(this, "").apply { gravity = Gravity.CENTER_HORIZONTAL }
+        head.addView(posText, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(8) })
+        // összhaladás: egyetlen csík
         barTotal = BarRow(this)
         barTotal.color(Ui.color(this, R.color.primary))
         head.addView(barTotal.root)
@@ -894,6 +944,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(16), 0, 0)
         }
+        var recogWrap: View? = null
         stepsBox.addView(headerRow(20, "Lépés", "Idő" to S_TIME, "Hátra" to S_ETA, "%" to S_PCT))
         tRows.clear()
         for (i in 0 until SrtJob.WEIGHTS.size) {
@@ -937,6 +988,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(4)
             ).apply { topMargin = dp(4); marginStart = dp(20) })
             stepsBox.addView(wrap)
+            if (i == SrtJob.ST_RECOG) recogWrap = wrap
             tRows.add(TRow(wrap, icon, name, note, time, eta, pct, bar))
         }
         head.addView(stepsBox)
@@ -944,7 +996,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         // darabok: részletes lista (beszédhossz, idő, hátra, haladás, tempó) – a darab-számlálók a Felismerés sor alatt vannak
         chunkSection = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(18), 0, 0)
+            setPadding(dp(20), dp(2), 0, dp(6))
             visibility = View.GONE
         }
         chunkTitle = TextView(this).apply {
@@ -953,10 +1005,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
         }
         chunkSection.addView(chunkTitle)
-        chunkMap = ChunkMapView(this)
-        chunkSection.addView(chunkMap, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(8) })
         chunkSection.addView(headerRow(
             20, "Darab", "Beszéd" to C_LEN, "Idő" to C_TIME, "Hátra" to C_ETA, "%" to C_PCT
         ).apply { setPadding(0, dp(10), 0, dp(2)) })
@@ -968,7 +1016,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         chunkMore = Ui.small(this, "")
         chunkSection.addView(chunkMore)
-        head.addView(chunkSection)
+        // a darabok a 4. lépés (Felismerés + fordítás) alatt, a lépés-táblázaton belül
+        stepsBox.addView(chunkSection, stepsBox.indexOfChild(recogWrap) + 1)
         progressSection.addView(head)
 
         // élő előnézet: az utoljára felismert sorok (így azonnal látszik, jó nyelven halad-e)
@@ -1060,6 +1109,22 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     /** Fejlécsor: [lead] üres hely (jelző), a rugalmas első oszlop, majd a fix szélességű oszlopok. */
+    /** Melyik hangszakaszt dolgozza fel éppen (pl. "Éppen: 4:45 – 10:46 · Darab 1/2"). */
+    private fun positionLabel(job: SrtJob): String {
+        val st = job.chunkState
+        val r = job.waveRanges
+        if (st.isEmpty() || r.size < st.size * 2) return ""
+        val fr = job.chunkFracCopy()
+        val act = st.indices.filter { st[it] == 1 }
+        if (act.isEmpty()) return if (st.all { it == 2 }) "Kész: a teljes hang feldolgozva" else "Várakozás a következő szakaszra…"
+        return act.take(2).joinToString("   ") { i ->
+            val a = r[2 * i]
+            val b = r[2 * i + 1]
+            val cur = a + ((b - a) * fr.getOrElse(i) { 0.0 }.coerceIn(0.0, 1.0)).toLong()
+            "Éppen: ${fmtDur(cur)} (${fmtDur(a)} – ${fmtDur(b)}) · ${i + 1}/${st.size}. darab"
+        } + if (act.size > 2) " …" else ""
+    }
+
     private fun headerRow(lead: Int, first: String, vararg cols: Pair<String, Int>): LinearLayout {
         val sec = Ui.color(this, R.color.textSecondary)
         val row = LinearLayout(this).apply {
@@ -1366,6 +1431,12 @@ class FileSubtitleActivity : AppCompatActivity() {
                 row.addView(Ui.small(this, item.detail).apply { setPadding(dp(28), dp(2), 0, 0) })
             }
             if (item.state == SrtJob.Q_DONE && item.srt != null) {
+                val nSusp = try { item.cues?.let { c -> LineQuality.summarize(c).count { it.isNotEmpty() } } ?: 0 } catch (_: Exception) { 0 }
+                if (nSusp > 0) {
+                    row.addView(Ui.smallButton(this, "⚠ $nSusp gyanús sor átnézése (meghallgatással)…") {
+                        SrtEditorActivity.open(this, SrtJob.queue.indexOf(item), true)
+                    }.apply { (layoutParams as? LinearLayout.LayoutParams)?.apply { topMargin = dp(6); marginStart = dp(28) } })
+                }
                 row.addView(Ui.smallButton(this, "Átnézés / szerkesztés…") {
                     SrtEditorActivity.open(this, SrtJob.queue.indexOf(item))
                 }.apply { (layoutParams as? LinearLayout.LayoutParams)?.apply { topMargin = dp(6); marginStart = dp(28) } })
@@ -1411,6 +1482,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             pickBtn.text = if (waiting == 0) "Fájlok kiválasztása…" else "További fájl hozzáadása…"
             quickBtn.text = if (waiting == 0) "Fájlok kiválasztása…"
             else "▶ Indítás az utolsó beállításokkal" + if (waiting > 1) " ($waiting fájl)" else ""
+            updateEstimate()
             startBtn.isEnabled = waiting > 0
             startBtn.alpha = if (waiting > 0) 1f else 0.45f
             startBtn.text = when {
@@ -1469,11 +1541,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             else -> ""
         }
         barTotal.set("Teljes folyamat", job.overall, basis)
-        ring.set(
-            job.overall, "${job.overall}%",
-            if (totRem >= 0) "kb. ${fmtDur(totRem)}" else "számítás…",
-            running = job.running
-        )
         val env = job.waveEnv
         wave.visibility = View.VISIBLE
         if (env.isNotEmpty() && shownEnv !== env) {
@@ -1485,6 +1552,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         if (job.chunkState.isNotEmpty()) {
             wave.setProgress(job.chunkState.copyOf(), job.chunkFracCopy())
         }
+        posText.text = positionLabel(job)
+        pipeline.set(IntArray(SrtJob.WEIGHTS.size) { job.steps[it].state }, job.steps.getOrNull(job.curStep)?.pct ?: 0)
         tileElapsed.text = fmtDur(elapsedAll)
         tileRem.text = if (totRem >= 0) "kb. ${fmtDur(totRem)}" else "számítás…"
         tileFin.text = if (totRem >= 0) SrtJob.fmtClock(now + totRem) else "–"
@@ -1628,8 +1697,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             chunkMore.text = "… még $hidden darab nincs kiírva (kész ${job.chunkDone} · vár ${job.chunkState.count { it == 0 }})"
             chunkMore.visibility = if (hidden > 0) View.VISIBLE else View.GONE
             // sok darabnál a térkép adja az áttekintést
-            chunkMap.visibility = if (n > 0) View.VISIBLE else View.GONE
-            if (n > 0) chunkMap.update()
         }
 
         // hűtési szünet

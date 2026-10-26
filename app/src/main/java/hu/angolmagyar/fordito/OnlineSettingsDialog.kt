@@ -83,7 +83,12 @@ object OnlineSettingsDialog {
             saveAll()
             val cfg = OnlinePrefs.config(ctx, "angol", "magyar")
             if (cfg == null) {
-                result.text = "Hiányzik valami: kulcs / modell / tudomásulvétel."
+                val miss = ArrayList<String>()
+                if (OnlinePrefs.apiKey(ctx).isBlank() && !(OnlinePrefs.provider(ctx) == OnlineTranslator.Provider.OPENAI && OnlinePrefs.baseUrl(ctx).isNotBlank()))
+                    miss.add("API-kulcs (a Claude-előfizetés nem API-kulcs: az console.anthropic.com oldalon kell létrehozni)")
+                if (OnlinePrefs.provider(ctx) == OnlineTranslator.Provider.OPENAI && OnlinePrefs.model(ctx).isBlank()) miss.add("modellnév")
+                if (!OnlinePrefs.consent(ctx)) miss.add("tudomásulvétel (kapcsoló)")
+                result.text = "Hiányzik: " + miss.joinToString(", ") + "."
             } else {
                 result.text = "Próba…"
                 Thread {

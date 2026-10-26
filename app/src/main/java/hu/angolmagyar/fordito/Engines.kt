@@ -85,6 +85,11 @@ object Engines {
 
     /** Hiányzó követelmény szövege, vagy null, ha az élő mód indítható. */
     fun missingForLive(ctx: Context, prefs: Prefs): String? {
+        if (prefs.polyMode) {
+            return if (whisperSpec(ctx) == null)
+                "A többnyelvű módhoz Whisper modell kell (Modellek képernyő → Whisper small ajánlott)."
+            else null
+        }
         val s = sides(prefs)
         if (s.other) {
             val spec = voskSpecFor(ctx, prefs, s.otherLang)

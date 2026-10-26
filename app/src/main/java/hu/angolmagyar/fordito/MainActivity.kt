@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var meter: ProgressBar
     private lateinit var hintText: TextView
     private var captionText: TextView? = null
+    private var livePanels: LivePanels? = null
 
     // Állapot
     private var translatorReady = false
@@ -108,7 +109,9 @@ class MainActivity : AppCompatActivity() {
         false
     }
 
-    private fun allReady() = voskReady() && translatorReady && hasOverlay() && hasMic()
+    private fun trReady() = prefs.polyMode || translatorReady
+
+    private fun allReady() = voskReady() && trReady() && hasOverlay() && hasMic()
 
     // ------------------------------------------------------------------ életciklus
 
@@ -257,6 +260,7 @@ class MainActivity : AppCompatActivity() {
         meterShown = false
         timerText = null
         captionText = null
+        livePanels = null
 
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -310,6 +314,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         errorCard()
+        if (!AppState.running) polyCard()
 
         if (AppState.running) {
             runningCard()
@@ -380,7 +385,7 @@ class MainActivity : AppCompatActivity() {
             })
         }
         stepRow(
-            voskReady() && translatorReady, getString(R.string.m_step1),
+            voskReady() && trReady(), getString(R.string.m_step1),
             getString(R.string.m_step1_desc, spec.label),
             if (downloading) null else getString(R.string.m_download)
         ) { startDownload() }
@@ -438,7 +443,7 @@ class MainActivity : AppCompatActivity() {
 
         // Mit szeretnél? – ikonos csempék, mindegyik saját varázslóval.
         // Modellek nélkül is látszanak, csak szürkék; koppintásra a letöltéshez visznek.
-        val modelsOk = voskReady() && translatorReady
+        val modelsOk = voskReady() && trReady()
         fun open(task: String) {
             val needsLive = task == TaskSetupActivity.TASK_LIVE || task == TaskSetupActivity.TASK_INTERPRETER
             when {
@@ -588,11 +593,22 @@ class MainActivity : AppCompatActivity() {
             max = 100
         }
         card.addView(meter)
-        val cap = Ui.body(this, AppState.lastCaptionHu.ifBlank { AppState.lastCaptionEn }).apply {
-            setPadding(0, dp(8), 0, dp(4))
+        if (prefs.polyMode) {
+            // többnyelvű mód: két panel (eredeti | fordítás), beszélő- és nyelvjelöléssel, alul a célnyelv-választóval
+            val lp = LivePanels(this, prefs)
+            livePanels = lp
+            lp.update(AppState.liveLog.value)
+            card.addView(lp.root)
+            card.addView(Ui.smallButton(this, "⛶ Teljes képernyő (nagy betű, kivetítéshez)") {
+                startActivity(Intent(this, LiveFullscreenActivity::class.java))
+            })
+        } else {
+            val cap = Ui.body(this, AppState.lastCaptionHu.ifBlank { AppState.lastCaptionEn }).apply {
+                setPadding(0, dp(8), 0, dp(4))
+            }
+            captionText = cap
+            card.addView(cap)
         }
-        captionText = cap
-        card.addView(cap)
         hintText = Ui.small(this, "").apply {
             setTextColor(Ui.color(this@MainActivity, R.color.warn))
         }
@@ -618,6 +634,25 @@ class MainActivity : AppCompatActivity() {
             }
         })
         card.addView(row)
+        column.addView(card)
+    }
+
+    /** Mód-választó: többnyelvű (minden nyelv, auto) vagy klasszikus (rögzített nyelvpár). */
+    private fun polyCard() {
+        val card = Ui.card(this)
+        card.addView(Ui.title(this, "🌍 Többnyelvű mód", 16f))
+        card.addView(Ui.small(this,
+            "Bármilyen nyelvet felismer (Whisper), megkülönbözteti a beszélőket, jelzi a nyelvváltást, " +
+            "és a választott nyelvre fordít. Ki: a klasszikus, rögzített nyelvpáros mód."))
+        val sw = androidx.appcompat.widget.SwitchCompat(this).apply {
+            text = "Többnyelvű mód bekapcsolva"
+            isChecked = prefs.polyMode
+            setOnCheckedChangeListener { _, on ->
+                prefs.polyMode = on
+                rebuild(false)
+            }
+        }
+        card.addView(sw)
         column.addView(card)
     }
 
@@ -664,6 +699,7 @@ class MainActivity : AppCompatActivity() {
             hintText.text = AppState.hint ?: ""
             timerText?.text = getString(R.string.m_running, modeName(AppState.mode), elapsedLabel())
             captionText?.text = AppState.lastCaptionHu.ifBlank { AppState.lastCaptionEn }
+            livePanels?.update(AppState.liveLog.value)
         }
         val tr = AppState.testResult
         if (tr != shownTestResult) {

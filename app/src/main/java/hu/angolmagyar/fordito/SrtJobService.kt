@@ -376,13 +376,17 @@ class SrtJobService : Service() {
             else { groups.add(gs..ge); gs = i; ge = i }
         }
         groups.add(gs..ge)
-        val picked = groups.sortedBy { g -> input.subList(g.first, g.last + 1).sumOf { it.lp.toDouble() } }.take(6)
+        // kétmenetes mód: ha van nagyobb (large-v3) modell, a bizonytalan szakaszokat azzal futtatjuk újra
+        val big = ModelManager.installedSpecs(this).firstOrNull { it.id == ModelManager.WH_LARGE.id && it.id != asr.whisper?.id }
+        val maxSpans = if (big != null) 10 else 6
+        val picked = groups.sortedBy { g -> input.subList(g.first, g.last + 1).sumOf { it.lp.toDouble() } }.take(maxSpans)
             .sortedBy { it.first }
         SrtJob.progress(99, "Bizonytalan szakaszok pontosítása (${picked.size} szakasz)…")
         DiagLog.log("MÁSODIK MENET: ${picked.size} szakasz")
         val spans = picked.map { g -> maxOf(0L, input[g.first].startMs - 500) to (input[g.last].endMs + 500) }
         val beam = (AsrPrefs.beam(this) + 4).coerceAtMost(10)
-        val results = rec.refine(pcm, spans, asr.whisper!!, lang, beam) { d, t ->
+        DiagLog.log("MÁSODIK MENET modell: ${(big ?: asr.whisper!!).label}")
+        val results = rec.refine(pcm, spans, big ?: asr.whisper!!, lang, beam) { d, t ->
             SrtJob.progress(99, "Bizonytalan szakaszok pontosítása: $d/$t")
         }
         val out = ArrayList(input)
@@ -898,6 +902,10 @@ class SrtJobService : Service() {
                         val m = ms / w
                         val old = hist.getLong("msPerWindow", 0L)
                         hist.edit().putLong("msPerWindow", if (old > 0) (old + m) / 2 else m).apply()
+                        asr.whisper?.id?.let { wid ->
+                            val oldM = hist.getLong("mpw_$wid", 0L)
+                            hist.edit().putLong("mpw_$wid", if (oldM > 0) (oldM + m) / 2 else m).apply()
+                        }
                     }
                 }
             } catch (_: Exception) {

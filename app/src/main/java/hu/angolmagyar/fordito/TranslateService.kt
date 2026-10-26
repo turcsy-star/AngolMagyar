@@ -453,7 +453,7 @@ class TranslateService : Service(), Overlay.Callbacks {
     // ------------------------------------------------------------------ fordító
 
     private fun initTranslator() {
-        if (!prefs.needsTranslation()) {
+        if (prefs.polyMode || !prefs.needsTranslation()) {
             translatorReady = true
             return
         }
@@ -603,7 +603,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         render()
         if (prefs.ttsEnabled && hu.isNotBlank() && !isTest) {
             if (tts == null) {
-                tts = TtsHelper(this).also { it.setLanguage(prefs.targetLang) }
+                tts = TtsHelper(this).also { it.setLanguage(if (prefs.polyMode) prefs.polyTarget else prefs.targetLang) }
             }
             tts?.speak(hu)
         }
@@ -733,10 +733,29 @@ class TranslateService : Service(), Overlay.Callbacks {
             var recHu: Recognizer? = null
             var sys: LiveSystemAsr? = null
             var liveWhisper: LiveWhisperAsr? = null
+            var poly: PolyEngine? = null
             var audio: AudioRecord? = null
             try {
                 LibVosk.setLogLevel(LogLevel.WARNINGS)
-                val sides = Engines.sides(prefs)
+                val sides0 = Engines.sides(prefs)
+                // többnyelvű módban a PolyEngine (Whisper auto) dolgozik, a Vosk/rendszer ASR ágak ki vannak kapcsolva
+                val polyOn = prefs.polyMode
+                val sides = if (polyOn) Engines.Sides(hu = false, other = false, otherLang = sides0.otherLang) else sides0
+                if (polyOn) {
+                    val pe = PolyEngine(this@TranslateService, prefs, main, object : PolyEngine.Listener {
+                        override fun onFinalLine(original: String, translated: String) {
+                            if (active) commitFinalNow(original, translated)
+                        }
+                        override fun onFatal(message: String) {
+                            main.post { if (active) fail(AppState.ERR_NO_MODEL, message) }
+                        }
+                        override fun onNote(message: String?) {
+                            main.post { if (active) setWarning("poly", message) }
+                        }
+                    })
+                    poly = pe
+                    pe.start()
+                }
                 if (sides.other) {
                     if (modelPath == null || !File(modelPath).isDirectory) {
                         throw AppFailure(
@@ -885,6 +904,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                         continue
                     }
                     // a rendszer-felismerőnek a csendet is átadjuk (mondathatár-érzékelés)
+                    poly?.feed(data, len)
                     val huNow = conversationHuToEn
                     val feedHu = sides.hu && (huNow || autoDual)
                     val feedOther = sides.other && (!huNow || autoDual)
@@ -981,6 +1001,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                 audio?.release()
                 sys?.stop()
                 liveWhisper?.stop()
+                poly?.stop()
                 recOther?.close()
                 modelOther?.close()
                 recHu?.close()

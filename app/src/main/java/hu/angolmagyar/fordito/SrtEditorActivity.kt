@@ -35,6 +35,7 @@ class SrtEditorActivity : AppCompatActivity() {
 
     companion object {
         private const val EXTRA_IDX = "idx"
+        private const val EXTRA_SUSP = "susp"
         private const val PAGE = 20
 
         private const val EXTRA_PATH = "path"
@@ -44,8 +45,8 @@ class SrtEditorActivity : AppCompatActivity() {
             ctx.startActivity(i, o.toBundle())
         }
 
-        fun open(ctx: Context, queueIndex: Int) {
-            launch(ctx, Intent(ctx, SrtEditorActivity::class.java).putExtra(EXTRA_IDX, queueIndex))
+        fun open(ctx: Context, queueIndex: Int, onlySuspicious: Boolean = false) {
+            launch(ctx, Intent(ctx, SrtEditorActivity::class.java).putExtra(EXTRA_IDX, queueIndex).putExtra(EXTRA_SUSP, onlySuspicious))
         }
 
         /** Korábban elkészült (belső tárban lévő) SRT megnyitása az előzményekből. */
@@ -161,6 +162,7 @@ class SrtEditorActivity : AppCompatActivity() {
         column.addView(SwitchCompat(this).apply {
             text = "Csak a gyanús blokkok"
             minHeight = dp(48)
+            isChecked = intent.getBooleanExtra(EXTRA_SUSP, false).also { onlySuspicious = it }
             setOnCheckedChangeListener { _, c ->
                 applyRows()
                 onlySuspicious = c

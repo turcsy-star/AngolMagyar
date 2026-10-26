@@ -25,6 +25,8 @@ class LiveWhisperAsr(
         fun onPartial(text: String)
         fun onFinal(text: String)
         fun onFatal(message: String)
+        /** A szakasz hangjával együtt (beszélő-azonosításhoz); alapértelmezésben csak a szöveget adja tovább. */
+        fun onFinalAudio(text: String, audio: FloatArray) { onFinal(text) }
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -182,48 +184,63 @@ class LiveWhisperAsr(
             inSpeech = false
         }
 
-        if (!busy.compareAndSet(false, true)) {
-            // előző még fut – dobjuk (élő prioritás a késés ellen)
-            return
+        // Az utolsó 3 szakaszt sorba állítjuk (több beszélő közt gyors váltásnál se vesszen el mondat).
+        synchronized(pending) {
+            pending.addLast(samples)
+            while (pending.size > 3) pending.removeFirst()
         }
+        drain()
+    }
 
+    private val pending = java.util.ArrayDeque<ShortArray>()
+
+    private fun drain() {
+        if (!busy.compareAndSet(false, true)) return
         val w = whisper
         if (w == null) {
             busy.set(false)
             return
         }
-
         Thread({
             try {
-                val audio = FloatArray(samples.size)
-                for (i in samples.indices) audio[i] = samples[i] / 32768f
-                val prompt = WhisperPrompt.build(
-                    lang = lang,
-                    prevTail = prevTail,
-                    domain = "general"
-                )
-                val beam = AsrPrefs.beam(ctx).coerceIn(1, 3) // élőben ne legyen túl lassú
-                val code = w.transcribe(
-                    audio, lang, Perf.whisperThreads(), beam, prompt, null, null
-                )
-                if (code != 0) {
-                    // átmeneti hiba – ne öljük meg a munkamenetet
-                    return@Thread
+                while (running.get()) {
+                    val samples = synchronized(pending) { pending.pollFirst() } ?: break
+                    transcribeOne(w, samples)
                 }
-                val segs = w.segments()
-                val text = segs.joinToString(" ") { it.text }.trim()
-                if (text.isNotBlank()) {
-                    prevTail = (prevTail + " " + text).takeLast(120).trim()
-                    lastPartial = ""
-                    main.post {
-                        if (running.get()) cb.onFinal(text)
-                    }
-                }
-            } catch (t: Throwable) {
-                // ne legyen fatális az egyedi chunk hiba
             } finally {
                 busy.set(false)
             }
+            if (running.get() && synchronized(pending) { pending.isNotEmpty() }) drain()
         }, "whisper-seg").also { it.isDaemon = true; it.start() }
+    }
+
+    private fun transcribeOne(w: WhisperNative, samples: ShortArray) {
+        try {
+            val audio = FloatArray(samples.size)
+            for (i in samples.indices) audio[i] = samples[i] / 32768f
+            // Automatikus nyelvfelismerésnél nincs prompt: egy adott nyelvű prompt a felismerést arra a nyelvre húzná.
+            val auto = lang.equals("auto", ignoreCase = true)
+            val prompt = if (auto) "" else WhisperPrompt.build(
+                lang = lang,
+                prevTail = prevTail,
+                domain = "general"
+            )
+            val beam = AsrPrefs.beam(ctx).coerceIn(1, 3) // élőben ne legyen túl lassú
+            val code = w.transcribe(
+                audio, lang, Perf.whisperThreads(), beam, prompt, null, null
+            )
+            if (code != 0) return // átmeneti hiba – ne öljük meg a munkamenetet
+            val segs = w.segments()
+            val text = segs.joinToString(" ") { it.text }.trim()
+            if (text.isNotBlank()) {
+                if (!auto) prevTail = (prevTail + " " + text).takeLast(120).trim()
+                lastPartial = ""
+                main.post {
+                    if (running.get()) cb.onFinalAudio(text, audio)
+                }
+            }
+        } catch (t: Throwable) {
+            // ne legyen fatális az egyedi chunk hiba
+        }
     }
 }

@@ -69,7 +69,14 @@ object SrtExporter {
     fun build(cues: List<Cue>, mode: Mode, colors: Map<String, String>? = null): String {
         val sb = StringBuilder()
         var idx = 1
-        for (c in cues) {
+        var prevSp = ""
+        var prevEnd = Long.MIN_VALUE
+        for (c0 in cues) {
+            // a beszélő neve csak váltáskor (vagy hosszabb szünet után) jelenik meg, hogy ne zsúfolja a feliratot
+            val same = c0.speaker.isNotBlank() && c0.speaker == prevSp && c0.startMs - prevEnd <= 3000
+            val c = if (same) c0.copy(speaker = "") else c0
+            prevSp = c0.speaker
+            prevEnd = c0.endMs
             val body = when (mode) {
                 Mode.SOURCE_ONLY -> prefixSpeaker(c, SubFormat.wrapBalanced(c.source).joinToString("\n"), colors)
                 Mode.TARGET_ONLY -> prefixSpeaker(c, SubFormat.wrapBalanced(c.target).joinToString("\n"), colors)

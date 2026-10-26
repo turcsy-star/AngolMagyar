@@ -70,6 +70,15 @@ object AppState {
     @Volatile var lastCaptionHu: String = ""
     @Volatile var lastCaptionEn: String = ""
 
+    // v2.22.4 – többnyelvű kétpaneles élő napló (eredeti | fordítás, beszélők, nyelvek)
+    private val _liveLog = MutableStateFlow<List<LiveLine>>(emptyList())
+    val liveLog: StateFlow<List<LiveLine>> = _liveLog.asStateFlow()
+    private val liveIds = java.util.concurrent.atomic.AtomicLong(0)
+    fun nextLiveId(): Long = liveIds.incrementAndGet()
+    @Synchronized fun liveAppend(line: LiveLine) { _liveLog.value = LiveLog.append(_liveLog.value, line) }
+    @Synchronized fun liveSetTranslation(id: Long, t: String) { _liveLog.value = LiveLog.setTranslation(_liveLog.value, id, t) }
+    @Synchronized fun liveClear() { _liveLog.value = emptyList() }
+
     // v2.21.1 – level throttling (max ~20 fps) a felesleges recomposition elkerülésére
     private var lastLevelPublishMs = 0L
     private const val LEVEL_THROTTLE_MS = 50L

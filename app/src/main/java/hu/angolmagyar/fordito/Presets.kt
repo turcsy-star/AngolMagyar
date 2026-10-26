@@ -20,7 +20,7 @@ object SubPrefs {
 
     /** Hallucináció-szűrő: ismétlődő mondatok és magányos, értelmetlen sorok kidobása. */
     /** A bizonytalan szakaszok pontosító második menete (lassabb, de kevesebb a felismerési hiba). */
-    fun secondPass(ctx: Context): Boolean = p(ctx).getBoolean("subSecondPass", false)
+    fun secondPass(ctx: Context): Boolean = p(ctx).getBoolean("subSecondPass", true)
     fun setSecondPass(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subSecondPass", v).apply() }
 
     fun hallucFilter(ctx: Context): Boolean = p(ctx).getBoolean("subHalluc", true)

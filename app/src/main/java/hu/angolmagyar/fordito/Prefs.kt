@@ -136,6 +136,16 @@ class Prefs(ctx: Context) {
         get() = p.getString("targetLang", LANG_HU) ?: LANG_HU
         set(v) { p.edit().putString("targetLang", v).apply() }
 
+    /** v2.22.4: többnyelvű élő mód – minden nyelvet felismer (Whisper auto) és a választott célnyelvre fordít. */
+    var polyMode: Boolean
+        get() = p.getBoolean("polyMode", true)
+        set(v) { p.edit().putBoolean("polyMode", v).apply() }
+
+    /** A többnyelvű mód célnyelve (BCP-47 kód). */
+    var polyTarget: String
+        get() = p.getString("polyTarget", "hu") ?: "hu"
+        set(v) { p.edit().putString("polyTarget", v).apply() }
+
     var sourceLang: String
         get() = p.getString("sourceLang", LANG_EN) ?: LANG_EN
         set(v) { p.edit().putString("sourceLang", v).apply() }
