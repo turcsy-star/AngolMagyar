@@ -80,6 +80,24 @@ object SrtJob {
 
     val queue = CopyOnWriteArrayList<QItem>()
 
+    // ---- melyik fordítómotor dolgozott (összesítés a futás alatt)
+    @Volatile var engOnlineName = ""
+    @Volatile var engOnline = 0
+    @Volatile var engOffline = 0
+    @Volatile var names: List<String> = emptyList()
+
+    @Synchronized fun addEngine(onlineName: String, online: Int, offline: Int) {
+        if (online > 0) { engOnlineName = onlineName; engOnline += online }
+        engOffline += offline
+    }
+
+    fun engineText(): String {
+        val parts = ArrayList<String>()
+        if (engOnline > 0) parts.add("$engOnlineName: $engOnline sor")
+        if (engOffline > 0) parts.add("offline (ML Kit): $engOffline sor")
+        return if (parts.isEmpty()) "" else "Fordítómotor – " + parts.joinToString(" · ")
+    }
+
     /** A teljes sor (több fájl) feldolgozása folyamatban van. */
     @Volatile var batchRunning = false
     @Volatile var batchStartMs = 0L
@@ -249,7 +267,7 @@ object SrtJob {
         val now = System.currentTimeMillis()
         if (!force && now - lastChangedMs < 1000) return
         lastChangedMs = now
-        main.post { for (l in listeners) try { l() } catch (_: Exception) {} }
+        main.post { for (l in listeners) try { l() } catch (e: Exception) { DiagLog.swallow("SrtJob", e) } }
     }
 
     // a felismerés haladásának mintái (idő, %) a folyamatos ETA-hoz; a legutóbbi ~60 mp tempója számít
@@ -268,6 +286,7 @@ object SrtJob {
 
     @Synchronized
     fun reset(withTr: Boolean) {
+        engOnlineName = ""; engOnline = 0; engOffline = 0; names = emptyList()
         for (s in steps) { s.state = PENDING; s.durMs = 0; s.comment = ""; s.pct = -1 }
         withTranslation = withTr
         running = true

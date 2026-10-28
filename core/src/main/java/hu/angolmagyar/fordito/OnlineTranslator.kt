@@ -22,6 +22,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         val glossary: List<Pair<String, String>> = emptyList(),
         /** szabad szöveges háttér: téma, szereplők nevei stb. */
         val hint: String = "",
+        val style: TranslationStyle = TranslationStyle.NATURAL,
         val batchSize: Int = 30,
         val timeoutMs: Int = 90_000
     )
@@ -50,6 +51,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             sb.append("You are a professional subtitle translator. Translate subtitle blocks from ${cfg.srcLang} to ${cfg.tgtLang}.\n")
             sb.append("Rules:\n")
             sb.append("- Translate faithfully and naturally, as the lines would be spoken; keep the register, slang and tone. Add no commentary and do not soften or censor.\n")
+            sb.append("- Requested translation style: ").append(cfg.style.instruction).append("\n")
             sb.append("- Consecutive blocks are often fragments of one sentence. Use the neighbouring blocks (given as context) so the sentence reads naturally, but give each block only the translation of its own part, short enough for a subtitle.\n")
             sb.append("- Do not translate or alter personal names; keep interjections short (Oh → Ó, Yeah → Igen).\n")
             if (cfg.informal && cfg.tgtLang.equals("magyar", ignoreCase = true))

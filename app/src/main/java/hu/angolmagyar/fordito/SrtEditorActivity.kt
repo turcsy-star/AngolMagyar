@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import hu.angolmagyar.fordito.core.review.ReviewIntelligence
 import kotlin.math.abs
 
 /**
@@ -86,6 +87,8 @@ class SrtEditorActivity : AppCompatActivity() {
     private var onlySuspicious = false
     private var dirty = false
     private val rows = ArrayList<RowViews>()
+    private val cardOf = HashMap<Int, View>()
+    private var activeIdx = -1
 
     private lateinit var scroll: ScrollView
     private lateinit var listBox: LinearLayout
@@ -273,18 +276,28 @@ class SrtEditorActivity : AppCompatActivity() {
         if (playUntil in 0..pos && v.isPlaying) { v.pause(); playUntil = -1L; updatePlayBtn() }
         val cue = cues.firstOrNull { pos >= it.startMs && pos <= it.endMs }
         caption?.text = if (cue == null) "" else if (rich && hasTarget) cue.target else cue.source
+        // lejátszás közben az éppen szóló blokk kiemelődik, és a lista követi
+        val ai = if (v.isPlaying && cue != null) cues.indexOf(cue) else -1
+        if (ai != activeIdx) {
+            cardOf[activeIdx]?.setBackgroundColor(0)
+            activeIdx = ai
+            cardOf[ai]?.let { c ->
+                c.setBackgroundColor(android.graphics.Color.argb(48, 47, 128, 237))
+                try { scroll.smoothScrollTo(0, (c.top + listBox.top - dp(140)).coerceAtLeast(0)) } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
+            }
+        }
         updatePlayBtn()
     }
 
     override fun onResume() { super.onResume(); ui.post(poll) }
     override fun onPause() {
         ui.removeCallbacks(poll)
-        try { video?.pause() } catch (_: Exception) {}
+        try { video?.pause() } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
         super.onPause()
     }
     override fun onDestroy() {
         ui.removeCallbacks(poll)
-        try { video?.stopPlayback() } catch (_: Exception) {}
+        try { video?.stopPlayback() } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
         super.onDestroy()
     }
 
@@ -347,6 +360,8 @@ class SrtEditorActivity : AppCompatActivity() {
             val cur = if (rich && hasTarget) old.target else old.source
             if (s != old.startMs || e != old.endMs || t != cur.trim()) {
                 if (!snap) { pushUndo(); snap = true }
+                if (t != cur.trim()) AuditLog.add(this, auditKey(), hu.angolmagyar.fordito.core.review.ReviewAuditEntry(
+                    System.currentTimeMillis(), r.idx, cur.trim(), t, "Kézi szerkesztés", true, "manual"))
                 cues[r.idx] = if (rich && hasTarget) old.copy(startMs = s, endMs = e, target = t)
                 else old.copy(startMs = s, endMs = e, source = t)
                 dirty = true
@@ -402,8 +417,7 @@ class SrtEditorActivity : AppCompatActivity() {
                     .setNegativeButton("Most nem", null)
                     .show()
             }
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
     }
 
     private fun save() {
@@ -435,7 +449,9 @@ class SrtEditorActivity : AppCompatActivity() {
         ur.addView(Ui.smallButton(this, "↶ Visszavonás") { undoStep() })
         ur.addView(Ui.smallButton(this, "↷ Újra") { redoStep() })
         toolsBox.addView(ur)
+        if (cues.any { it.speaker.isNotBlank() }) toolsBox.addView(Ui.smallButton(this, "Beszélők nevei…") { renameSpeakers() })
         if (!rich) return
+        toolsBox.addView(Ui.smallButton(this, "Szótár újraalkalmazása + javított sorok újrafordítása") { reapplyGlossary() })
         if (hasTarget) {
             toolsBox.addView(Ui.smallButton(this, "Gyanús sorok javítása (online)") {
                 applyRows()
@@ -447,13 +463,190 @@ class SrtEditorActivity : AppCompatActivity() {
             toolsBox.addView(Ui.smallButton(this, "Az egész újrafordítása (online)") { applyRows(); retranslate(null, OnlinePrefs.ONLINE) })
             toolsBox.addView(Ui.smallButton(this, "Az egész újrafordítása (offline)") { applyRows(); retranslate(null, OnlinePrefs.OFF) })
         }
-        toolsBox.addView(Ui.small(this, QualityReport.build(cues).lines().joinToString(" · ")))
+        val reviewThr = (Math.exp(QualityRules.REVIEW_LP.toDouble()) * 100).toInt() + 1
+        val review = ReviewIntelligence.analyze(cues.map { cue ->
+            val pct = if (cue.lp.isFinite() && cue.lp <= 0f) (Math.exp(cue.lp.toDouble()) * 100).toInt().coerceIn(0, 100) else null
+            ReviewIntelligence.Line(
+                text = if (hasTarget && cue.target.isNotBlank()) cue.target else cue.source,
+                confidencePercent = pct,
+                startMs = cue.startMs,
+                endMs = cue.endMs,
+                source = if (hasTarget) cue.source else null,
+                target = if (hasTarget) cue.target else null,
+                weakWords = cue.wordConfidence.any { TokenQuality.needsReview(it) }
+            )
+        }, lowConfidencePercent = reviewThr)
+        // minőség-kártya: animált pontgyűrű + összegzés; koppintásra megnyílik a részletes lap
+        val qCard = Ui.card(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            isClickable = true
+            setOnClickListener { applyRows(); showReviewSheet(review) }
+        }
+        val qRing = QualityRingView(this)
+        qCard.addView(qRing, LinearLayout.LayoutParams(dp(60), dp(60)))
+        val qText = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), 0, 0, 0) }
+        qText.addView(Ui.text(this, "Minőség · ${review.flaggedLines} jelölt sor", 15f, R.color.textPrimary, true))
+        qText.addView(Ui.small(this, QualityReport.build(cues).lines().joinToString(" · ")))
+        qText.addView(Ui.small(this, "Koppints a részletekhez ›"))
+        qCard.addView(qText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        toolsBox.addView(qCard)
+        qRing.setScore(ReviewSheet.score(review))
         toolsBox.addView(Ui.smallButton(this, if (worstOnly) "Mind a sor megjelenítése" else "Legrosszabb 10 sor") {
             applyRows(); worstOnly = !worstOnly; page = 0; rebuild()
         })
         if (dropped.isNotEmpty()) {
             toolsBox.addView(Ui.smallButton(this, "Kiszűrt blokkok visszaállítása (${dropped.size})") { restoreDropped() })
         }
+    }
+
+
+    private fun auditKey(): String = item?.name.orEmpty()
+
+    /** Prémium ellenőrző lap: a jelzések kártyái, szűrők, célzott újrafelismerés, napló, benchmark. */
+    private fun showReviewSheet(review: ReviewIntelligence.ReviewSummary) {
+        ReviewSheet.show(this, review, cues.toList(), rich && hasTarget, Benchmark.hasReference(this, auditKey()),
+            object : ReviewSheet.Actions {
+                override fun jump(lineIndex: Int) = jumpToLine(lineIndex)
+                override fun recheckSuspicious() = startTargetedReview(review)
+                override fun showAudit() = showAuditDialog()
+                override fun showBenchmark() = showBenchmarkDialog()
+                override fun saveReference() {
+                    Benchmark.saveReference(this@SrtEditorActivity, auditKey(), cues)
+                    toast("Referenciának mentve. Újrafuttatás után a Benchmark összeveti az eredményt.")
+                }
+            })
+    }
+
+    private fun jumpToLine(index: Int) {
+        applyRows()
+        onlySuspicious = false
+        worstOnly = false
+        page = index / PAGE
+        rebuild()
+        scroll.post {
+            val card = cardOf[index]
+            if (card != null) scroll.smoothScrollTo(0, (card.top + listBox.top - dp(100)).coerceAtLeast(0))
+        }
+    }
+
+    /** A kritikus/magas jelzésű sorok hangszakaszának újrafelismerése; a változás csak jóváhagyással kerül be. */
+    private fun startTargetedReview(review: ReviewIntelligence.ReviewSummary) {
+        if (busy) return
+        val qi = item ?: return
+        if (qi.uri == android.net.Uri.EMPTY) { toast("Ehhez az eredeti videó/hang kell (régi, fájl nélküli elem)."); return }
+        val lines = TargetedReview.pickLines(review)
+        if (lines.isEmpty()) { toast("Nincs kritikus vagy magas prioritású jelzés."); return }
+        busy = true
+        summary.text = "Célzott újrafelismerés előkészítése (${lines.size} sor)…"
+        val snapshot = cues.toList()
+        val lang = qi.dir.substringBefore('_').takeIf { it.length == 2 } ?: "en"
+        val cancel = java.util.concurrent.atomic.AtomicBoolean(false)
+        Thread {
+            var err: String? = null
+            var props: List<TargetedReview.Proposal> = emptyList()
+            try {
+                props = TargetedReview.run(this, qi.uri, snapshot, lines, lang, cancel) { m -> runOnUiThread { summary.text = m } }
+            } catch (e: Throwable) {
+                err = e.message ?: e.javaClass.simpleName
+                DiagLog.log("Célzott újrafelismerés hiba: $err")
+            }
+            val errMsg = err
+            val result = props
+            runOnUiThread {
+                busy = false
+                if (errMsg != null) toast("Újrafelismerési hiba: $errMsg")
+                else showProposals(result)
+                rebuild()
+            }
+        }.start()
+    }
+
+    private fun showProposals(all: List<TargetedReview.Proposal>) {
+        val changed = all.filter { it.changed }
+        if (changed.isEmpty()) { toast("Az újrafelismerés nem talált eltérést – a sorok maradnak."); return }
+        val labels = changed.map { p ->
+            val first = p.first + 1
+            "${if (p.first == p.last) "$first." else "$first–${p.last + 1}."} sor ${if (p.better) "✓ jobb" else "• eltér"}\n" +
+                "régi: ${p.oldText().take(90)}\núj:   ${p.newText().take(90)}"
+        }.toTypedArray()
+        val checked = BooleanArray(changed.size) { changed[it].better }
+        AlertDialog.Builder(this)
+            .setTitle("Újrafelismerési javaslatok")
+            .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
+            .setPositiveButton("Kiválasztottak alkalmazása") { _, _ ->
+                val chosen = changed.filterIndexed { i, _ -> checked[i] }
+                if (chosen.isEmpty()) return@setPositiveButton
+                val before = cues.toList()
+                pushUndo()
+                val out = TargetedReview.apply(before, chosen)
+                val showT = rich && hasTarget
+                cues.clear(); cues.addAll(out)
+                dirty = true
+                AuditLog.recordDiff(this, auditKey(), before, out, "Célzott újrafelismerés", "targeted-review", showT)
+                // az új sorok fordítását pótoljuk, ha kell
+                if (hasTarget && cues.any { it.target.isBlank() && it.source.isNotBlank() }) {
+                    val todo = cues.indices.filter { cues[it].target.isBlank() && cues[it].source.isNotBlank() }
+                    retranslate(todo, if (OnlinePrefs.usable(this)) OnlinePrefs.AUTO else OnlinePrefs.OFF)
+                } else rebuild()
+            }
+            .setNegativeButton("Elvetés", null)
+            .show()
+    }
+
+    private fun showAuditDialog() {
+        val entries = AuditLog.load(this, auditKey()).takeLast(40).reversed()
+        if (entries.isEmpty()) { toast("Még nincs rögzített módosítás ehhez a fájlhoz."); return }
+        val fmt = java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+        val labels = entries.map { e ->
+            "${fmt.format(java.util.Date(e.timestampEpochMs))} · ${if (e.lineIndex >= 0) "${e.lineIndex + 1}. sor" else "több sor"} · ${e.reason}\n" +
+                "${e.beforeText.take(70)} → ${e.afterText.take(70)}"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Módosítási napló (koppints: visszaállítás)")
+            .setItems(labels) { _, which ->
+                val e = entries[which]
+                if (e.lineIndex !in cues.indices) { toast("Ez a bejegyzés nem állítható vissza egy sorra."); return@setItems }
+                val showT = rich && hasTarget
+                val cur = cues[e.lineIndex]
+                val curText = if (showT) cur.target else cur.source
+                if (curText.trim() != e.afterText.trim()) { toast("A sor azóta másképp módosult, nem állítom vissza."); return@setItems }
+                applyRows(); pushUndo()
+                cues[e.lineIndex] = if (showT) cur.copy(target = e.beforeText) else cur.copy(source = e.beforeText)
+                dirty = true
+                AuditLog.add(this, auditKey(), hu.angolmagyar.fordito.core.review.ReviewAuditEntry(
+                    System.currentTimeMillis(), e.lineIndex, e.afterText, e.beforeText, "Visszaállítás", true, "undo-from-log"))
+                rebuild()
+            }
+            .setNegativeButton("Bezárás", null)
+            .setNeutralButton("Napló törlése") { _, _ -> AuditLog.clear(this, auditKey()) }
+            .show()
+    }
+
+    private fun showBenchmarkDialog() {
+        val audioMs = cues.maxOfOrNull { it.endMs } ?: 0L
+        val elapsed = if (SrtJob.endMs > SrtJob.startMs) SrtJob.endMs - SrtJob.startMs else 0L
+        val rep = Benchmark.evaluate(this, auditKey(), cues, elapsed, audioMs)
+        if (rep == null) { toast("Nincs referencia ehhez a fájlhoz."); return }
+        val hist = Benchmark.history(this, auditKey()).takeLast(6)
+        val msg = StringBuilder()
+        msg.append("WER: ${"%.1f".format(rep.bench.wordErrorRate * 100)}% (${rep.result.errors} hiba / ${rep.result.referenceWords} szó)\n")
+        msg.append("  helyettesítés ${rep.result.substitutions} · törlés ${rep.result.deletions} · beszúrás ${rep.result.insertions}\n")
+        msg.append("Kritikus eltérés: ${rep.bench.criticalErrors} (szám ${rep.numberDiffs}, tagadás ${rep.negationDiffs})\n")
+        if (elapsed > 0 && audioMs > 0) msg.append("Valós idejű szorzó: ${"%.2f".format(rep.bench.realtimeFactor)}×\n")
+        msg.append("Verzió: ${rep.bench.version}\n")
+        if (hist.isNotEmpty()) {
+            msg.append("\nElőzmények:\n")
+            for (h in hist) msg.append("  ${h.version}: WER ${"%.1f".format(h.wordErrorRate * 100)}% · kritikus ${h.criticalErrors}\n")
+        }
+        msg.append("\nA WER felismerési mérőszám, nem fordítás- vagy jogi hitelességi mutató.")
+        AlertDialog.Builder(this)
+            .setTitle("Benchmark")
+            .setMessage(msg.toString())
+            .setPositiveButton("Eredmény rögzítése") { _, _ -> Benchmark.record(this, rep.bench); toast("Rögzítve.") }
+            .setNeutralButton("Referencia törlése") { _, _ -> Benchmark.deleteReference(this, auditKey()) }
+            .setNegativeButton("Bezárás", null)
+            .show()
     }
 
     private fun toast(m: String) = Toast.makeText(this, m, Toast.LENGTH_LONG).show()
@@ -484,7 +677,132 @@ class SrtEditorActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun retranslate(indices: List<Int>?, mode: Int) {
+    /** A (felhasználói + automatikus) szótár újra az egész feliratra; a megváltozott forrású sorok újrafordulnak. */
+    private fun reapplyGlossary() {
+        if (busy) return
+        applyRows()
+        val prefs = Prefs(this)
+        val en = Fixes.parse(prefs.enFixes + "\n" + VocabLearner.autoRules(prefs))
+        val hu = Fixes.parse(Projects.huRules(this))
+        val changed = ArrayList<Int>()
+        var huChanged = 0
+        pushUndo()
+        for (k in cues.indices) {
+            val c = cues[k]
+            val ns = Fixes.apply(c.source, en)
+            val nt = if (hasTarget && hu.isNotEmpty()) Fixes.apply(c.target, hu) else c.target
+            if (ns != c.source) changed.add(k)
+            else if (nt != c.target) huChanged++
+            if (ns != c.source || nt != c.target) cues[k] = c.copy(source = ns, target = if (ns != c.source) c.target else nt)
+        }
+        dirty = true
+        if (changed.isEmpty()) { toast(if (huChanged > 0) "$huChanged sor magyar szövege javítva." else "A szótár nem talált javítanivalót."); rebuild(); return }
+        if (!hasTarget) { toast("${changed.size} sor szövege javítva."); rebuild(); return }
+        toast("${changed.size} sor forrása javult – újrafordítom.")
+        retranslate(changed, OnlinePrefs.mode(this).let { if (it == OnlinePrefs.OFF || !OnlinePrefs.usable(this)) OnlinePrefs.OFF else it })
+    }
+
+    /** A beszélők átnevezése (pl. S1 → Nina) az egész felirat összes blokkjában. */
+    private fun renameSpeakers() {
+        applyRows()
+        val ids = cues.map { it.speaker }.filter { it.isNotBlank() }.distinct()
+        if (ids.isEmpty()) { toast("Nincs beszélő a feliratban."); return }
+        val pad = dp(16)
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, 0) }
+        col.addView(Ui.small(this, "Írd be a nevet; üresen hagyva marad a jelenlegi."))
+        val fields = ids.map { id ->
+            col.addView(Ui.body(this, id))
+            android.widget.EditText(this).apply { hint = "pl. Nina"; setSingleLine(true) }.also { col.addView(it) }
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Beszélők nevei")
+            .setView(ScrollView(this).apply { addView(col) })
+            .setPositiveButton("Alkalmaz") { _, _ ->
+                val map = ids.zip(fields).associate { (id, f) -> id to f.text.toString().trim() }.filter { it.value.isNotEmpty() }
+                if (map.isNotEmpty()) {
+                    pushUndo()
+                    for (k in cues.indices) cues[k].speaker.let { s -> map[s]?.let { cues[k] = cues[k].copy(speaker = it) } }
+                    dirty = true
+                    // a nevek a következő feldolgozáshoz is megmaradnak
+                    try {
+                        val cur = Prefs(this).speakerNames
+                        val add = map.entries.joinToString("\n") { "${it.key}=${it.value}" }
+                        Prefs(this).speakerNames = if (cur.isBlank()) add else cur.trimEnd() + "\n" + add
+                    } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
+                    rebuild()
+                }
+            }
+            .setNegativeButton("Mégse", null)
+            .show()
+    }
+
+    /** Egy sor több fordítása (jelenlegi / online / offline) egymás mellett; a választott bekerül a sorba. */
+    private fun compare(i: Int) {
+        if (busy) return
+        val qi = item ?: return
+        applyRows()
+        if (i !in cues.indices) return
+        busy = true
+        summary.text = "Összehasonlítás…"
+        val snap = cues.toList()
+        val dir = qi.dir
+        Thread {
+            val opts = LinkedHashMap<String, String>()
+            opts["Jelenlegi"] = snap[i].target
+            if (OnlinePrefs.usable(this)) try {
+                val cfg = OnlinePrefs.config(
+                    this, SrtJobService.langName(dir.substringBefore("_", "en")), SrtJobService.langName(dir.substringAfter("_", "hu"))
+                )
+                if (cfg != null) {
+                    val a = (i - 4).coerceAtLeast(0)
+                    val en = snap.subList(a, i + 1).map { it.source }
+                    val hu = snap.subList(a, i + 1).map { it.target }.toMutableList()
+                    hu[hu.size - 1] = ""
+                    val bad = OnlineTranslator(cfg).translate(en, hu, listOf(en.size - 1), { _, _ -> }, { false })
+                    if (bad.isEmpty() && hu.last().isNotBlank()) {
+                        val nm = when (cfg.provider) {
+                            OnlineTranslator.Provider.DEEPL -> "DeepL"
+                            OnlineTranslator.Provider.ANTHROPIC -> "Claude"
+                            else -> "Online"
+                        }
+                        opts[nm] = hu.last().trim()
+                    }
+                }
+            } catch (_: Throwable) {}
+            val rec = FileRecognizer(this, Prefs(this), java.util.concurrent.atomic.AtomicBoolean(false))
+            try {
+                val off = rec.retranslate(snap, listOf(i), dir, OnlinePrefs.OFF) { _, _, _ -> }
+                opts["Offline (ML Kit)"] = off.getOrNull(i)?.target.orEmpty()
+            } catch (_: Throwable) {
+            } finally {
+                try { rec.close() } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
+            }
+            // azonos szövegű változatok összevonása
+            val seen = HashSet<String>()
+            val list = opts.entries.filter { it.value.isNotBlank() && seen.add(it.value.trim()) }
+            runOnUiThread {
+                busy = false
+                rebuild()
+                if (list.size < 2) { toast("Nincs másik változat (az online fordítás nincs beállítva?)."); return@runOnUiThread }
+                androidx.appcompat.app.AlertDialog.Builder(this)
+                    .setTitle("Melyik fordítás legyen?")
+                    .setItems(list.map { "${it.key}:\n${it.value}" }.toTypedArray()) { _, which ->
+                        val pick = list[which].value
+                        if (i in cues.indices && pick != cues[i].target) {
+                            pushUndo()
+                            cues[i] = cues[i].copy(target = pick)
+                            dirty = true
+                            try { TranslationMemoryStore.record(this, listOf(cues[i])) } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
+                            rebuild()
+                        }
+                    }
+                    .setNegativeButton("Mégse", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun retranslate(indices: List<Int>?, mode: Int, group: Boolean = false) {
         if (busy) return
         val qi = item ?: return
         if (mode != OnlinePrefs.OFF && !OnlinePrefs.usable(this)) {
@@ -500,6 +818,7 @@ class SrtEditorActivity : AppCompatActivity() {
             var out: List<SrtExporter.Cue>? = null
             var note = ""
             val rec = FileRecognizer(this, Prefs(this), java.util.concurrent.atomic.AtomicBoolean(false))
+            rec.groupSubset = group
             try {
                 rec.onNote = { m -> note = m }
                 out = rec.retranslate(snapshot, indices, dir, mode) { d, t, label ->
@@ -508,7 +827,7 @@ class SrtEditorActivity : AppCompatActivity() {
             } catch (e: Throwable) {
                 err = e.message ?: e.javaClass.simpleName
             } finally {
-                try { rec.close() } catch (_: Exception) {}
+                try { rec.close() } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) }
             }
             val result = out
             val errMsg = err
@@ -517,6 +836,8 @@ class SrtEditorActivity : AppCompatActivity() {
                 busy = false
                 if (result != null) {
                     pushUndo()
+                    AuditLog.recordDiff(this, auditKey(), cues.toList(), result,
+                        "Újrafordítás (${if (mode == OnlinePrefs.OFF) "offline" else "online/auto"})", "retranslate", true)
                     cues.clear(); cues.addAll(result)
                     dirty = true
                     if (noteMsg.isNotBlank()) toast(noteMsg)
@@ -606,6 +927,26 @@ class SrtEditorActivity : AppCompatActivity() {
         }
     }
 
+    /** Forrásszöveg szókonfidencia-jelölése: narancs = ellenőrizendő; a szöveget nem módosítja. */
+    private fun confidencePreview(c: SrtExporter.Cue): TextView = TextView(this).apply {
+        val words = c.source.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        val span = android.text.SpannableStringBuilder()
+        words.forEachIndexed { index, word ->
+            if (index > 0) span.append(" ")
+            val start = span.length
+            span.append(word)
+            val score = c.wordConfidence.getOrNull(index)
+            if (score != null && TokenQuality.needsReview(score)) {
+                span.setSpan(android.text.style.ForegroundColorSpan(Ui.color(this@SrtEditorActivity, R.color.warn)), start, span.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                span.setSpan(android.text.style.UnderlineSpan(), start, span.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        text = if (c.wordConfidence.isEmpty()) c.source else span
+        textSize = 13f
+        setTextColor(Ui.color(this@SrtEditorActivity, R.color.textSecondary))
+        if (c.wordConfidence.isNotEmpty()) contentDescription = "Forrásszöveg. Narancssárga aláhúzás: alacsony tokenkonfidenciájú szó."
+    }
+
     private fun rebuild() {
         // gyanús blokkok
         val flags = arrayOfNulls<String>(cues.size)
@@ -618,14 +959,21 @@ class SrtEditorActivity : AppCompatActivity() {
             prev = c
         }
         buildTools(suspCount)
-        val worst = if (rich && worstOnly) QualityReport.build(cues).worst.toHashSet() else null
-        val view = cues.indices.filter { (!onlySuspicious || flags[it] != null) && (worst == null || it in worst) }
+        val worst = if (rich && worstOnly) QualityReport.build(cues).worst else null
+        // A "Legrosszabb 10 sor" valóban súlyosság szerint jelenjen meg; a normál nézet marad időrendi.
+        val view = if (worst != null) {
+            worst.filter { i -> !onlySuspicious || flags[i] != null }
+        } else {
+            cues.indices.filter { !onlySuspicious || flags[it] != null }
+        }
         val pages = ((view.size + PAGE - 1) / PAGE).coerceAtLeast(1)
         page = page.coerceIn(0, pages - 1)
         summary.text = "${cues.size} blokk · $suspCount gyanús" + if (dirty) " · módosítva" else ""
         pageLabel.text = "${page + 1}/$pages. oldal"
 
         rows.clear()
+        cardOf.clear()
+        activeIdx = -1
         listBox.removeAllViews()
         if (view.isEmpty()) {
             listBox.addView(Ui.small(this, if (onlySuspicious) "Nincs gyanús blokk." else "Nincs blokk."))
@@ -652,23 +1000,69 @@ class SrtEditorActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(8) })
             if (rich && hasTarget) {
-                card.addView(TextView(this).apply {
-                    text = c.source
-                    textSize = 13f
-                    setTextColor(Ui.color(this@SrtEditorActivity, R.color.textSecondary))
-                }, LinearLayout.LayoutParams(
+                card.addView(confidencePreview(c), LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply { topMargin = dp(8) })
+            } else if (c.wordConfidence.isNotEmpty()) {
+                card.addView(confidencePreview(c), LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(8) })
+            }
+            if (rich && hasTarget) {
+                // Párhuzamos eredeti/fordítás nézet: az angol forrás közvetlenül a magyar
+                // szöveg felett jelenik meg, így a fordítás ellenőrizhető anélkül, hogy
+                // el kellene hagyni a szerkesztőt. A forrás szándékosan csak olvasható.
+                val sourceBox = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(dp(10), dp(8), dp(10), dp(8))
+                    background = GradientDrawable().apply {
+                        cornerRadius = dp(10).toFloat()
+                        setColor(Ui.color(this@SrtEditorActivity,  R.color.card))
+                    }
+                }
+                sourceBox.addView(TextView(this).apply {
+                    text = "ANGOL EREDETI"
+                    textSize = 10f
+                    setTypeface(typeface, Typeface.BOLD)
+                    letterSpacing = 0.08f
+                    setTextColor(Ui.color(this@SrtEditorActivity, R.color.textSecondary))
+                })
+                sourceBox.addView(TextView(this).apply {
+                    text = c.source
+                    textSize = 14f
+                    setTextColor(Ui.color(this@SrtEditorActivity, R.color.textPrimary))
+                    setPadding(0, dp(4), 0, 0)
+                    textIsSelectable = true
+                })
+                card.addView(sourceBox, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(8) })
+            }
+            if (rich && hasTarget) {
+                card.addView(TextView(this).apply {
+                    text = "MAGYAR FORDÍTÁS · szerkeszthető"
+                    textSize = 10f
+                    letterSpacing = 0.08f
+                    setTypeface(typeface, Typeface.BOLD)
+                    setTextColor(Ui.color(this@SrtEditorActivity, R.color.accentGlow))
+                }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(10) })
             }
             val tx = edit(if (rich && hasTarget) c.target else c.source, false, true)
             card.addView(tx, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(8) })
+            ).apply { topMargin = dp(4) })
             if (videoReady) {
                 card.addView(Ui.smallButton(this, "▶ Meghallgat / megnéz") { applyRows(); playSpan(c.startMs, c.endMs) })
             }
             if (rich && hasTarget) {
                 card.addView(Ui.smallButton(this, "Újrafordítás (online)") { retranslate(listOf(i), OnlinePrefs.ONLINE) })
+                card.addView(Ui.smallButton(this, "Fordítások összehasonlítása") { compare(i) })
+                card.addView(Ui.smallButton(this, "Szakasz újrafordítása egyben (±4 sor)") {
+                    applyRows()
+                    retranslate(((i - 4).coerceAtLeast(0)..(i + 4).coerceAtMost(cues.size - 1)).toList(), OnlinePrefs.ONLINE, true)
+                })
                 card.addView(Ui.smallButton(this, "Javítás szabállyá") { makeRule(i, tx.text.toString()) })
             }
             card.addView(Ui.smallButton(this, "Blokk törlése") {
@@ -678,6 +1072,8 @@ class SrtEditorActivity : AppCompatActivity() {
             })
             attachSwipeToDelete(card, i)
             listBox.addView(card)
+            cardOf[i] = card
+            tx.setOnFocusChangeListener { _, has -> if (has) try { video?.pause(); updatePlayBtn() } catch (e: Exception) { DiagLog.swallow("SrtEditorActivity", e) } }
             rows.add(RowViews(i, st, en, tx))
         }
         scroll.post { scroll.scrollTo(0, 0) }

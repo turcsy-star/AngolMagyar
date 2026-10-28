@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0F1117</color>
-    <color name="bgElevated">#171A22</color>
-    <color name="card">#1C2030</color>
-    <color name="stroke">#2A3144</color>
-    <color name="primary">#6366F1</color>
-    <color name="primaryDim">#4F46E5</color>
+    <color name="bg">#111214</color>
+    <color name="bgElevated">#191A1D</color>
+    <color name="card">#202125</color>
+    <color name="stroke">#393A3F</color>
+    <color name="primary">#E6C875</color>
+    <color name="primaryDim">#B99A4A</color>
     <color name="onPrimary">#FFFFFF</color>
-    <color name="textPrimary">#F1F5F9</color>
-    <color name="textSecondary">#94A3B8</color>
-    <color name="ok">#34D399</color>
-    <color name="warn">#FBBF24</color>
-    <color name="err">#F87171</color>
-    <color name="accentGlow">#818CF8</color>
-    <color name="ic_launcher_bg">#312E81</color>
+    <color name="textPrimary">#F4F1E8</color>
+    <color name="textSecondary">#B9BBC2</color>
+    <color name="ok">#62C59A</color>
+    <color name="warn">#E6C875</color>
+    <color name="err">#FF7777</color>
+    <color name="accentGlow">#DDE5EF</color>
+    <color name="ic_launcher_bg">#171719</color>
     <color name="overlayScrim">#CC000000</color>
     <color name="chipBg">#33FFFFFF</color>
     <!-- OLED pure black (Prefs.oledBlack) -->

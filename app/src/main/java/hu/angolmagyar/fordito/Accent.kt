@@ -14,10 +14,18 @@ object Accent {
         Theme("emerald", "Smaragd", 0xFF047857.toInt(), 0xFF10B981.toInt(), 0xFF10B981.toInt(), 0xFF34D399.toInt()),
         Theme("orange", "Narancs", 0xFFC2410C.toInt(), 0xFFF97316.toInt(), 0xFFF97316.toInt(), 0xFFFB923C.toInt()),
         Theme("rose", "Rózsa", 0xFFBE185D.toInt(), 0xFFEC4899.toInt(), 0xFFEC4899.toInt(), 0xFFF472B6.toInt()),
-        Theme("sky", "Ég", 0xFF0369A1.toInt(), 0xFF0EA5E9.toInt(), 0xFF0EA5E9.toInt(), 0xFF38BDF8.toInt())
+        Theme("sky", "Ég", 0xFF0369A1.toInt(), 0xFF0EA5E9.toInt(), 0xFF0EA5E9.toInt(), 0xFF38BDF8.toInt()),
+        // Gyémánt: hideg türkiz főszín, kékes-lila fény; a meglévő felületeken is egységesen működik.
+        Theme("diamond", "Gyémánt", 0xFF087E8B.toInt(), 0xFF22D3EE.toInt(), 0xFF4F46E5.toInt(), 0xFFA78BFA.toInt()),
+        // Új visszafogott prémium paletta: platina felülethez illő, hűvös ezüst-kék hangsúly.
+        Theme("platinum", "Platina", 0xFF475569.toInt(), 0xFFCBD5E1.toInt(), 0xFF64748B.toInt(), 0xFFE2E8F0.toInt()),
+        // Silver & Gold luxuspaletta: elegáns pezsgőarany főszín és platina-ezüst ragyogás.
+        Theme("luxury", "Silver & Gold", 0xFF8A6418.toInt(), 0xFFE6C875.toInt(), 0xFF64748B.toInt(), 0xFFDDE5EF.toInt()),
+        // Kombinált Platina–Gyémánt: hűvös platina alapszín, kristályos cián fény és mély indigó kontraszt.
+        Theme("platinum_diamond", "Platina Gyémánt", 0xFF526579.toInt(), 0xFFB9E7F2.toInt(), 0xFF0891B2.toInt(), 0xFF818CF8.toInt())
     )
 
-    fun id(ctx: Context): String = try { Prefs(ctx).raw().getString("accent", "indigo") ?: "indigo" } catch (_: Exception) { "indigo" }
+    fun id(ctx: Context): String = try { Prefs(ctx).raw().getString("accent", "luxury") ?: "luxury" } catch (_: Exception) { "luxury" }
     fun set(ctx: Context, id: String) { Prefs(ctx).raw().edit().putString("accent", id).apply() }
     fun current(ctx: Context): Theme = ALL.firstOrNull { it.id == id(ctx) } ?: ALL[0]
 

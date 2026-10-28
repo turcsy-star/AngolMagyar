@@ -34,8 +34,8 @@ object OnlineSettingsDialog {
         }
 
         col.addView(Ui.small(ctx,
-            "A felismert angol szöveg ezen a szolgáltatáson keresztül megy a fordításhoz. Az Anthropic vagy " +
-                "OpenAI-kompatibilis végpont (akár a saját hálózatodon futó helyi szerver) is megadható."))
+            "Ajánlott: DeepL – csak egy kulcs kell hozzá. Ingyenes kulcs (500 000 karakter/hó, kb. 25–40 film): " +
+                "deepl.com/pro-api → „DeepL API Free” – a kulcs végén :fx áll. Másold be ide, kapcsold be a tudomásulvételt, kész."))
 
         col.addView(label("Szolgáltató"))
         val provSpin = Spinner(ctx)
@@ -52,13 +52,21 @@ object OnlineSettingsDialog {
         val key = field("sk-…", OnlinePrefs.apiKey(ctx), true)
         col.addView(key)
 
-        col.addView(label("Modell (DeepL-nél nem kell)"))
+        // csak Claude / OpenAI esetén látszik; DeepL-nél nincs mit beállítani
+        val advBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        advBox.addView(label("Modell"))
         val model = field("üresen: ${OnlineTranslator.DEFAULT_ANTHROPIC_MODEL}", OnlinePrefs.model(ctx))
-        col.addView(model)
-
-        col.addView(label("Végpont (OpenAI-kompatibilisnél, DeepL-nél opcionális; üresen: ${OnlineTranslator.DEFAULT_OPENAI_BASE})"))
+        advBox.addView(model)
+        advBox.addView(label("Végpont (OpenAI-kompatibilisnél; üresen: ${OnlineTranslator.DEFAULT_OPENAI_BASE})"))
         val base = field("http://192.168.1.10:11434/v1", OnlinePrefs.baseUrl(ctx))
-        col.addView(base)
+        advBox.addView(base)
+        col.addView(advBox)
+        fun syncAdv() { advBox.visibility = if (provSpin.selectedItemPosition == 2) View.GONE else View.VISIBLE }
+        syncAdv()
+        provSpin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = syncAdv()
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
 
         col.addView(label("Háttér a fordítónak (téma, nevek – nem kötelező)"))
         val hint = field("pl. családi dráma, a szereplők: Nina, Jake", OnlinePrefs.hint(ctx))
@@ -84,6 +92,8 @@ object OnlineSettingsDialog {
             OnlinePrefs.setBaseUrl(ctx, base.text.toString())
             OnlinePrefs.setHint(ctx, hint.text.toString())
             OnlinePrefs.setConsent(ctx, consent.isChecked)
+            // ha használható a beállítás, az online fordítás magától bekapcsol (offline tartalékkal)
+            if (OnlinePrefs.usable(ctx) && OnlinePrefs.mode(ctx) == OnlinePrefs.OFF) OnlinePrefs.setMode(ctx, OnlinePrefs.AUTO)
         }
 
         col.addView(Ui.smallButton(ctx, "Kapcsolat kipróbálása") {

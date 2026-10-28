@@ -46,7 +46,8 @@ object WhisperPrompt {
         lang: String = "hu",
         castNames: List<String> = emptyList(),
         prevTail: String = "",
-        domain: String = "general"
+        domain: String = "general",
+        terms: List<String> = emptyList()
     ): String {
         val hu = lang.equals("hu", ignoreCase = true)
         val d = Domain.values().firstOrNull { it.name.equals(domain, ignoreCase = true) } ?: Domain.GENERAL
@@ -65,6 +66,23 @@ object WhisperPrompt {
 
         var result = head.toString().trim()
         if (result.length > MAX_PROMPT_CHARS) result = result.take(MAX_PROMPT_CHARS).trimEnd()
+
+        // Egyéni szótár: csak a javított/kanonikus alakok kerülnek a promptba, a hibás alakok nem.
+        val knownTerms = terms.map { it.trim() }
+            .filter { it.length in 2..48 && it.any(Char::isLetter) }
+            .distinctBy { it.lowercase() }
+            .filterNot { term -> names.any { it.equals(term, ignoreCase = true) } }
+            .take(8)
+        if (knownTerms.isNotEmpty()) {
+            val label = if (hu) " Kifejezések: " else " Terms: "
+            val room = MAX_PROMPT_CHARS - result.length - label.length
+            if (room >= 8) {
+                val selected = knownTerms.joinToString(", ")
+                val suffix = if (selected.length <= room) selected else
+                    selected.take(room).substringBeforeLast(' ', selected.take(room)).trimEnd(',', ' ')
+                if (suffix.isNotBlank()) result += label + suffix
+            }
+        }
 
         val tail = usableTail(prevTail)
         if (tail != null) {

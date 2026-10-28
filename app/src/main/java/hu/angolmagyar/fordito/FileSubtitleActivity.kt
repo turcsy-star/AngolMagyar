@@ -132,6 +132,50 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var langLine: TextView
     private lateinit var barTotal: BarRow
     private lateinit var posText: TextView
+    private var glossEn: android.widget.EditText? = null
+    private var glossHu: android.widget.EditText? = null
+    private var glossAuto: android.widget.EditText? = null
+
+    private val exportGlossary = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) try {
+            glossEn?.let { prefs.enFixes = it.text.toString() }
+            glossHu?.let { prefs.huFixes = it.text.toString() }
+            val o = org.json.JSONObject()
+                .put("enFixes", prefs.enFixes).put("huFixes", prefs.huFixes).put("vocab", prefs.customVocab)
+                .put("cast", Projects.get(this, "cast")).put("speakerNames", prefs.speakerNames)
+            contentResolver.openOutputStream(uri)?.use { it.write(o.toString(2).toByteArray(Charsets.UTF_8)) }
+            Toast.makeText(this, "Szótár exportálva.", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Az exportálás nem sikerült: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val importGlossary = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) try {
+            val txt = contentResolver.openInputStream(uri)?.use { String(it.readBytes(), Charsets.UTF_8) } ?: return@registerForActivityResult
+            val o = org.json.JSONObject(txt)
+            fun merge(old: String, add: String): String {
+                val have = old.lines().map { it.trim().lowercase() }.toSet()
+                val extra = add.lines().map { it.trim() }.filter { it.isNotEmpty() && it.lowercase() !in have }
+                return if (extra.isEmpty()) old else (old.trimEnd() + "\n" + extra.joinToString("\n")).trim()
+            }
+            prefs.enFixes = merge(glossEn?.text?.toString() ?: prefs.enFixes, o.optString("enFixes"))
+            prefs.huFixes = merge(glossHu?.text?.toString() ?: prefs.huFixes, o.optString("huFixes"))
+            prefs.customVocab = merge(prefs.customVocab, o.optString("vocab"))
+            Projects.set(this, "cast", merge(Projects.get(this, "cast"), o.optString("cast")))
+            prefs.speakerNames = merge(prefs.speakerNames, o.optString("speakerNames"))
+            glossEn?.setText(prefs.enFixes)
+            glossHu?.setText(prefs.huFixes)
+            Toast.makeText(this, "Szótár importálva (összefésülve a meglévővel).", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Az importálás nem sikerült: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    private lateinit var engineLine: TextView
     private lateinit var pipeline: PipelineView
     private lateinit var wave: WaveView
     private lateinit var checkView: CheckView
@@ -258,8 +302,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 for (uri in uris) {
                     try {
                         contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    } catch (_: Exception) {
-                    }
+                    } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
                     val name = OutputWriter.displayName(this, uri) ?: uri.lastPathSegment ?: "fájl"
                     items.add(SrtJob.QItem(uri, name))
                 }
@@ -294,8 +337,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             contentResolver.takePersistableUriPermission(
                 uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             )
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
     }
 
     private val pickDefaultTree =
@@ -555,6 +597,23 @@ class FileSubtitleActivity : AppCompatActivity() {
         col.addView(Ui.body(this, "Magyar szöveg javításai"))
         val hu = field("pl. mostoha testvér=mostohatestvér", prefs.huFixes)
         col.addView(hu)
+        glossEn = en
+        glossHu = hu
+        col.addView(SwitchCompat(this).apply {
+            text = "A szótár magától fejlődik (a háromszor ugyanúgy javított szó szabály lesz)"
+            minHeight = dp(52)
+            isChecked = VocabLearner.auto(prefs)
+            setOnCheckedChangeListener { _, c -> VocabLearner.setAuto(prefs, c) }
+        })
+        col.addView(Ui.body(this, "Automatikus szabályok (magától tanulta; szerkeszthető, törölhető)"))
+        val autoF = field("üres – a program tölti", VocabLearner.autoRules(prefs))
+        col.addView(autoF)
+        glossAuto = autoF
+        val learned = VocabLearner.autoLog(prefs)
+        if (learned.isNotEmpty()) col.addView(Ui.small(this, "Automatikusan tanult: " + learned.takeLast(6).joinToString("; ") +
+            "\n(Törléshez töröld a sort a fenti listából.)"))
+        col.addView(Ui.smallButton(this, "Szótár exportálása (fájlba)") { exportGlossary.launch("szotar.json") })
+        col.addView(Ui.smallButton(this, "Szótár importálása (fájlból)") { importGlossary.launch(arrayOf("*/*")) })
         val sv = android.widget.ScrollView(this).apply { addView(col) }
         androidx.appcompat.app.AlertDialog.Builder(this)
             .setTitle("Szótár")
@@ -562,6 +621,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             .setPositiveButton("Mentés") { _, _ ->
                 prefs.enFixes = en.text.toString()
                 prefs.huFixes = hu.text.toString()
+                glossAuto?.let { VocabLearner.setAutoRules(prefs, it.text.toString()) }
             }
             .setNegativeButton("Mégse", null)
             .show()
@@ -570,8 +630,8 @@ class FileSubtitleActivity : AppCompatActivity() {
     private fun dp(v: Int) = Ui.dp(this, v)
 
     override fun onDestroy() {
-        try { flow.stop() } catch (_: Exception) {}
-        try { seekPlayer?.release() } catch (_: Exception) {}
+        try { flow.stop() } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
+        try { seekPlayer?.release() } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
         // Ideiglenes tárgyalás mód: kilépéskor visszaállítjuk az eredeti beállításokat.
         if (isFinishing && ::prefs.isInitialized && prefs.meetingMode && prefs.meetingTemporary) {
             MeetingMode.clear(prefs)
@@ -581,8 +641,49 @@ class FileSubtitleActivity : AppCompatActivity() {
 
     // ------------------------------------------------------------------ felépítés
 
+    /** Félbehagyott (pl. az app leállása miatt megszakadt) feldolgozás folytatásának felajánlása. */
+    /** Éjszakai sor indítása, ha van eltett fájl. Igaz, ha megjelent a kérdés. */
+    private fun offerNight(): Boolean {
+        val items = NightMode.pending(this)
+        if (items.isEmpty() || SrtJob.batchRunning) return false
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("🌙 Éjszakai feldolgozás")
+            .setMessage("${items.size} fájl vár. Indítsam a jelenlegi beállításokkal?")
+            .setPositiveButton("Indítás") { _, _ ->
+                SrtJob.addItems(items.map { SrtJob.QItem(it.first, it.second) })
+                NightMode.clear(this)
+                startProcess()
+            }
+            .setNegativeButton("Később", null)
+            .setNeutralButton("Elvetés") { _, _ -> NightMode.clear(this) }
+            .show()
+        return true
+    }
+
+    private fun offerResume() {
+        try {
+            if (offerNight()) return
+            if (SrtJob.batchRunning || SrtJob.queue.isNotEmpty()) return
+            val raw = prefs.raw().getString("pendingJob", null) ?: return
+            val o = org.json.JSONObject(raw)
+            val uri = android.net.Uri.parse(o.getString("uri"))
+            val name = o.optString("name")
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Félbehagyott feldolgozás")
+                .setMessage("„$name” feldolgozása megszakadt (pl. az app leállt). A már kész darabok megvannak, onnan folytathatom.")
+                .setPositiveButton("Folytatás") { _, _ ->
+                    prefs.raw().edit().remove("pendingJob").apply()
+                    SrtJob.addItems(listOf(SrtJob.QItem(uri, name)))
+                    startProcess()
+                }
+                .setNegativeButton("Elvetés") { _, _ -> prefs.raw().edit().remove("pendingJob").apply() }
+                .show()
+        } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        main.post { offerResume() }
         prefs = Prefs(this)
         val meeting = intent.getBooleanExtra(EXTRA_MEETING, false) || prefs.meetingMode
         if (meeting) {
@@ -636,6 +737,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)
+        main.post { offerResume() }
     }
 
     /** Más appból (Galéria, Fájlok…) a Megosztás menüvel érkező videók / hangok a sorba kerülnek. */
@@ -826,13 +928,21 @@ class FileSubtitleActivity : AppCompatActivity() {
         refreshWhere()
 
         g.addView(makeTranslateModeCard())
-        g.addView(makeProjectCard())
-        g.addView(makeProfileCard())
+        val projCard = makeProjectCard()
+        val profCard = makeProfileCard()
 
         // Teljesítmény (a futás közben is ugyanez marad az egyetlen beállítás) – a haladó részben
         Perf.load(this)
         val adv = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        adv.addView(projCard)
+        adv.addView(profCard)
         adv.addView(makePerfCard())
+        adv.addView(SwitchCompat(this).apply {
+            text = "Hangminőség-előszűrés (zúgás szűrése, halk felvétel felhangosítása)"
+            minHeight = dp(52)
+            isChecked = prefs.raw().getBoolean("audioPrep", true)
+            setOnCheckedChangeListener { _, c -> prefs.raw().edit().putBoolean("audioPrep", c).apply() }
+        })
         adv.addView(SwitchCompat(this).apply {
             text = "Megosztásból érkező fájl azonnal induljon (az utolsó beállításokkal)"
             minHeight = dp(52)
@@ -864,10 +974,16 @@ class FileSubtitleActivity : AppCompatActivity() {
             })
         }
         adv.addView(makeBgHint())
-        g.addView(collapsible("Haladó beállítások (teljesítmény, háttérfutás)", adv))
+        g.addView(collapsible("Haladó beállítások (projekt, profil, teljesítmény, háttérfutás)", adv))
 
         startBtn = Ui.button(this, "SRT készítése", true) { startProcess() }
         g.addView(startBtn)
+        g.addView(Ui.button(this, "🌙 Éjszakára ütemezés (töltőn, Wi-Fin)", false) {
+            val n = NightMode.schedule(this, SrtJob.queue.filter { it.state == SrtJob.Q_WAIT })
+            Toast.makeText(this,
+                if (n > 0) "$n fájl ütemezve: töltőre téve értesítést kapsz, koppintással indul."
+                else "Nincs várakozó fájl (vagy az ütemezés nem sikerült).", Toast.LENGTH_LONG).show()
+        })
     }
 
     private fun buildRun() {
@@ -897,6 +1013,10 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(posText, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(8) })
+        engineLine = Ui.small(this, "").apply { gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE }
+        head.addView(engineLine, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(6) })
         // összhaladás: egyetlen csík
         barTotal = BarRow(this)
         barTotal.color(Ui.color(this, R.color.primary))
@@ -1126,7 +1246,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             mp.setOnPreparedListener { m ->
                 m.seekTo(ms.toInt())
                 m.start()
-                main.postDelayed({ try { if (m.isPlaying) m.pause() } catch (_: Exception) {} }, 6000)
+                main.postDelayed({ try { if (m.isPlaying) m.pause() } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) } }, 6000)
             }
             mp.setOnErrorListener { _, _, _ -> true }
             mp.prepareAsync()
@@ -1320,26 +1440,28 @@ class FileSubtitleActivity : AppCompatActivity() {
         val mode = OutputPrefs.saveMode(this)
         val beside = mode == OutputPrefs.SAVE_BESIDE
         val allFiles = OutputWriter.hasAllFiles()
+        val canAllFiles = OutputWriter.allFilesDeclared(this)
         val tree = OutputPrefs.defaultTree(this)
 
         saveBox.addView(optionRow(
             "A videó mellé (alapértelmezett)",
             "A program megnézi, honnan töltötted be a videót, és oda menti a feliratot." +
                 if (allFiles) "\n✓ teljes fájlhozzáférés megvan"
-                else "\n✗ ehhez teljes fájlhozzáférés kell – nélküle az alapértelmezett mappába ment",
+                else if (canAllFiles) "\n✗ ehhez teljes fájlhozzáférés kell – nélküle az alapértelmezett mappába ment"
+                else "\nA videó mappájához mentéskor egyszer engedélyt kérek (mappa-hozzáférés); nélküle az alapértelmezett mappába ment",
             beside
         ) {
             OutputPrefs.setSaveMode(this, OutputPrefs.SAVE_BESIDE)
             refreshWhere()
         })
-        if (beside && !allFiles && android.os.Build.VERSION.SDK_INT >= 30) {
+        if (beside && !allFiles && canAllFiles && android.os.Build.VERSION.SDK_INT >= 30) {
             saveBox.addView(Ui.button(this, "Teljes fájlhozzáférés megadása", false) {
                 try {
                     startActivity(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
                         Uri.parse("package:$packageName")))
                 } catch (_: Exception) {
                     try { startActivity(Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
-                    catch (_: Exception) {}
+                    catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
                 }
             })
         }
@@ -1580,6 +1702,10 @@ class FileSubtitleActivity : AppCompatActivity() {
             wave.setProgress(job.chunkState.copyOf(), job.chunkFracCopy())
         }
         posText.text = positionLabel(job)
+        engineLine.text = SrtJob.engineText().let { t ->
+            if (SrtJob.names.isNotEmpty()) t + (if (t.isNotEmpty()) "\n" else "") + "Nevek: " + SrtJob.names.joinToString(", ") else t
+        }
+        engineLine.visibility = if (engineLine.text.isNotEmpty()) View.VISIBLE else View.GONE
         pipeline.set(IntArray(SrtJob.WEIGHTS.size) { job.steps[it].state }, job.steps.getOrNull(job.curStep)?.pct ?: 0)
         tileElapsed.text = fmtDur(elapsedAll)
         tileRem.text = if (totRem >= 0) "kb. ${fmtDur(totRem)}" else "számítás…"
@@ -1791,8 +1917,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 }
             }
             if (tips.isNotEmpty()) resultText.append("\n\n💡 " + tips.distinct().take(3).joinToString("\n💡 "))
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
 
         // automatikus bezárás: minden kész fájl el van mentve
         if (watchedRun && !closeScheduled && OutputPrefs.autoClose(this) &&
@@ -1860,7 +1985,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             prefs.raw().edit().putInt("lastOut", mode.ordinal.let { if (it == 0) 0 else if (it == 1) 1 else 2 })
                 .putString("lastSrc", selectedSrc())
                 .putBoolean("lastTr", needTranslate).apply()
-        } catch (_: Exception) {}
+        } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
         val tgtLang = if (needTranslate && mode != SrtExporter.Mode.SOURCE_ONLY) dir.substringAfter("_", selectedSrc()) else selectedSrc()
         SrtJobService.start(this, mode, selectedSrc(), dir, needTranslate, useDiarization, kind, tgtLang)
         main.removeCallbacks(tick)

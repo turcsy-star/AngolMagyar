@@ -17,7 +17,11 @@ object SrtExporter {
         val target: String,
         val speaker: String = "", // pl. S1, S2 vagy "Anna"
         /** A felismerés átlagos naplóvalószínűsége (Whisper); 1 = ismeretlen, kb. -1 alatt bizonytalan. */
-        val lp: Float = 1f
+        val lp: Float = 1f,
+        /** Szó-szintű Whisper tokenbizonytalanság; hiányozhat nem-Whisper motoroknál. */
+        val wordConfidence: List<Float> = emptyList(),
+        /** Whisper no-speech becslése; magas érték csak ellenőrzést indokol, törlést nem. */
+        val noSpeechProb: Float = 0f
     )
 
     enum class Mode {

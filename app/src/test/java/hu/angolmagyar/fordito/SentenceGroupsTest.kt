@@ -14,6 +14,18 @@ class SentenceGroupsTest {
         assertEquals(listOf(0..1, 2..2), g)
     }
 
+    @Test fun falseWhisperStopsAreBridged() {
+        assertTrue(SentenceGroups.falseStop("Oh, so what are you."))
+        assertTrue(SentenceGroups.falseStop("do you have to be like that, you know? I."))
+        assertTrue(SentenceGroups.falseStop("Top of everything else and the."))
+        assertTrue(!SentenceGroups.falseStop("I love taking care of you."))
+        assertTrue(!SentenceGroups.falseStop("Okay."))
+        val g = SentenceGroups.group(listOf(
+            item(0, 5000, "Oh, so what are you."), item(5100, 8000, "Doing later? Do you need help?"), item(9000, 10000, "Okay.")
+        ))
+        assertEquals(listOf(0..1, 2..2), g)
+    }
+
     @Test fun groupsBreakOnLongGap() {
         val g = SentenceGroups.group(listOf(item(0, 1000, "one two"), item(9000, 10000, "three four")))
         assertEquals(2, g.size)

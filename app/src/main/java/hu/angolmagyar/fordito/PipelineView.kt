@@ -22,6 +22,8 @@ class PipelineView @JvmOverloads constructor(
     private val labels = arrayOf("Előkészítés", "Hang", "Betöltés", "Felismerés + fordítás", "Mentés")
     private var states = IntArray(labels.size)
     private var pct = 0
+    private var dispPct = 0f
+    private var spin = 0f
     private var phase = 0f
     private val doneAt = LongArray(5)
     private var initialized = false
@@ -32,10 +34,17 @@ class PipelineView @JvmOverloads constructor(
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; textSize = 10.5f * d }
 
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 1600
+        duration = 3200
         repeatCount = ValueAnimator.INFINITE
         interpolator = LinearInterpolator()
-        addUpdateListener { phase = it.animatedFraction; if (hasActive() || popping()) invalidate() }
+        addUpdateListener {
+            phase = it.animatedFraction
+            // a haladás-kitöltés finoman követi a célértéket (nincs ugrálás)
+            dispPct += (pct - dispPct) * 0.06f
+            if (kotlin.math.abs(pct - dispPct) < 0.05f) dispPct = pct.toFloat()
+            spin = (spin + 0.045f) % (2f * Math.PI.toFloat())
+            if (hasActive() || popping()) invalidate()
+        }
     }
 
     private fun hasActive() = states.any { it == SrtJob.ACTIVE }
@@ -51,6 +60,7 @@ class PipelineView @JvmOverloads constructor(
             states[i] = newStates[i]; changed = true
         }
         initialized = true
+        if (activePct < pct - 2) dispPct = activePct.toFloat() // új lépés: nem csúszik vissza
         pct = activePct
         if (changed) invalidate()
     }
@@ -73,7 +83,7 @@ class PipelineView @JvmOverloads constructor(
                 c.drawCircle(cx + (k - 1) * 9f * d, baseY - 6f * d, rr, p)
             }
             1 -> for (k in 0 until 5) { // hang: pergő oszlopok
-                val h = (5f + 11f * (0.5f + 0.5f * sin(phase * 2f * Math.PI.toFloat() * 2f + k * 1.3f))) * d
+                val h = (5f + 11f * (0.5f + 0.5f * sin(phase * 2f * Math.PI.toFloat() * 3f + k * 1.3f))) * d
                 c.drawRoundRect(cx + (k - 2) * 7f * d - 1.6f * d, baseY - h, cx + (k - 2) * 7f * d + 1.6f * d, baseY, 2f * d, 2f * d, p)
             }
             2 -> for (k in 0 until 5) { // betöltés: sorban megtelő négyzetek
@@ -128,15 +138,22 @@ class PipelineView @JvmOverloads constructor(
                 c.drawLine(x0, cy, x1, cy, p)
             } else if (states[i] == SrtJob.ACTIVE) {
                 // az aktív lépés felé áramló pontok: haladás szerinti kitöltés + mozgó fények
-                val fill = x0 + (x1 - x0) * (pct.coerceIn(0, 100) / 100f)
-                p.color = primary
+                val fill = x0 + (x1 - x0) * (dispPct.coerceIn(0f, 100f) / 100f)
+                p.color = (primary and 0x00FFFFFF) or (0x99 shl 24)
                 c.drawLine(x0, cy, fill, cy, p)
                 p.style = Paint.Style.FILL
-                for (k in 0 until 3) {
-                    val f = (phase + k / 3f) % 1f
-                    val x = x0 + (x1 - x0) * f
-                    p.color = (primary and 0x00FFFFFF) or (((1f - kotlin.math.abs(f - 0.5f) * 2f) * 200).toInt() shl 24)
-                    c.drawCircle(x, cy, 3.2f * d, p)
+                // két üstökös: lassan gyorsuló-lassuló fej, elhalványuló farokkal
+                for (k in 0 until 2) {
+                    val f0 = (phase + k * 0.5f) % 1f
+                    for (tl in 0 until 7) {
+                        val f = (f0 - tl * 0.022f).coerceAtLeast(0f)
+                        val e = 0.5f - 0.5f * kotlin.math.cos(Math.PI.toFloat() * f)
+                        val x = x0 + (x1 - x0) * e
+                        val edge = kotlin.math.sin(Math.PI.toFloat() * f0) // a végeken eltűnik
+                        val al = (edge * (1f - tl / 7f) * 230).toInt().coerceIn(0, 255)
+                        p.color = (primary and 0x00FFFFFF) or (al shl 24)
+                        c.drawCircle(x, cy, (3.4f - tl * 0.28f) * d, p)
+                    }
                 }
                 p.style = Paint.Style.STROKE
             }
@@ -169,17 +186,36 @@ class PipelineView @JvmOverloads constructor(
                 }
                 SrtJob.ACTIVE -> {
                     mini(c, i, cx, cy - r - 10f * d, primary)
-                    // kifelé terjedő hullám
-                    val a = ((1f - phase) * 120).toInt()
-                    p.style = Paint.Style.STROKE; p.strokeWidth = 2f * d
-                    p.color = (primary and 0x00FFFFFF) or (a shl 24)
-                    c.drawCircle(cx, cy, r + 12f * d * phase, p)
+                    // lágy fény a csomópont körül (lassan "lélegzik")
+                    val br = 0.5f + 0.5f * sin(phase * 2f * Math.PI.toFloat())
+                    val gr = r * (2.0f + 0.25f * br)
+                    p.style = Paint.Style.FILL
+                    p.shader = android.graphics.RadialGradient(
+                        cx, cy, gr,
+                        intArrayOf((primary and 0x00FFFFFF) or ((70 + 30 * br).toInt() shl 24), primary and 0x00FFFFFF),
+                        floatArrayOf(0.35f, 1f), android.graphics.Shader.TileMode.CLAMP
+                    )
+                    c.drawCircle(cx, cy, gr, p)
+                    p.shader = null
+                    // két, időben eltolt, kifelé táguló és elhalványuló hullám
+                    p.style = Paint.Style.STROKE; p.strokeWidth = 1.8f * d
+                    for (k in 0 until 2) {
+                        val t = (phase + k * 0.5f) % 1f
+                        val e = 1f - (1f - t) * (1f - t)
+                        val a = ((1f - t) * (1f - t) * 130).toInt()
+                        p.color = (primary and 0x00FFFFFF) or (a shl 24)
+                        c.drawCircle(cx, cy, r + 14f * d * e, p)
+                    }
                     p.style = Paint.Style.FILL; p.color = primary
                     c.drawCircle(cx, cy, r, p)
-                    // forgó pont a körben
-                    val ang = phase * 2f * Math.PI.toFloat()
-                    p.color = 0xFFFFFFFF.toInt()
-                    c.drawCircle(cx + (r - 5f * d) * kotlin.math.cos(ang), cy + (r - 5f * d) * sin(ang), 2.4f * d, p)
+                    // finom, forgó ív a körben (elhalványuló végű)
+                    p.style = Paint.Style.STROKE; p.strokeWidth = 2.4f * d; p.strokeCap = Paint.Cap.ROUND
+                    val deg = Math.toDegrees(spin.toDouble()).toFloat()
+                    val ar = r - 4.5f * d
+                    for (s in 0 until 6) {
+                        p.color = 0x00FFFFFF or (((1f - s / 6f) * 235).toInt() shl 24)
+                        c.drawArc(cx - ar, cy - ar, cx + ar, cy + ar, deg - s * 14f, 14f, false, p)
+                    }
                 }
                 SrtJob.ERROR, SrtJob.STOPPED -> {
                     p.style = Paint.Style.FILL; p.color = Ui.color(context, R.color.warn)

@@ -52,6 +52,13 @@ class WhisperPromptTest {
         assertFalse(p!!.contains("um"))
     }
 
+
+    @Test
+    fun includesCanonicalGlossaryTerms() {
+        val p = WhisperPrompt.build(lang = "en", terms = listOf("OpenAI", "chatGPT", "very-long-invalid-term"))
+        assertTrue(p!!.contains("Terms:") || p.contains("OpenAI") || p.contains("chatGPT"))
+    }
+
     @Test
     fun respectsMaxLength() {
         val longTail = "szó ".repeat(100)

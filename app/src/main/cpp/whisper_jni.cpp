@@ -2,6 +2,7 @@
 // Egy kontextus = egy modell; egy kontextust egyszerre csak egy szál használhat.
 #include <jni.h>
 #include <atomic>
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <cstdint>
@@ -262,6 +263,45 @@ Java_hu_angolmagyar_fordito_WhisperNative_nSegAvgLogProb(JNIEnv *, jclass, jlong
         else { sum += std::log(1e-6); cnt++; }
     }
     return cnt > 0 ? (jfloat) (sum / cnt) : 1.0f;
+}
+
+JNIEXPORT jint JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nSegTokenCount(JNIEnv *, jclass, jlong handle, jint i) {
+    auto * h = reinterpret_cast<Handle *>(handle);
+    if (!h || !h->ctx || i < 0 || i >= whisper_full_n_segments(h->ctx)) return 0;
+    return whisper_full_n_tokens(h->ctx, i);
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nSegTokenText(JNIEnv * env, jclass, jlong handle, jint i, jint token) {
+    auto * h = reinterpret_cast<Handle *>(handle);
+    if (!h || !h->ctx || i < 0 || i >= whisper_full_n_segments(h->ctx) ||
+        token < 0 || token >= whisper_full_n_tokens(h->ctx, i)) return to_bytes(env, "");
+    return to_bytes(env, whisper_full_get_token_text(h->ctx, i, token));
+}
+
+JNIEXPORT jfloat JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nSegTokenProbability(JNIEnv *, jclass, jlong handle, jint i, jint token) {
+    auto * h = reinterpret_cast<Handle *>(handle);
+    if (!h || !h->ctx || i < 0 || i >= whisper_full_n_segments(h->ctx) ||
+        token < 0 || token >= whisper_full_n_tokens(h->ctx, i)) return -1.0f;
+    return whisper_full_get_token_p(h->ctx, i, token);
+}
+
+JNIEXPORT jlong JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nSegTokenT0(JNIEnv *, jclass, jlong handle, jint i, jint token) {
+    auto * h = reinterpret_cast<Handle *>(handle);
+    if (!h || !h->ctx || i < 0 || i >= whisper_full_n_segments(h->ctx) ||
+        token < 0 || token >= whisper_full_n_tokens(h->ctx, i)) return 0;
+    return whisper_full_get_token_data(h->ctx, i, token).t0;
+}
+
+JNIEXPORT jlong JNICALL
+Java_hu_angolmagyar_fordito_WhisperNative_nSegTokenT1(JNIEnv *, jclass, jlong handle, jint i, jint token) {
+    auto * h = reinterpret_cast<Handle *>(handle);
+    if (!h || !h->ctx || i < 0 || i >= whisper_full_n_segments(h->ctx) ||
+        token < 0 || token >= whisper_full_n_tokens(h->ctx, i)) return 0;
+    return whisper_full_get_token_data(h->ctx, i, token).t1;
 }
 
 JNIEXPORT jstring JNICALL

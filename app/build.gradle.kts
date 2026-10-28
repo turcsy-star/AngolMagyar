@@ -15,8 +15,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2400
-        versionName = "2.24.0"
+        versionCode = 4400
+        versionName = "2.44.0"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
@@ -41,13 +41,34 @@ android {
         }
     }
 
+    // Saját release kulcs: a projekt gyökerében lévő keystore.properties (storeFile, storePassword, keyAlias, keyPassword)
+    // vagy KEYSTORE_FILE / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD környezeti változók. Ha egyik sincs,
+    // a release a debug kulccsal íródik alá (csak saját tesztelésre).
+    val ksProps = java.util.Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    fun ksValue(prop: String, env: String): String? = ksProps.getProperty(prop) ?: System.getenv(env)
+    val relStore = ksValue("storeFile", "KEYSTORE_FILE")
+    if (relStore != null && file(relStore).exists()) {
+        signingConfigs.create("release") {
+            storeFile = file(relStore)
+            storePassword = ksValue("storePassword", "KEYSTORE_PASSWORD")
+            keyAlias = ksValue("keyAlias", "KEY_ALIAS")
+            keyPassword = ksValue("keyPassword", "KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("debugPermanent")
         }
         release {
-            isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debugPermanent")
+            // R8 (kisebb APK): ./gradlew :app:assembleRelease -Pminify  – előbb telefonon próbáld ki a Vosk/JNA/ONNX/Whisper útvonalakat!
+            isMinifyEnabled = project.hasProperty("minify")
+            isShrinkResources = project.hasProperty("minify")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debugPermanent")
         }
     }
 
@@ -69,6 +90,10 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
     }
 
     packaging {
@@ -121,4 +146,9 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")
+
+    // Compose screenshot smoke test (Robolectric + Roborazzi)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.44.1")
 }

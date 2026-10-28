@@ -303,8 +303,7 @@ class OnnxDiarizer(
                         return flattenOutput((ov as? ai.onnxruntime.OnnxValue)?.value)
                     }
                 }
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("SpeakerDiarizer", e) }
         }
         return null
     }
@@ -343,7 +342,7 @@ class OnnxDiarizer(
     }
 
     fun close() {
-        try { session?.close() } catch (_: Exception) {}
+        try { session?.close() } catch (e: Exception) { DiagLog.swallow("SpeakerDiarizer", e) }
         session = null
         env = null
     }

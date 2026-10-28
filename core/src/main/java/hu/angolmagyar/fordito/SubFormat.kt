@@ -112,9 +112,25 @@ object SubFormat {
         return out
     }
 
-    /** A teljes formázás: szétvágás + időzítés. */
+    /** Olvasási sebesség: ami 20 karakter/mp fölött van, annak a végét a következő blokk előtti szabad helyig kitoljuk. */
+    fun fixReadingSpeed(cues: List<SrtExporter.Cue>, maxCps: Double = 20.0): List<SrtExporter.Cue> {
+        val out = ArrayList<SrtExporter.Cue>(cues.size)
+        for ((i, c) in cues.withIndex()) {
+            val shown = (if (c.target.isNotBlank()) c.target else c.source).replace("\n", " ")
+            val dur = c.endMs - c.startMs
+            if (shown.isEmpty() || dur <= 0 || shown.length * 1000.0 / dur <= maxCps) { out.add(c); continue }
+            val need = (shown.length * 1000.0 / maxCps).toLong()
+            var end = minOf(c.startMs + need, c.startMs + 8000L)
+            val next = cues.getOrNull(i + 1)?.startMs
+            if (next != null && end > next - 40) end = maxOf(c.endMs, next - 40)
+            out.add(c.copy(endMs = maxOf(end, c.endMs)))
+        }
+        return out
+    }
+
+    /** A teljes formázás: szétvágás + időzítés + olvasási sebesség. */
     fun polish(cues: List<SrtExporter.Cue>): List<SrtExporter.Cue> =
-        fixTiming(reflow(cues.sortedBy { it.startMs }))
+        fixReadingSpeed(fixTiming(reflow(cues.sortedBy { it.startMs })))
 
     /** Beszélőnként más szín (SRT <font color>), a megjelenés sorrendjében. */
     fun speakerColors(cues: List<SrtExporter.Cue>): Map<String, String> {

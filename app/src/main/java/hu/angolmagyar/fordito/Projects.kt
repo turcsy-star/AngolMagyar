@@ -66,7 +66,7 @@ object Projects {
 }
 
 /** Fordítási memória tárolása (app privát fájl) + egyszerű gyorsítótár.
- * v2.21.0: dual-write a Room-alapú TranslationMemoryRepo felé is (háttérben). */
+ * v2.29.0: egyetlen forrás (fájl); a Room-kettősírás megszűnt. */
 object TranslationMemoryStore {
     private var cache: TranslationMemory? = null
     private fun file(ctx: Context) = java.io.File(ctx.filesDir, "tm.tsv")
@@ -88,39 +88,18 @@ object TranslationMemoryStore {
         if (!enabled(ctx)) return
         val tm = get(ctx)
         for (c in cues) if (c.source.isNotBlank() && c.target.isNotBlank() && c.source != c.target) tm.put(c.source, c.target)
-        try { file(ctx).writeText(tm.toText(), Charsets.UTF_8) } catch (_: Exception) {}
-
-        // v2.21 dual-write → Room (fire-and-forget)
         try {
-            val appCtx = ctx.applicationContext
-            Thread {
-                try {
-                    val repo = hu.angolmagyar.fordito.core.TranslationMemoryRepo(appCtx)
-                    kotlinx.coroutines.runBlocking {
-                        for (c in cues) {
-                            if (c.source.isNotBlank() && c.target.isNotBlank() && c.source != c.target) {
-                                repo.put(c.source, c.target)
-                            }
-                        }
-                    }
-                } catch (_: Exception) { }
-            }.start()
-        } catch (_: Exception) { }
+            val f = file(ctx); val tmp = java.io.File(f.path + ".tmp")
+            tmp.writeText(tm.toText(), Charsets.UTF_8)
+            if (!tmp.renameTo(f)) { f.writeText(tm.toText(), Charsets.UTF_8); tmp.delete() }
+        } catch (e: Exception) { DiagLog.log("TM mentés sikertelen: ${e.message}") }
+        // A fájl az egyetlen igazságforrás. A korábbi Room-kettősírás (szálanként runBlocking) megszűnt:
+        // olvasója nem volt, csak párhuzamos szálakat és lemezírást okozott.
     }
 
     @Synchronized
     fun clear(ctx: Context) {
         cache = TranslationMemory()
-        try { file(ctx).delete() } catch (_: Exception) {}
-        try {
-            val appCtx = ctx.applicationContext
-            Thread {
-                try {
-                    kotlinx.coroutines.runBlocking {
-                        hu.angolmagyar.fordito.core.db.AppDatabase.get(appCtx).translationDao().clear()
-                    }
-                } catch (_: Exception) { }
-            }.start()
-        } catch (_: Exception) { }
+        try { file(ctx).delete() } catch (e: Exception) { DiagLog.log("TM törlés sikertelen: ${e.message}") }
     }
 }

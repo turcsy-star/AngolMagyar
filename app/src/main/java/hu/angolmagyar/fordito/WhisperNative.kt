@@ -9,7 +9,35 @@ class WhisperNative private constructor(private var handle: Long) {
         fun onSegment(t0: Long, t1: Long, text: ByteArray)
     }
 
-    class Seg(val startMs: Long, val endMs: Long, val text: String, val noSpeech: Float, val avgLogProb: Float = 1f)
+    data class TokenScore(
+        val text: String,
+        val probability: Float,
+        val startMs: Long,
+        val endMs: Long
+    ) {
+        /** Jelzésre szolgáló érték, nem a szó helyességének bizonyítéka. */
+        val needsReview: Boolean get() = !probability.isFinite() || probability < 0.35f
+    }
+
+    class Seg(val startMs: Long, val endMs: Long, val text: String, val noSpeech: Float,
+              val avgLogProb: Float = 1f, val tokens: List<TokenScore> = emptyList()) {
+        /** Szavankénti, óvatos minimum-token pontszám; az SRT-sorok kiemeléséhez használjuk. */
+        val wordConfidence: List<Float> by lazy {
+            val out = ArrayList<Float>()
+            var current: Float? = null
+            for (token in tokens) {
+                if (token.text.firstOrNull()?.isWhitespace() == true && current != null) {
+                    out.add(current!!); current = null
+                }
+                if (token.text.isNotEmpty() && !token.text.trim().startsWith("<|")) {
+                    val p = token.probability.coerceIn(0f, 1f)
+                    current = if (current == null) p else minOf(current!!, p)
+                }
+            }
+            if (current != null) out.add(current!!)
+            if (out.size == text.trim().split(Regex("\\s+")).size) out else emptyList()
+        }
+    }
 
     /** 0 = rendben. */
     fun transcribe(pcm: FloatArray, lang: String, threads: Int, beam: Int,
@@ -28,7 +56,17 @@ class WhisperNative private constructor(private var handle: Long) {
             val t = String(nSegText(h, i), Charsets.UTF_8).trim()
             if (t.isEmpty()) continue
             val lp = try { nSegAvgLogProb(h, i) } catch (_: Throwable) { 1f }
-            out.add(Seg(nSegT0(h, i) * 10, nSegT1(h, i) * 10, t, nSegNoSpeech(h, i), lp))
+            val tokens = try {
+                val count = nSegTokenCount(h, i).coerceAtMost(4096)
+                (0 until count).mapNotNull { ti ->
+                    val tokenText = String(nSegTokenText(h, i, ti), Charsets.UTF_8)
+                    val probability = nSegTokenProbability(h, i, ti)
+                    val t0 = nSegTokenT0(h, i, ti).coerceAtLeast(0) * 10
+                    val t1 = nSegTokenT1(h, i, ti).coerceAtLeast(nSegTokenT0(h, i, ti)) * 10
+                    if (tokenText.isEmpty()) null else TokenScore(tokenText, probability, t0, t1)
+                }
+            } catch (_: Throwable) { emptyList() }
+            out.add(Seg(nSegT0(h, i) * 10, nSegT1(h, i) * 10, t, nSegNoSpeech(h, i), lp, tokens))
         }
         return out
     }
@@ -97,6 +135,11 @@ class WhisperNative private constructor(private var handle: Long) {
         @JvmStatic private external fun nSegText(h: Long, i: Int): ByteArray
         @JvmStatic private external fun nSegNoSpeech(h: Long, i: Int): Float
         @JvmStatic private external fun nSegAvgLogProb(h: Long, i: Int): Float
+        @JvmStatic private external fun nSegTokenCount(h: Long, i: Int): Int
+        @JvmStatic private external fun nSegTokenText(h: Long, i: Int, token: Int): ByteArray
+        @JvmStatic private external fun nSegTokenProbability(h: Long, i: Int, token: Int): Float
+        @JvmStatic private external fun nSegTokenT0(h: Long, i: Int, token: Int): Long
+        @JvmStatic private external fun nSegTokenT1(h: Long, i: Int, token: Int): Long
         @JvmStatic private external fun nSystemInfo(): String
     }
 }

@@ -81,7 +81,7 @@ class ModelDownloadService : Service() {
             val pa = paused
             val f = done
             for (l in listeners) {
-                try { l(p, m, pa, f) } catch (_: Exception) {}
+                try { l(p, m, pa, f) } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
             }
         }
     }
@@ -163,7 +163,7 @@ class ModelDownloadService : Service() {
         worker = Thread {
             try {
                 wakeLock?.acquire(6 * 60 * 60 * 1000L) // max 6 óra
-            } catch (_: Exception) {}
+            } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
             val failed = ArrayList<String>()
             val prefs = Prefs(this)
             while (queue.isNotEmpty() && !cancelFlag.get()) {
@@ -213,7 +213,7 @@ class ModelDownloadService : Service() {
                     paused = true
                     post(-1, "${shortName(id)} · szüneteltetve", true)
                     updateNotif("Szüneteltetve – koppints a folytatáshoz", true)
-                    try { wakeLock?.release() } catch (_: Exception) {}
+                    try { wakeLock?.release() } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
                     return@Thread
                 } catch (e: Exception) {
                     if (cancelFlag.get()) break
@@ -222,7 +222,7 @@ class ModelDownloadService : Service() {
                     queue = queue.drop(1)
                 }
             }
-            try { wakeLock?.release() } catch (_: Exception) {}
+            try { wakeLock?.release() } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
             running = false
             done = true
             if (cancelFlag.get()) {
@@ -271,8 +271,7 @@ class ModelDownloadService : Service() {
                 .setOnlyAlertOnce(true)
                 .build()
             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
     }
 
     private fun post(p: Int, msg: String, isPaused: Boolean) {
@@ -414,14 +413,14 @@ class ModelDownloadService : Service() {
         try {
             if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_DETACH)
             else @Suppress("DEPRECATION") stopForeground(false)
-        } catch (_: Exception) {}
+        } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
         stopSelf()
     }
 
     override fun onDestroy() {
         // Ne állítsuk le a letöltést Activity onDestroy miatt – a service önálló.
         // Csak ha a rendszer öli meg a service-t, a Range folytatás a partial fájlból megy.
-        try { wakeLock?.release() } catch (_: Exception) {}
+        try { wakeLock?.release() } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
         super.onDestroy()
     }
 }

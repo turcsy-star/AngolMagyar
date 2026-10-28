@@ -1,9 +1,14 @@
 package hu.angolmagyar.fordito.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,6 +31,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +53,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.WifiOff
@@ -64,6 +72,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -85,6 +94,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import hu.angolmagyar.fordito.Accent
 import hu.angolmagyar.fordito.App
@@ -93,18 +106,28 @@ import hu.angolmagyar.fordito.DiagnosticsActivity
 import hu.angolmagyar.fordito.FileSubtitleActivity
 import hu.angolmagyar.fordito.ModelDownloadService
 import hu.angolmagyar.fordito.ModelManager
+import hu.angolmagyar.fordito.OnlinePrefs
+import hu.angolmagyar.fordito.OnlineSettingsDialog
 import hu.angolmagyar.fordito.ModelsActivity
 import hu.angolmagyar.fordito.Prefs
+import hu.angolmagyar.fordito.PhrasebookActivity
+import hu.angolmagyar.fordito.PhrasebookStore
+import hu.angolmagyar.fordito.TranslationStyle
 import hu.angolmagyar.fordito.SettingsActivity
 import hu.angolmagyar.fordito.SetupWizardActivity
 import hu.angolmagyar.fordito.SrtJob
 import hu.angolmagyar.fordito.TranscriptActivity
 import hu.angolmagyar.fordito.TranslateService
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
+import hu.angolmagyar.fordito.ui.design.ProvidePremiumDesignSystem
+import hu.angolmagyar.fordito.ui.design.StatusPill
+import hu.angolmagyar.fordito.ui.design.PremiumCard
+import hu.angolmagyar.fordito.ui.design.PremiumSectionTitle
+import hu.angolmagyar.fordito.ui.design.PremiumTranslationCard
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
-import hu.angolmagyar.fordito.MainActivity as LiveActivity
+import hu.angolmagyar.fordito.LiveTranslateActivity as LiveActivity
 
 /**
  * v2.22.3 – Material 3 kezdőlap: egy érintéssel felirat-készítés, élő fordítás, átiratok.
@@ -123,11 +146,22 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
      */
     private fun autoDownloadModels() {
         try {
-            if (prefs.raw().getBoolean("autoDlDone", false)) return
-            if (ModelManager.installedSpecs(this).any { it == ModelManager.WH_LARGE || it == ModelManager.WH_TURBO }) {
+            // egyszeri áttérés: a pontos profil és a large-v3 az alapértelmezett
+            if (!prefs.raw().getBoolean("preciseDefault", false)) {
+                prefs.raw().edit().putBoolean("preciseDefault", true).apply()
+                Presets.apply(this, "precise")
+            }
+            if (ModelManager.installedSpecs(this).any { it == ModelManager.WH_LARGE }) {
+                AsrPrefs.setWhisperId(this, ModelManager.WH_LARGE.id)
                 prefs.raw().edit().putBoolean("autoDlDone", true).apply()
                 return
             }
+            if (prefs.raw().getBoolean("autoDlDone", false) && !ModelDownloadService.running &&
+                !prefs.raw().getBoolean("largeAsked", false)) {
+                // régi telepítés (turbo/kisebb modell): a large-v3-at is letöltjük egyszer
+                prefs.raw().edit().putBoolean("autoDlDone", false).putBoolean("largeAsked", true).apply()
+            }
+            if (prefs.raw().getBoolean("autoDlDone", false)) return
             val cm = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
             val caps = cm.getNetworkCapabilities(cm.activeNetwork)
             val unmetered = caps != null &&
@@ -151,6 +185,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
 
         setContent {
             AngolMagyarTheme(isTrueBlack = prefs.oledBlack) {
+                ProvidePremiumDesignSystem {
                 HomeScreen(
                     onSubtitles = {
                         startActivity(Intent(this, FileSubtitleActivity::class.java)
@@ -163,6 +198,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
                             .putExtra(LiveActivity.EXTRA_AUTO_START, TranslateService.MODE_MIC))
                     },
                     onTranscripts = { startActivity(Intent(this, TranscriptActivity::class.java)) },
+                    onPhrasebook = { startActivity(Intent(this, PhrasebookActivity::class.java)) },
                     onModels = { startActivity(Intent(this, ModelsActivity::class.java)) },
                     onSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
                     onDiagnostics = { startActivity(Intent(this, DiagnosticsActivity::class.java)) },
@@ -183,6 +219,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
                         })
                     }
                 )
+                }
             }
         }
     }
@@ -214,6 +251,7 @@ fun HomeScreen(
     onLive: () -> Unit,
     onMic: () -> Unit,
     onTranscripts: () -> Unit,
+    onPhrasebook: () -> Unit,
     onModels: () -> Unit,
     onSettings: () -> Unit,
     onDiagnostics: () -> Unit,
@@ -250,11 +288,14 @@ fun HomeScreen(
                 val varied = (lvl * 0.82f + 0.12f + 0.08f * sin(System.currentTimeMillis() / 220.0).toFloat())
                     .coerceIn(0.08f, 1f)
                 if (amplitudes.isNotEmpty()) { amplitudes.removeAt(0); amplitudes.add(varied) }
+                delay(70)
             } else {
                 elapsed = ""
+                // Idle mode should not poll the audio level at recording cadence.
+                // Decay once, then sleep longer to reduce needless recompositions and battery use.
                 for (i in amplitudes.indices) amplitudes[i] = (amplitudes[i] * 0.82f).coerceAtLeast(0.08f)
+                delay(300)
             }
-            delay(70)
         }
     }
 
@@ -273,6 +314,7 @@ fun HomeScreen(
             Staggered(0, shown) { Header(running = snap.running || jobRunning, error = snap.lastError != null) }
 
             DownloadBanner(onClick = onModels)
+            TranslationComfortCard()
             StateCards(error = snap.lastError?.message, onDiagnostics = onDiagnostics, onModels = onModels)
 
             Staggered(1, shown) {
@@ -293,15 +335,28 @@ fun HomeScreen(
             }
 
             Staggered(2, shown) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    TileCard(
-                        title = "Élő fordítás", subtitle = "Mikrofon, belső hang",
-                        icon = Icons.Rounded.Mic, onClick = onLive, modifier = Modifier.weight(1f)
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PremiumSectionTitle(
+                        title = "Gyors műveletek",
+                        subtitle = "A legfontosabb eszközök egyetlen érintésre"
                     )
-                    TileCard(
-                        title = "Átiratok", subtitle = "Mentett beszélgetések",
-                        icon = Icons.Rounded.Description, onClick = onTranscripts, modifier = Modifier.weight(1f)
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        TileCard(
+                            title = "Élő fordítás", subtitle = "Mikrofon, belső hang",
+                            icon = Icons.Rounded.Mic, onClick = onLive, modifier = Modifier.weight(1f)
+                        )
+                        TileCard(
+                            title = "Átiratok", subtitle = "Mentett beszélgetések",
+                            icon = Icons.Rounded.Description, onClick = onTranscripts, modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        TileCard(
+                            title = "Saját szókincstár", subtitle = "Kézzel mentett fordítások",
+                            icon = Icons.Rounded.BookmarkBorder, onClick = onPhrasebook, modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.weight(1f))
+                    }
                 }
             }
 
@@ -348,6 +403,90 @@ fun HomeScreen(
     }
 }
 
+/** Gyors elérés: célnyelv és feliratfordítási mód, a beállítások mély menüje nélkül. */
+@Composable
+private fun TranslationComfortCard() {
+    val ctx = LocalContext.current
+    val prefs = remember { Prefs(ctx) }
+    var target by remember { mutableStateOf(prefs.targetLang) }
+    var mode by remember { mutableStateOf(OnlinePrefs.mode(ctx)) }
+    var onlineReady by remember { mutableStateOf(OnlinePrefs.usable(ctx)) }
+    var translationStyle by remember { mutableStateOf(OnlinePrefs.translationStyle(ctx)) }
+    val languages = listOf(
+        Prefs.LANG_HU to "Magyar", Prefs.LANG_EN to "Angol", Prefs.LANG_DE to "Német",
+        Prefs.LANG_FR to "Francia", Prefs.LANG_ES to "Spanyol", Prefs.LANG_IT to "Olasz",
+        Prefs.LANG_UK to "Ukrán"
+    )
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        PremiumSectionTitle(
+            title = "Fordítási vezérlőpult",
+            subtitle = "Célnyelv és fordítási mód · gyors hozzáférés"
+        )
+        Text("Forrásnyelv: ${languages.firstOrNull { it.first == prefs.sourceLang }?.second ?: prefs.sourceLang.uppercase()} (a Beállításokban módosítható)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            languages.filterNot { it.first == prefs.sourceLang }.forEach { (code, label) ->
+                androidx.compose.material3.FilterChip(
+                    selected = target == code,
+                    onClick = { target = code; prefs.targetLang = code },
+                    label = { Text(label) }
+                )
+            }
+        }
+        Text("Online / offline fordítási mód", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            androidx.compose.material3.FilterChip(
+                selected = mode == OnlinePrefs.OFF,
+                onClick = { OnlinePrefs.setMode(ctx, OnlinePrefs.OFF); mode = OnlinePrefs.OFF },
+                label = { Text("Offline") }
+            )
+            androidx.compose.material3.FilterChip(
+                selected = mode == OnlinePrefs.ONLINE,
+                onClick = {
+                    onlineReady = OnlinePrefs.usable(ctx)
+                    if (onlineReady) { OnlinePrefs.setMode(ctx, OnlinePrefs.ONLINE); mode = OnlinePrefs.ONLINE }
+                    else (ctx as? androidx.appcompat.app.AppCompatActivity)?.let { act ->
+                        OnlineSettingsDialog.show(act) { onlineReady = OnlinePrefs.usable(ctx); if (onlineReady) { OnlinePrefs.setMode(ctx, OnlinePrefs.ONLINE); mode = OnlinePrefs.ONLINE } }
+                    }
+                },
+                label = { Text("Online") }
+            )
+            androidx.compose.material3.FilterChip(
+                selected = mode == OnlinePrefs.AUTO,
+                onClick = {
+                    onlineReady = OnlinePrefs.usable(ctx)
+                    if (onlineReady) { OnlinePrefs.setMode(ctx, OnlinePrefs.AUTO); mode = OnlinePrefs.AUTO }
+                    else (ctx as? androidx.appcompat.app.AppCompatActivity)?.let { act ->
+                        OnlineSettingsDialog.show(act) { onlineReady = OnlinePrefs.usable(ctx); if (onlineReady) { OnlinePrefs.setMode(ctx, OnlinePrefs.AUTO); mode = OnlinePrefs.AUTO } }
+                    }
+                },
+                label = { Text("Online + tartalék") }
+            )
+        }
+        val modeDescription = when (mode) {
+            OnlinePrefs.OFF -> "Eszközön futó fordítás · internet nélkül is használható, ha a nyelvi modell telepítve van."
+            OnlinePrefs.ONLINE -> if (onlineReady) "Online nyelvi modell · a felismert szöveg elküldhető a beállított szolgáltatónak." else "Online módhoz szolgáltatás, API-kulcs és adatküldési hozzájárulás szükséges."
+            else -> if (onlineReady) "Online fordítás, sikertelenség esetén offline tartalék." else "Jelenleg offline tartalék használható; az online fordításhoz beállítás szükséges."
+        }
+        Text(modeDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (OnlinePrefs.provider(ctx) != hu.angolmagyar.fordito.OnlineTranslator.Provider.DEEPL) {
+            Text("Online LLM fordítási stílusa", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                TranslationStyle.entries.forEach { style ->
+                    androidx.compose.material3.FilterChip(
+                        selected = translationStyle == style,
+                        onClick = { translationStyle = style; OnlinePrefs.setTranslationStyle(ctx, style) },
+                        label = { Text(style.labelHu) }
+                    )
+                }
+            }
+            Text("A stílus a támogatott online nyelvimodell-fordításra vonatkozik; az offline fordító működését nem módosítja.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+      }
+    }
+}
+
 @Composable
 private fun Staggered(index: Int, shown: Boolean, content: @Composable () -> Unit) {
     AnimatedVisibility(
@@ -361,8 +500,13 @@ private fun Staggered(index: Int, shown: Boolean, content: @Composable () -> Uni
 @Composable
 private fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
     val pressed by source.collectIsPressedAsState()
+    val ctx = LocalContext.current
+    val reduceMotion = remember(ctx) {
+        Prefs(ctx).reduceMotion ||
+            ((ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
+    }
     val s by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
+        targetValue = if (pressed && !reduceMotion) 0.96f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
         label = "press"
     )
@@ -371,56 +515,73 @@ private fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
 
 @Composable
 private fun AuroraBackground(active: Boolean) {
-    val t = rememberInfiniteTransition(label = "aurora")
-    val a by t.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(14000, easing = LinearEasing), RepeatMode.Reverse), label = "a"
-    )
-    val b by t.animateFloat(
-        initialValue = 1f, targetValue = 0f,
-        animationSpec = infiniteRepeatable(tween(19000, easing = LinearEasing), RepeatMode.Reverse), label = "b"
-    )
-    val boost by animateFloatAsState(if (active) 1f else 0.6f, tween(800), label = "boost")
+    val ctx = LocalContext.current
+    val prefs = remember { Prefs(ctx) }
+    val powerSave = remember { (ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true }
+    val animate = !prefs.reduceMotion && !powerSave
     val p = MaterialTheme.colorScheme.primary
     val s = MaterialTheme.colorScheme.tertiary
-    Canvas(Modifier.fillMaxSize()) {
-        drawRect(
-            Brush.radialGradient(
-                listOf(p.copy(alpha = 0.30f * boost), Color.Transparent),
-                center = Offset(size.width * (0.15f + 0.5f * a), size.height * (0.08f + 0.15f * b)),
-                radius = size.maxDimension * 0.7f
-            )
-        )
-        drawRect(
-            Brush.radialGradient(
-                listOf(s.copy(alpha = 0.24f * boost), Color.Transparent),
-                center = Offset(size.width * (0.9f - 0.5f * b), size.height * (0.55f + 0.2f * a)),
-                radius = size.maxDimension * 0.6f
-            )
-        )
+    if (animate) {
+        val t = rememberInfiniteTransition(label = "aurora")
+        val a by t.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(14000, easing = LinearEasing), RepeatMode.Reverse), label = "a")
+        val b by t.animateFloat(initialValue = 1f, targetValue = 0f, animationSpec = infiniteRepeatable(tween(19000, easing = LinearEasing), RepeatMode.Reverse), label = "b")
+        val boost by animateFloatAsState(if (active) 1f else 0.6f, tween(800), label = "boost")
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Brush.radialGradient(listOf(p.copy(alpha = 0.30f * boost), Color.Transparent), center = Offset(size.width * (0.15f + 0.5f * a), size.height * (0.08f + 0.15f * b)), radius = size.maxDimension * 0.7f))
+            drawRect(Brush.radialGradient(listOf(s.copy(alpha = 0.24f * boost), Color.Transparent), center = Offset(size.width * (0.9f - 0.5f * b), size.height * (0.55f + 0.2f * a)), radius = size.maxDimension * 0.6f))
+        }
+    } else {
+        Canvas(Modifier.fillMaxSize()) {
+            drawRect(Brush.verticalGradient(listOf(p.copy(alpha = 0.12f), Color.Transparent, s.copy(alpha = 0.10f))))
+        }
     }
 }
 
 @Composable
 private fun Header(running: Boolean, error: Boolean) {
-    val t = rememberInfiniteTransition(label = "dot")
-    val pulse by t.animateFloat(
-        initialValue = 0.35f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse"
-    )
+    val ctx = LocalContext.current
+    val lowMotion = remember { Prefs(ctx).reduceMotion || ((ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true) }
+    val pulse = if (running && !lowMotion) {
+        val t = rememberInfiniteTransition(label = "dot")
+        val value by t.animateFloat(initialValue = 0.35f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "pulse")
+        value
+    } else 1f
     val dotColor = when {
         error -> MaterialTheme.colorScheme.error
         running -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.outline
     }
     Column(Modifier.padding(top = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "Angol–Magyar",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            StatusPill(label = "✦ GYÉMÁNT")
+        }
         Text(
-            "Angol–Magyar",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            text = "Intelligens átirat · pontosabb fordítás",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
         )
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription = when {
+                    error -> "Állapot: hiba történt, diagnosztika szükséges"
+                    running -> "Állapot: a feldolgozás folyamatban van"
+                    else -> "Állapot: készenlét, offline felismerés"
+                }
+            },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 Modifier.size(9.dp).alpha(if (running) pulse else 1f).clip(CircleShape).background(dotColor)
             )
@@ -440,11 +601,13 @@ private fun Header(running: Boolean, error: Boolean) {
 @Composable
 private fun HeroCard(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
-    val t = rememberInfiniteTransition(label = "shine")
-    val shine by t.animateFloat(
-        initialValue = -0.4f, targetValue = 1.4f,
-        animationSpec = infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart), label = "shine"
-    )
+    val ctx = LocalContext.current
+    val lowMotion = remember { Prefs(ctx).reduceMotion || ((ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true) }
+    val shine = if (!lowMotion) {
+        val t = rememberInfiniteTransition(label = "shine")
+        val value by t.animateFloat(initialValue = -0.4f, targetValue = 1.4f, animationSpec = infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart), label = "shine")
+        value
+    } else 0.5f
     val shape = RoundedCornerShape(28.dp)
     Box(
         Modifier
@@ -560,22 +723,50 @@ private fun LiveCard(
                 if (elapsed.isNotBlank()) Text(elapsed, style = MaterialTheme.typography.titleSmall)
             }
             LiveWaveform(amplitudes = amplitudes)
-            Crossfade(targetState = snap.lastCaptionHu, animationSpec = tween(250), label = "hu") { hu ->
-                Text(
-                    text = hu.ifBlank { "Várakozás a beszédre…" },
-                    style = MaterialTheme.typography.titleMedium,
-                    color = if (hu.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant
-                    else MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth()
-                )
+            val context = LocalContext.current
+            var speakerReady by remember { mutableStateOf(false) }
+            val speaker = remember(context) {
+                TextToSpeech(context.applicationContext) { status ->
+                    speakerReady = status == TextToSpeech.SUCCESS
+                }
             }
-            if (snap.lastCaptionEn.isNotBlank()) {
-                Text(
-                    snap.lastCaptionEn, style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-                )
+            DisposableEffect(speaker) {
+                onDispose {
+                    speaker.stop()
+                    speaker.shutdown()
+                }
             }
+            PremiumTranslationCard(
+                sourceLabel = "Angol",
+                targetLabel = "Magyar",
+                sourceText = snap.lastCaptionEn,
+                translatedText = snap.lastCaptionHu,
+                onCopySource = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Angol szöveg", snap.lastCaptionEn))
+                },
+                onCopyTranslation = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Magyar fordítás", snap.lastCaptionHu))
+                },
+                onSpeakTranslation = {
+                    if (speakerReady && snap.lastCaptionHu.isNotBlank()) {
+                        val localeResult = speaker.setLanguage(java.util.Locale("hu", "HU"))
+                        if (localeResult != TextToSpeech.LANG_MISSING_DATA && localeResult != TextToSpeech.LANG_NOT_SUPPORTED) {
+                            speaker.speak(snap.lastCaptionHu, TextToSpeech.QUEUE_FLUSH, null, "live-translation")
+                        } else {
+                            Toast.makeText(context, "Magyar beszédhang nem érhető el ezen az eszközön.", Toast.LENGTH_SHORT).show()
+                        }
+                    } else if (!speakerReady) {
+                        Toast.makeText(context, "A felolvasó még inicializálódik.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onSaveTranslation = {
+                    val saved = PhrasebookStore(context).save(snap.lastCaptionEn, snap.lastCaptionHu)
+                    Toast.makeText(context, if (saved) "Fordítás elmentve a saját szókincstárba." else "Üres vagy már mentett fordítás.", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
             if (!snap.hint.isNullOrBlank()) {
                 Text(
                     snap.hint ?: "", style = MaterialTheme.typography.bodySmall,
@@ -725,7 +916,7 @@ fun DownloadBanner(onClick: () -> Unit) {
     }
 }
 
-/** Téma-választó: kiemelőszín (5 szín) + megjelenés (rendszer / világos / sötét / OLED fekete). Azonnal érvényesül. */
+/** Téma-választó: kiemelőszín (köztük Gyémánt) + megjelenés (rendszer / világos / sötét / OLED fekete). Azonnal érvényesül. */
 @Composable
 fun ThemePicker() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -733,6 +924,7 @@ fun ThemePicker() {
     var accent by remember { mutableStateOf(Accent.id(ctx)) }
     var mode by remember { mutableStateOf(prefs.themeMode) }
     var oled by remember { mutableStateOf(prefs.oledBlack) }
+    var reduceMotion by remember { mutableStateOf(prefs.reduceMotion) }
     val activity = ctx as? android.app.Activity
     Column(
         Modifier.fillMaxWidth()
@@ -742,7 +934,11 @@ fun ThemePicker() {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("Megjelenés", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             for (t in Accent.ALL) {
                 val sel = t.id == accent
                 val size by animateFloatAsState(if (sel) 40f else 32f, spring(Spring.DampingRatioMediumBouncy), label = "dot")
@@ -770,6 +966,18 @@ fun ThemePicker() {
                 onClick = { oled = !oled; prefs.oledBlack = oled; App.oledBlack = oled; activity?.recreate() },
                 label = { Text("OLED") }
             )
+        }
+        androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.weight(1f)) {
+                Text("Akkukímélő animációk", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("Kevesebb folyamatos fény- és háttérmozgás", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            androidx.compose.material3.Switch(checked = reduceMotion, onCheckedChange = {
+                reduceMotion = it
+                prefs.reduceMotion = it
+                activity?.recreate() // a teljes képernyőn leállítja / újraindítja a folyamatos animációkat
+            })
         }
     }
 }
@@ -825,15 +1033,17 @@ fun StateCards(error: String?, onDiagnostics: () -> Unit, onModels: () -> Unit) 
 private fun IllustratedState(
     icon: ImageVector, title: String, text: String, button: String, accent: Color, onClick: () -> Unit
 ) {
-    val t = rememberInfiniteTransition(label = "state")
-    val bob by t.animateFloat(
-        initialValue = -4f, targetValue = 4f,
-        animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob"
-    )
-    val ring by t.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "ring"
-    )
+    val ctx = LocalContext.current
+    val lowMotion = remember { Prefs(ctx).reduceMotion || ((ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true) }
+    val bob: Float
+    val ring: Float
+    if (!lowMotion) {
+        val t = rememberInfiniteTransition(label = "state")
+        val b by t.animateFloat(initialValue = -4f, targetValue = 4f, animationSpec = infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "bob")
+        val r by t.animateFloat(initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Restart), label = "ring")
+        bob = b
+        ring = r
+    } else { bob = 0f; ring = 0.2f }
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))

@@ -56,6 +56,12 @@ object OutputWriter {
     fun baseName(fileName: String): String =
         safeName(fileName.substringBeforeLast('.', fileName))
 
+    /** Be van-e jegyezve a "Minden fájl elérése" jogosultság ebben a buildben (a release build-ben nincs). */
+    fun allFilesDeclared(ctx: Context): Boolean = try {
+        val pi = ctx.packageManager.getPackageInfo(ctx.packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
+        pi.requestedPermissions?.contains("android.permission.MANAGE_EXTERNAL_STORAGE") == true
+    } catch (_: Exception) { false }
+
     fun hasAllFiles(): Boolean =
         Build.VERSION.SDK_INT >= 30 && try { Environment.isExternalStorageManager() } catch (_: Exception) { false }
 
@@ -133,8 +139,7 @@ object OutputWriter {
                     if (!d.isNullOrBlank() && d.startsWith("/")) return File(d).parentFile
                 }
             }
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("OutputWriter", e) }
         return null
     }
 
@@ -221,8 +226,7 @@ object OutputWriter {
                     f.writeBytes(bytes)
                     return "a videó mellé: " + dirLabel(dir) + "/" + f.name
                 }
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("OutputWriter", e) }
         }
         val parent = docIdOf(dir) ?: return null
         val tree = OutputPrefs.videoTree(ctx) ?: return null

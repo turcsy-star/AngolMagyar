@@ -46,6 +46,19 @@ object DiagLog {
         try { screenOn = (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive } catch (_: Exception) {}
     }
 
+    private val lastSwallow = HashMap<String, Long>()
+
+    /** Lenyelt kivétel naplózása (ugyanaz 5 mp-en belül csak egyszer, hogy ciklusban se árassza el a naplót). */
+    @Synchronized
+    fun swallow(tag: String, e: Throwable) {
+        val k = tag + e.javaClass.simpleName + e.message
+        val now = System.currentTimeMillis()
+        if (now - (lastSwallow[k] ?: 0L) < 5_000L) return
+        lastSwallow[k] = now
+        if (lastSwallow.size > 200) lastSwallow.clear()
+        log("⚠ $tag: ${e.javaClass.simpleName}: ${e.message}")
+    }
+
     @Synchronized
     fun log(msg: String) {
         val line = "${fmt.format(Date())} $msg"

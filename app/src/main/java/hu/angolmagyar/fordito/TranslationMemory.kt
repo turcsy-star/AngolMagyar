@@ -1,19 +1,28 @@
 package hu.angolmagyar.fordito
 
+import java.text.Normalizer
+import java.util.LinkedHashMap
+
 /** Fordítási memória: ugyanaz az angol mondat mindig ugyanúgy fordul; a kézzel javított sor felülírja a gépit. */
 class TranslationMemory(private val map: LinkedHashMap<String, String> = LinkedHashMap(), private val cap: Int = 5000) {
 
     companion object {
         private val NON = Regex("[^\\p{L}\\p{N}]+")
-        fun key(en: String): String = en.lowercase().replace(NON, " ").trim()
+        fun key(en: String): String = Normalizer.normalize(en, Normalizer.Form.NFC)
+            .lowercase().replace(NON, " ").trim()
 
         fun fromText(t: String): TranslationMemory {
             val m = LinkedHashMap<String, String>()
-            for (line in t.lines()) {
+            val memory = TranslationMemory(m)
+            for (line in t.lineSequence()) {
+                if (line.isBlank()) continue
                 val i = line.indexOf('\t')
-                if (i > 0) m[line.substring(0, i)] = line.substring(i + 1)
+                if (i <= 0 || i == line.lastIndex) continue
+                // Import through put(): normalize external source phrases exactly like lookup().
+                // This also applies capacity limits and rejects blank targets consistently.
+                memory.put(line.substring(0, i), line.substring(i + 1))
             }
-            return TranslationMemory(m)
+            return memory
         }
     }
 

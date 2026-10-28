@@ -47,12 +47,11 @@ class Checkpoint(private val file: File, private val key: String) {
             sb.append("C\t").append(idx).append('\t').append(cues.size).append('\n')
             for (c in cues) sb.append(encode(c)).append('\n')
             file.appendText(sb.toString(), Charsets.UTF_8)
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("Checkpoint", e) }
     }
 
     fun clear() {
-        try { file.delete() } catch (_: Exception) {}
+        try { file.delete() } catch (e: Exception) { DiagLog.swallow("Checkpoint", e) }
     }
 
     companion object {
@@ -63,8 +62,7 @@ class Checkpoint(private val file: File, private val key: String) {
                 dir.listFiles()?.forEach {
                     if (System.currentTimeMillis() - it.lastModified() > 7L * 24 * 3600 * 1000) it.delete()
                 }
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("Checkpoint", e) }
             return Checkpoint(File(dir, "$key.ckpt"), key)
         }
 
@@ -107,14 +105,18 @@ class Checkpoint(private val file: File, private val key: String) {
         }
 
         fun encode(c: SrtExporter.Cue): String =
-            "${c.startMs}\t${c.endMs}\t${esc(c.speaker)}\t${esc(c.source)}\t${esc(c.target)}"
+            "${c.startMs}\t${c.endMs}\t${esc(c.speaker)}\t${esc(c.source)}\t${esc(c.target)}" +
+                "\t${c.lp}\t${c.noSpeechProb}\t${c.wordConfidence.joinToString(";") { it.toString() }}"
 
         fun decode(line: String): SrtExporter.Cue? {
             val p = line.split("\t")
-            if (p.size != 5) return null
+            if (p.size != 5 && p.size < 8) return null
             val s = p[0].toLongOrNull() ?: return null
             val e = p[1].toLongOrNull() ?: return null
-            return SrtExporter.Cue(s, e, unesc(p[3]), unesc(p[4]), unesc(p[2]))
+            val lp = p.getOrNull(5)?.toFloatOrNull() ?: 1f
+            val noSpeech = p.getOrNull(6)?.toFloatOrNull() ?: 0f
+            val scores = p.getOrNull(7).orEmpty().split(';').mapNotNull { it.toFloatOrNull() }
+            return SrtExporter.Cue(s, e, unesc(p[3]), unesc(p[4]), unesc(p[2]), lp, scores, noSpeech)
         }
     }
 }

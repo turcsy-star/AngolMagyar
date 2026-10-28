@@ -104,7 +104,7 @@ object AppState {
     /** Frissíti a StateFlow-t és értesíti a legacy listenereket. */
     fun notifyListeners() {
         publish()
-        for (l in listeners) try { l() } catch (_: Exception) {}
+        for (l in listeners) try { l() } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
 
     private fun publish() {
@@ -140,8 +140,7 @@ object AppState {
                 f.writeText(keep.joinToString("\n") + "\n")
             }
             f.appendText(entry + "\n")
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
 
     /** A legutóbbi naplósorok (újabb elöl). */
@@ -162,14 +161,12 @@ object AppState {
         recent.clear()
         try {
             logFile?.delete()
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
 
     fun notifyTile(ctx: Context) {
         try {
             TileService.requestListeningState(ctx, ComponentName(ctx, QuickTile::class.java))
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
 }

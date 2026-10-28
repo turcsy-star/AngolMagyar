@@ -11,6 +11,28 @@ object SentenceGroups {
 
     private const val SENTENCE_END = ".?!…\"”)"
 
+    /** Szavak, amelyekre egy valódi mondat nem végződik – ha ilyen után "." áll, az a Whisper-darab végi hamis pont. */
+    private val DANGLING = setOf(
+        "a", "an", "the", "and", "or", "but", "so", "of", "to", "in", "on", "at", "for", "with", "from", "by",
+        "my", "your", "his", "our", "their", "is", "are", "was", "were", "am", "be", "been", "i", "we", "they",
+        "he", "she", "that", "this", "can", "will", "would", "could", "should", "what", "who", "how", "why",
+        "if", "because", "as", "than", "not", "just", "very", "supposed", "gonna", "wanna", "going"
+    )
+    private val WH = setOf("what", "where", "why", "how", "who", "when")
+
+    /** True, ha a "." végű blokk valójában félbevágott mondat (hamis pont a darab végén). */
+    fun falseStop(text: String): Boolean {
+        val t = text.trim()
+        if (!t.endsWith(".") || t.endsWith("...")) return false
+        val words = t.trimEnd('.').split(Regex("[\\s,;:!?]+")).filter { it.isNotBlank() }
+        val last = words.lastOrNull()?.lowercase()?.trim('"', '\'', '“', '”') ?: return false
+        if (last in DANGLING) return true
+        // a kérdőszóval induló utolsó tagmondat pont nélkül/ponttal végződve is kérdés → folytatódik
+        val clause = t.trimEnd('.').split(Regex("[.?!]")).last().trim().lowercase()
+        val cw = clause.split(Regex("[\\s,]+")).filter { it.isNotBlank() }
+        return cw.size <= 6 && cw.take(3).any { it in WH }
+    }
+
     fun group(
         items: List<Item>, maxChars: Int = 260, maxGapMs: Long = 1500, maxItems: Int = 6
     ): List<IntRange> {
@@ -31,7 +53,7 @@ object SentenceGroups {
                 // a mondat közepén vágott blokk (vessző / nincs záró írásjel + kisbetűs folytatás) kicsit hosszabb szünetet is áthidal;
                 // a "…" végű blokk kisbetűs folytatással szintén egy mondat
                 val ellipsis = t.endsWith("...") || t.endsWith("…")
-                val sentenceEnd = ends && !(ellipsis && nextLower)
+                val sentenceEnd = ends && !(ellipsis && nextLower) && !(falseStop(t) && gap <= maxOf(maxGapMs, 2500L))
                 val gapLimit = if (!ends && nextLower) maxOf(maxGapMs, 3000L) else maxGapMs
                 cut = sentenceEnd || gap > gapLimit || chars + next.length > maxChars || (i - start + 1) >= maxItems
             }

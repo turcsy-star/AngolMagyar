@@ -72,18 +72,18 @@ object WearBridge : MessageClient.OnMessageReceivedListener {
         when (cmd) {
             "start_mic" -> {
                 if (!AppState.running) {
-                    val i = Intent(ctx, MainActivity::class.java).apply {
+                    val i = Intent(ctx, LiveTranslateActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        putExtra(MainActivity.EXTRA_AUTO_START, TranslateService.MODE_MIC)
+                        putExtra(LiveTranslateActivity.EXTRA_AUTO_START, TranslateService.MODE_MIC)
                     }
                     ctx.startActivity(i)
                 }
             }
             "start_ptt" -> {
                 if (!AppState.running) {
-                    val i = Intent(ctx, MainActivity::class.java).apply {
+                    val i = Intent(ctx, LiveTranslateActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        putExtra(MainActivity.EXTRA_AUTO_START, TranslateService.MODE_PTT)
+                        putExtra(LiveTranslateActivity.EXTRA_AUTO_START, TranslateService.MODE_PTT)
                     }
                     ctx.startActivity(i)
                 }

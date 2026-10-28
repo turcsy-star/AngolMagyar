@@ -17,6 +17,15 @@ class App : Application() {
         oledBlack = prefs.oledBlack
         // a :core nem ismeri a natív könyvtárat: a neurális VAD-ot innen kapja
         Vad.neuralProvider = { model, audio, threads -> WhisperNative.vadSegments(model, audio, threads) }
+        // hőállapot-figyelés: melegedéskor a Whisper kevesebb szálon fut (Perf.thermalScaled)
+        try {
+            val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+            Perf.thermalStatus = pm.currentThermalStatus
+            pm.addThermalStatusListener { st ->
+                Perf.thermalStatus = st
+                DiagLog.log("HŐÁLLAPOT: $st")
+            }
+        } catch (e: Exception) { DiagLog.log("Hőállapot-figyelés nem indítható: ${e.message}") }
         // Ha a rendszer kilőtte a szolgáltatást, a félbehagyott mondatot pótoljuk.
         Thread { TranscriptStore.recoverPartials(this) }.start()
     }

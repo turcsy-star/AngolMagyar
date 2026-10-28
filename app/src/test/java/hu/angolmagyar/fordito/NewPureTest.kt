@@ -72,7 +72,7 @@ class QualityReportTest {
     @Test fun countsAndWorst() {
         val cues = listOf(
             SrtExporter.Cue(0, 2000, "Hello there my friend.", "Szia barátom."),
-            SrtExporter.Cue(2500, 4000, "Okay then.", "Okay then."),
+            SrtExporter.Cue(2500, 4000, "Okay then.", "Rendben."),
             SrtExporter.Cue(4100, 6000, "Fine.", "")
         )
         val r = QualityReport.build(cues)
@@ -80,5 +80,25 @@ class QualityReportTest {
         assertTrue(r.flagged >= 2)
         assertTrue(r.worst.contains(2))
         assertTrue(r.lines().isNotEmpty())
+    }
+
+    @Test fun worstRowsAreOrderedBySeverityNotTimeline() {
+        val cues = listOf(
+            SrtExporter.Cue(0, 2000, "A normal source sentence.", "Normál magyar mondat."),
+            SrtExporter.Cue(2500, 4000, "Okay then.", "Rendben."),
+            SrtExporter.Cue(4100, 6000, "Fine.", "")
+        )
+        val r = QualityReport.build(cues)
+        assertEquals("A legsúlyosabb (fordítatlan/üres célú) sor kerüljön előre", 2, r.worst.first())
+    }
+}
+
+
+class QualityReportContentWeightTest {
+    @Test fun numberMismatchOutranksFastLine() {
+        val fast = SrtExporter.Cue(0, 100, "Hello there my dear friend", "Szia kedves barátom, hogyan vagy ma")
+        val numberBug = SrtExporter.Cue(5000, 7000, "I paid 500 dollars", "Kifizettem")
+        val r = QualityReport.build(listOf(fast, numberBug))
+        assertEquals(1, r.worst.first())
     }
 }

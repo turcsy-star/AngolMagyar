@@ -64,8 +64,7 @@ class TranscriptStore(private val ctx: Context, resume: Boolean = false) {
                     }
                     p.delete()
                 }
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("TranscriptStore", e) }
         }
     }
 
@@ -123,8 +122,7 @@ class TranscriptStore(private val ctx: Context, resume: Boolean = false) {
                 lastEntryMs = total
                 // a lezárt mondat már bent van: a félbehagyott másolat felesleges
                 partialFile(file).delete()
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("TranscriptStore", e) }
         }
     }
 
@@ -137,8 +135,7 @@ class TranscriptStore(private val ctx: Context, resume: Boolean = false) {
                 file.appendText("[${stamp(total)}] $source\n           $target\n\n")
                 entryCount.incrementAndGet()
                 lastEntryMs = total
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("TranscriptStore", e) }
         }
     }
 
@@ -152,8 +149,7 @@ class TranscriptStore(private val ctx: Context, resume: Boolean = false) {
             try {
                 ensureOffset()
                 partialFile(file).writeText(stamp(rel + offsetMs) + "\n" + text.replace('\n', ' ') + "\n")
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("TranscriptStore", e) }
         }
     }
 
@@ -169,8 +165,7 @@ class TranscriptStore(private val ctx: Context, resume: Boolean = false) {
         exec.execute {
             try {
                 partialFile(file).delete()
-            } catch (_: Exception) {
-            }
+            } catch (e: Exception) { DiagLog.swallow("TranscriptStore", e) }
         }
         exec.shutdown()
     }

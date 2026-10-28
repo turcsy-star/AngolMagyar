@@ -145,8 +145,7 @@ class ModelsActivity : AppCompatActivity() {
                     if (!downloading) build()
                 }
             }
-        } catch (_: Exception) {
-        }
+        } catch (e: Exception) { DiagLog.swallow("ModelsActivity", e) }
         checkHungarian()
     }
 
@@ -180,14 +179,14 @@ class ModelsActivity : AppCompatActivity() {
                         sup -> "Letölthető (kb. 50–100 MB)."
                         else -> "Ez a felismerő nem támogatja a magyart offline."
                     }
-                    try { r.destroy() } catch (_: Exception) {}
+                    try { r.destroy() } catch (e: Exception) { DiagLog.swallow("ModelsActivity", e) }
                     if (!downloading) build()
                 }
 
                 override fun onError(error: Int) {
                     huStatus = "Állapot nem kérdezhető le (hiba $error). Próbáld a letöltést."
                     huCanDownload = true
-                    try { r.destroy() } catch (_: Exception) {}
+                    try { r.destroy() } catch (e: Exception) { DiagLog.swallow("ModelsActivity", e) }
                     if (!downloading) build()
                 }
             })
@@ -210,7 +209,7 @@ class ModelsActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
             main.postDelayed({
-                try { r.destroy() } catch (_: Exception) {}
+                try { r.destroy() } catch (e: Exception) { DiagLog.swallow("ModelsActivity", e) }
                 refreshStatuses()
             }, 4000)
         } catch (t: Throwable) {
@@ -225,7 +224,7 @@ class ModelsActivity : AppCompatActivity() {
         val ids = ArrayList<String>()
         ids.add(if (d.canRunLarge) ModelManager.LARGE.id else ModelManager.SMALL.id)
         if (WhisperNative.available() && ModelManager.WHISPER.none { ModelManager.isInstalled(this, it) }) {
-            ids.add(if (d.canRunLarge) ModelManager.WH_TURBO.id else ModelManager.WH_SMALL.id)
+            ids.add(ModelManager.WH_LARGE.id)
         }
         ids.add("mlkit")
         return ids
@@ -322,12 +321,11 @@ class ModelsActivity : AppCompatActivity() {
             wCard.addView(Ui.small(this,
                 "Ugyanaz a technika, mint a PC-s változatban: a hang a telefonon marad, a magyar felismerés pontos. " +
                     "A nagyobb modell pontosabb, de lassabb és több memóriát kér. Ajánlott: " +
-                    (if (dev.canRunLarge) "large-v3-turbo (jó arány)." else "small (a telefon RAM-jához).")))
+                    "large-v3 (a legpontosabb)."))
             for (spec in ModelManager.WHISPER) {
                 val installed = ModelManager.isInstalled(this, spec)
                 val part = if (installed) 0L else ModelManager.partialBytes(this, spec)
-                val rec = (dev.canRunLarge && spec.id == ModelManager.WH_TURBO.id) ||
-                    (!dev.canRunLarge && spec.id == ModelManager.WH_SMALL.id)
+                val rec = spec.id == ModelManager.WH_LARGE.id
                 val cb = CheckBox(this).apply {
                     text = buildString {
                         append(spec.label)

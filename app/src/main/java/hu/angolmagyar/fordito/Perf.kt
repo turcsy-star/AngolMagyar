@@ -32,12 +32,29 @@ object Perf {
     private fun cores() = Runtime.getRuntime().availableProcessors().coerceAtLeast(2)
 
     /** Whisper (ggml) szálszám. */
-    fun whisperThreads(l: Int = level): Int = when (l) {
-        1 -> 2
-        2 -> (cores() * 3 / 8).coerceAtLeast(2)
-        3 -> (cores() / 2).coerceAtLeast(2)
-        4 -> (cores() - 2).coerceIn(3, 6)
-        else -> cores().coerceAtMost(8)
+    fun whisperThreads(l: Int = level): Int {
+        val base = when (l) {
+            1 -> 2
+            2 -> (cores() * 3 / 8).coerceAtLeast(2)
+            3 -> (cores() / 2).coerceAtLeast(2)
+            4 -> (cores() - 2).coerceIn(3, 6)
+            else -> cores().coerceAtMost(8)
+        }
+        return thermalScaled(base)
+    }
+
+    /** A rendszer hőállapota (PowerManager.THERMAL_STATUS_*); az App figyeli, 0 = nincs probléma. */
+    @Volatile var thermalStatus: Int = 0
+
+    /**
+     * Melegedéskor a szálszám csökken (a darabok közti várakozás helyett folyamatosan, kisebb terheléssel):
+     * mérsékelt (2): ¾, súlyos (3): ½, kritikus (4+): 2 szál. Legalább 2 szál marad.
+     */
+    fun thermalScaled(base: Int, status: Int = thermalStatus): Int = when {
+        status >= 4 -> 2
+        status == 3 -> (base / 2).coerceAtLeast(2)
+        status == 2 -> (base * 3 / 4).coerceAtLeast(2)
+        else -> base
     }
 
     /** Egyszerre feldolgozott chunkok száma Voskhoz (a modell közös, a felismerők külön szálon futnak). */

@@ -40,6 +40,11 @@ class LineQualityTest {
         assertEquals(false, LineQuality.flags(null, a, near, true).contains("magányos"))
     }
 
+    @Test fun nonFiniteLogProbabilityIsFlaggedNotDropped() {
+        val cue = c(0, 3000, "I really meant that", "Ezt tényleg úgy gondoltam", Float.NaN)
+        assertTrue(LineQuality.flags(null, cue, null, true).contains("bizonytalan felismerés"))
+    }
+
     @Test fun sourceOnlyModeIgnoresTranslationFlags() {
         val f = LineQuality.flags(null, c(0, 3000, "Hello there friend", ""), null, false)
         assertTrue(!f.contains("fordítatlan") && !f.contains("üres"))

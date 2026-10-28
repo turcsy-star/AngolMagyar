@@ -10,8 +10,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Hang burkológörbe a feliratkészítés közben, lüktetés nélkül:
- * kész szakasz = fehér (olvasható szín), éppen dolgozott szakasz = zöld, hátralévő = szürke.
+ * Hang burkológörbe a feliratkészítés közben: kész = fehér, hátralévő = szürke; zöld csak az a kis ablak (~30 mp),
+ * amelyiken a felismerés éppen dolgozik – az nagyon lassan, finoman lüktet.
  */
 class WaveView @JvmOverloads constructor(
     ctx: Context, attrs: AttributeSet? = null
@@ -24,6 +24,18 @@ class WaveView @JvmOverloads constructor(
     private var chunkFrac = DoubleArray(0)
 
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var pulse = 0f
+    private val pulseAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 2800
+        repeatCount = android.animation.ValueAnimator.INFINITE
+        interpolator = android.view.animation.LinearInterpolator()
+        addUpdateListener {
+            pulse = it.animatedFraction
+            if (chunkState.any { s -> s == 1 }) invalidate()
+        }
+    }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); pulseAnim.start() }
+    override fun onDetachedFromWindow() { pulseAnim.cancel(); super.onDetachedFromWindow() }
     private val rect = RectF()
 
     init {
@@ -85,8 +97,13 @@ class WaveView @JvmOverloads constructor(
                 i += 2
             }
             if (last < 0) return chunkState.getOrElse(0) { 0 }
-            // az éppen dolgozott szakaszon belül: ami a kurzor előtt van, az már kész (fehér), ami mögötte, az zöld
-            if (chunkState[last] == 1 && tMs < cursorMs(last)) return 2
+            // az éppen dolgozott szakaszon belül: a kurzor előtt kész (fehér); a kurzor után egy ~30 mp-es ablak zöld
+            // (ezen dolgozik a Whisper), ami még távolabb van, az szürke
+            if (chunkState[last] == 1) {
+                val cur = cursorMs(last)
+                if (tMs < cur) return 2
+                return if (tMs < cur + 30_000L) 1 else 0
+            }
             return chunkState[last]
         }
         return when {
@@ -117,11 +134,19 @@ class WaveView @JvmOverloads constructor(
                 val bh = envelope[i].coerceIn(0.04f, 1f) * maxH
                 rect.set(x, mid - bh, x + bw, mid + bh)
                 val t = i.toFloat() / n
-                barPaint.color = when (stateAt((t * totalMs).toLong(), progress, t)) {
+                val st = stateAt((t * totalMs).toLong(), progress, t)
+                var barH = bh
+                barPaint.color = when (st) {
                     2 -> doneC
-                    1 -> activeC
+                    1 -> {
+                        // lassú, finom lüktetés: kissé változó fényesség és magasság
+                        val k = 0.5f + 0.5f * kotlin.math.sin(pulse * 2f * Math.PI.toFloat() - i * 0.12f)
+                        barH = bh * (0.94f + 0.12f * k)
+                        (activeC and 0x00FFFFFF) or ((150 + (105 * k).toInt()) shl 24)
+                    }
                     else -> idleC
                 }
+                rect.set(x, mid - barH, x + bw, mid + barH)
                 val rad = min(bw / 2f, 4f * d)
                 canvas.drawRoundRect(rect, rad, rad, barPaint)
             }

@@ -12,8 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <!-- Felirat mentése a videó mellé (Minden fájl elérése) -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- A videó melletti mentés a mappa-engedélyen (SAF) megy; a "Minden fájl elérése" csak a debug manifestben van. -->
 
     <application
         android:name=".App"
@@ -46,7 +45,7 @@
         <!-- Részletes élő-fordítás képernyő. A Wear, a gyorscsempe, a parancsikonok és a feladat-beállító
              (EXTRA_AUTO_START) ezt indítják – v2.22.2-ben ez hiányzott a manifestből (ActivityNotFoundException). -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LiveTranslateActivity"
             android:exported="false"
             android:label="@string/app_name"
             android:launchMode="singleTop" />
@@ -89,6 +88,10 @@
         <activity
             android:name=".TranscriptActivity"
             android:exported="false" />
+        <activity
+            android:name=".PhrasebookActivity"
+            android:exported="false"
+            android:label="Saját szókincstár" />
 
         <activity
             android:name=".TranscriptDetailActivity"
@@ -147,6 +150,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Long-running offline subtitle transcription and translation." />
         </service>
+
+        <service
+            android:name=".NightJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
             android:name=".QuickTile"

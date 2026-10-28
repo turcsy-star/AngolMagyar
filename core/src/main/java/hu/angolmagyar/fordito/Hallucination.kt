@@ -5,10 +5,9 @@ package hu.angolmagyar.fordito
  * vagy magányos, értelmetlen sort ír a hosszú szünetek közepére. Ez a szűrő a kész blokkokat tisztítja meg.
  *
  * Két szabály (mindkettő óvatos, és a végén a hívó kiírja, hány blokkot dobott el):
- *  A) ismétlődő hosszabb mondat: ugyanaz a (legalább [minRepeatWords] szavas) szöveg a 3. előfordulástól kiesik;
- *  B) magányos rövid sor: legfeljebb [isolatedMaxWords] szavas blokk, amelynek mindkét oldalán legalább
- *     [isolatedGapMs] a csend (az első / utolsó blokknál a hiányzó oldal nem számít akadálynak);
- *  C) nagyon bizonytalan felismerés: rövid blokk, amelynek a Whisper-valószínűsége [lowConfLp] alatt van.
+ *  A) ismétlődő hosszabb mondat: a harmadik, egymást követő azonos szöveg gyanús és eltávolítható;
+ *  B) magányos rövid sor és C) alacsony logprob csak jelzés, automatikusan nem törlünk valódi beszédet.
+ * A magányos vagy bizonytalan szegmens lehet halk, de helyes megszólalás is.
  */
 object Hallucination {
 
@@ -16,7 +15,9 @@ object Hallucination {
         val cues: List<SrtExporter.Cue>, val repeats: Int, val isolated: Int,
         val lowConf: Int = 0, val removed: List<SrtExporter.Cue> = emptyList()
     ) {
-        val dropped: Int get() = repeats + isolated + lowConf
+        /** Csak a ténylegesen eltávolított blokkok száma. A többi számláló figyelmeztetés, nem törlés. */
+        val dropped: Int get() = removed.size
+        val flagged: Int get() = isolated + lowConf
     }
 
     private val NON_WORD = Regex("[^\\p{L}\\p{N}]+")
@@ -30,18 +31,19 @@ object Hallucination {
 
     fun clean(
         cues: List<SrtExporter.Cue>,
-        minRepeatWords: Int = 4,
+        minRepeatWords: Int = QualityRules.REPEAT_MIN_WORDS,
         maxSameText: Int = 2,
-        isolatedGapMs: Long = 90_000L,
-        isolatedMaxWords: Int = 6,
-        lowConfLp: Float = -1.5f,
+        repeatWindowMs: Long = 30_000L,
+        isolatedGapMs: Long = QualityRules.ISOLATED_GAP_MS,
+        isolatedMaxWords: Int = QualityRules.ISOLATED_MAX_WORDS,
+        lowConfLp: Float = QualityRules.REVIEW_LP,
         lowConfMaxWords: Int = 8
     ): Result {
         if (cues.size < 2) return Result(cues, 0, 0)
         val sorted = cues.sortedBy { it.startMs }
 
         // A) ismétlődő hosszabb mondat
-        val seen = HashMap<String, Int>()
+        val seen = HashMap<String, Pair<Int, Long>>() // ismétlésszám + utolsó előfordulás vége
         val afterA = ArrayList<SrtExporter.Cue>(sorted.size)
         val removed = ArrayList<SrtExporter.Cue>()
         var repeats = 0
@@ -49,11 +51,14 @@ object Hallucination {
         for (c in sorted) {
             if (words(c) >= minRepeatWords) {
                 val k = key(c)
-                val n = (seen[k] ?: 0) + 1
-                seen[k] = n
+                val previous = seen[k]
+                val n = if (previous != null && c.startMs - previous.second in 0..repeatWindowMs)
+                    previous.first + 1 else 1
+                seen[k] = n to c.endMs
                 if (n > maxSameText) { repeats++; removed.add(c); continue }
             }
-            if (c.lp < lowConfLp && words(c) <= lowConfMaxWords) { lowConf++; removed.add(c); continue }
+            // A logprob önmagában nem bizonyítja, hogy a szöveg hibás. Megőrizzük, a szerkesztő jelzi.
+            if (c.lp.isFinite() && c.lp < lowConfLp && words(c) <= lowConfMaxWords) lowConf++
             afterA.add(c)
         }
 
@@ -66,7 +71,8 @@ object Hallucination {
             val nextGap = if (i == afterA.size - 1) Long.MAX_VALUE else afterA[i + 1].startMs - c.endMs
             val alone = prevGap >= isolatedGapMs && nextGap >= isolatedGapMs &&
                 !(prevGap == Long.MAX_VALUE && nextGap == Long.MAX_VALUE)
-            if (alone && words(c) <= isolatedMaxWords) { isolated++; removed.add(c); continue }
+            if (alone && words(c) <= isolatedMaxWords) isolated++
+            // Magányos rövid szegmens is lehet valódi megszólalás; automatikus törlés helyett jelöljük.
             out.add(c)
         }
         return Result(out, repeats, isolated, lowConf, removed.sortedBy { it.startMs })

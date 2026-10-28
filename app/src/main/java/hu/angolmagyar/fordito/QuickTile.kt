@@ -36,9 +36,9 @@ class QuickTile : TileService() {
         }
         // Az indításhoz előtérben lévő képernyő kell (mikrofon / képernyő-hangrögzítés engedély).
         val lastMode = Prefs(this).lastMode
-        val intent = Intent(this, MainActivity::class.java).apply {
+        val intent = Intent(this, LiveTranslateActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra(MainActivity.EXTRA_AUTO_START, lastMode)
+            putExtra(LiveTranslateActivity.EXTRA_AUTO_START, lastMode)
         }
         if (Build.VERSION.SDK_INT >= 34) {
             val pi = PendingIntent.getActivity(

@@ -1,4 +1,96 @@
-# Changelog
+# Változásnapló
+
+## v2.29.0 – célzott ellenőrzés, napló, benchmark, biztonság, prémium ellenőrző lap
+- **Prémium minőségellenőrző lap** (alulról felcsúszó): animált pontgyűrű, súlyosság-szűrők, színes kártyák, koppintásra sorra ugrás; a szerkesztőben minőség-kártya jelzi a pontot.
+- **Célzott újrafelismerés**: csak a kritikus/magas jelzésű sorok hangszakasza fut újra nagyobb nyalábbal (large-v3-mal, ha van); a javaslatokat soronként választod ki, semmi sem íródik át magától.
+- **Módosítási napló** (`AuditLog`): kézi szerkesztés, újrafordítás, célzott újrafelismerés rögzítve előtte/utána értékkel; a napló bejegyzése visszaállítható.
+- **Benchmark**: „Mentés referenciának” gomb; újrafuttatás után WER, kritikus (szám/tagadás) eltérés és előzmények verziónként.
+- **Eredményújrahasznosítás**: a kész fájl ellenőrzőpontja 7 napig megmarad; ugyanazon fájl és beállítás (szótár/szabályok is az ujjlenyomatban) újrafuttatása a kész darabokat nem számolja újra.
+- **API-kulcs titkosítva** (Android Keystore AES-GCM); a régi egyszerű érték első olvasáskor áttelepül.
+- **Fordítási memória**: a Room-kettősírás és a szálankénti `runBlocking` megszűnt; atomikus fájlírás.
+- **Hő-alapú szálszám**: a Whisper melegedéskor (mérsékelt/súlyos/kritikus) folyamatosan kevesebb szálon fut.
+- **Éjszakai ütemezés** („🌙 Éjszakára ütemezés”): töltőn (és Wi-Fin, ha online fordítás kell) értesítés, koppintásra indul.
+- **Mentés**: a `MANAGE_EXTERNAL_STORAGE` csak a debug manifestben; a release a mappa-engedélyt (SAF) használja.
+- **Release**: saját keystore (`keystore.properties` / környezeti változók), R8 opcionálisan (`-Pminify`).
+- A régi élő-fordító képernyő `MainActivity` → `LiveTranslateActivity` (nincs több azonos nevű osztály).
+- 85 üres `catch` helyett `DiagLog.swallow` (azonos hiba 5 mp-en belül egyszer), így a Hibajelentés használhatóbb.
+- Nem készült: a `FileSubtitleActivity` ViewModel-re bontása (nagy, fordító nélkül nem ellenőrizhető átszervezés).
+
+## v2.28.9 – javítások a 2.28.8-dev átnézése után
+- Javítva: az „Ellenőrzési javaslatok” ablakban a `setMessage` miatt nem jelent meg a sorlista; a fejléc most a címben van.
+- A szerkesztő átadja a valós bizonytalanságot (`lp`, szó-szintű konfidencia) az ellenőrző motornak; az `LOW_CONFIDENCE` jelzés így ténylegesen működik.
+- Eltérés-alapú jelzés: forrás+fordítás esetén szám/tagadás/név csak tényleges eltérésnél jelez (a `TranslationCheck` logikájával). Ismert, magas bizonyosságú egynyelvű sort nem jelöl; ismeretlen bizonyosságnál csökkentett súly.
+- Új `BAD_TIMING` típus a fordított időbélyegre; az évszám már nem jelenik meg számként és dátumként is.
+- `QualityReport`: a `szám eltér`, `tagadás eltér` (5), `név hiányzik` (4) jelzés nagy súlyt kap, így a „Legrosszabb 10 sor” elejére kerül.
+- Időkorlát (Android 15, ~6 óra): a feldolgozás nem vész el; a félbehagyott feladat és az ellenőrzőpont megmarad, értesítés jelzi, és a Fájl képernyő felajánlja a folytatást (újraindított képernyőn is).
+- Pótolva: `gradle/wrapper/gradle-wrapper.jar` + `.properties` (Gradle 8.9), `gradlew.bat`.
+- CI: a unit tesztek külön, kötelező jobban futnak (hiba esetén piros), az APK-build ettől függetlenül elkészül.
+- Új tesztek: eltérés-alapú jelzés, ismeretlen bizonyosság, BAD_TIMING, súlyozási sorrend.
+
+## v2.28.8-dev — 2026-10-27
+- A minőségellenőrző motor bekötése az SRT-szerkesztő eszközei közé.
+- Új „Ellenőrzési javaslatok” lista: kritikus tagadások, számok, dátumok/időpontok, rövid töredékek, ismétlődő és üres sorok áttekintése.
+- A jelzés kiválasztásával a szerkesztő közvetlenül az érintett blokkhoz navigál.
+- A modul kizárólag jelez, nem írja át automatikusan a szöveget; a jelzés nem bizonyít hibát.
+- APK/telefonos build még nem igazolt ebben a környezetben.
+
+
+## 2.28.7 – prioritásos minőségellenőrzés
+- Javítva a „Legrosszabb 10 sor” rendezése: a legsúlyosabb problémák jelennek meg először, nem időrendi sorrendben.
+- A gyenge szókonfidencia külön súlyt kap a minőségjelentésben; a beszéd/csend gyanúja, a töredék és a hosszarány-eltérés közepes súlyú jelzés.
+- Új regressziós teszt ellenőrzi a súlyossági sorrendet.
+- A változás nem írja át vagy törli az átirat szövegét.
+- Ellenőrzés: a teljes `:core` Kotlin-forrás lefordult `kotlinc`-cel, és a prioritásos sorrend smoke tesztje sikeres. Teljes Android-build és JUnit futtatás SDK/Gradle Wrapper hiányában nem igazolt.
+
+## 2.28.5 – pontosság, tartalmi hűség és minőségmérés
+- A `TextPolish` alapértelmezésben megőrzi a hezitálásnak tűnő magyar szavakat (pl. „hát”, „na”, „izé”); eltávolítás csak explicit `removeFillers = true` beállítással történik.
+- A tipikus feliratvégi zajszövegek csak önálló sorban törlődnek; valódi mondat közepén szereplő „thanks for watching” és hasonló kifejezés megmarad.
+- A hallucináció-ellenőrző a nagyon alacsony logprobú és a hosszú csendben magányos rövid sorokat megőrzi, és ellenőrzendőként jelöli. Csak a rövid időablakon belüli, harmadik és további azonos hosszú ismétlés kerül automatikusan kiszűrésre.
+- Közös `QualityRules` küszöbök: az SRT szerkesztő és a hallucináció-ellenőrző azonos logprob- és magányos-szegmens küszöböt használ.
+- A fájlfelismerés a meglévő egyéni szótár kanonikus alakjait is átadja a Whisper-promptnak, karakterkorláttal és duplikátumszűréssel.
+- Új `WordErrorRate` mérőmodul a felismerési változatok objektív összehasonlításához; a kis-/nagybetű és az írásjelek nem növelik a hibaarányt, a magyar ékezetek számítanak.
+- Új regressziós tesztek a tartalommegőrzéshez, hallucinációszűréshez és WER-számításhoz.
+- A meglévő Compose Material 3 felületet, animációkat, VAD-ot, promptot, fordítási memóriát és szerkesztőt megtartja; nem készülnek párhuzamos modulok.
+
+## 2.28.1
+- Az önjavító szótár a végén újrafordítja azokat a sorokat, amelyek forrása megváltozott.
+- Szerkesztő: „Szótár újraalkalmazása + javított sorok újrafordítása” – a régi felirat is megkapja az azóta tanult szabályokat.
+
+## 2.28.0
+- Teljesen automatikus, önjavító szótár: a felvételen belül ritkán, hibásan leírt neveket (pl. Nino / Nina) a gyakori alakra javítja az angol és a magyar szövegben is, és az új szabályt megjegyzi a következő fájlokhoz.
+- Önjavítás: ha egy automatikus szabály eredményét visszaírod az eredeti alakra, a szabály magától törlődik.
+- A szótár ablakban az automatikus szabályok külön, szerkeszthető listában látszanak.
+
+## 2.27.0
+- Szótár, ami magától fejlődik: a háromszor ugyanúgy javított szó automatikusan szabály lesz (kapcsolható); a szótár ablak mutatja az utoljára tanult elemeket.
+- Szótár exportálása / importálása fájlba (javítások, nevek, beszélők) – új telefonra költözéshez, másik sorozathoz.
+- Sorozat-mód: a felismert szereplőnevek bekerülnek a projekt szereplői közé, a következő rész már ismeri őket.
+- Szerkesztő: lejátszás közben az éppen szóló blokk kiemelődik és a lista követi; a szövegmezőre koppintva a lejátszás megáll.
+- Szerkesztő: „Beszélők nevei…” (S1 → Nina az egész feliratban, és megjegyzi); „Szakasz újrafordítása egyben (±4 sor)”.
+- Egyszerűbb főképernyő: a projekt, a profil és a teljesítmény a „Haladó beállítások” alá került.
+- Hangminőség-előszűrés a felismerés előtt (zúgás szűrése, halk felvétel felhangosítása; kapcsolható).
+
+## 2.26.0
+- Fordítómotor jelzése: a feldolgozó képernyőn és az eredményben látszik, hány sort fordított a DeepL/Claude és hányat az offline ML Kit.
+- Szereplőnevek automatikus felismerése az átiratból (többször előforduló nagybetűs szavak); háttérként megy az online fordítónak, és kiírja a képernyő.
+- A második menet a töredék sorokat is újrafuttatja, legfeljebb 12 szakaszt.
+- Szerkesztő: „Fordítások összehasonlítása” – jelenlegi / online / offline változat egymás mellett, a választott bekerül a sorba és a fordítási memóriába.
+- Olvasási sebesség: a 20 karakter/mp fölötti feliratok végét a következő blokk előtti szabad helyig kitolja.
+- Félbehagyott feldolgozás folytatása: ha az app közben leállt, a Fájl képernyő megnyitásakor felajánlja a folytatást (a kész darabok megvannak).
+
+## 2.25.0
+- Alapértelmezett a Whisper large-v3: az első indításnál (Wi-Fin) ez települ, és ez dolgozik; a régi telepítések is letöltik egyszer.
+- Egyetlen profil maradt: „Pontos” (large-v3, pontosabb keresés). A többi (vázlat, kiegyensúlyozott, éjszakai) megszűnt; alapból ez él.
+- DeepL egyszerűen: alapértelmezett szolgáltató; csak az API-kulcs kell (a modell- és végpontmező elrejtve), és a mentéskor az online fordítás magától bekapcsol offline tartalékkal.
+- Javítva: az online fordítás alapból ki volt kapcsolva (Ki mód), ezért a kulcs megadása után is az offline fordító dolgozott.
+
+## 2.24.2
+- Fordítás: a Whisper darabhatárokon hozzáadott hamis pontokat ("what are you." | "Doing later?") a mondatképzés áthidalja, így a félbevágott mondatok egyben kerülnek fordításra.
+- Az online fordítás (Claude / OpenAI / DeepL) is mondatokba fogva dolgozik, a lefordított mondatot a rendszer visszaosztja az időzített blokkokra.
+
+## 2.24.1
+- Hullám: zöld csak az a ~30 mp-es ablak, amelyen a felismerés éppen dolgozik, és az nagyon lassan, finoman lüktet; ami még nincs kész, az szürke.
+- Folyamat-gyöngysor: lassabb, finomabb mozgás – üstökös-szerű áramlás a lépések között, lágy fény és két eltolt hullám az aktív lépés körül, elhalványuló forgó ív, a haladás-kitöltés simán követi az értéket.
 
 ## 2.24.0
 - Élő átirat-folyam a hullámforma alatt: a felismert sorok beszélőszínnel; a legfrissebb sor betűnként gépelődik, majd áttűnéssel megjelenik alatta a fordítás; a bizonytalan sorok sárgásan derengenek.
@@ -42,3 +134,63 @@ Verzió: versionCode 2223 / 2.22.3 (app + wear).
 
 ## v2.22.2 és korábbiak
 Lásd az előző csomagok README-it (a v2.22.2 nem fordult le, ezért nem javasolt).
+
+
+## 2.28.6 – szókonfidencia és célzott ellenőrzés
+- A meglévő tokenenkénti valószínűség- és időbélyeg-JNI-hozzáférést használja; nem hoz létre párhuzamos tokenmodult.
+- Narancssárga aláhúzás az SRT-szerkesztőben a gyenge szavaknál; a sor lejátszógombjával célzottan meghallgatható a hozzá tartozó hangszakasz.
+- A Whisper JNI szó-szintű konfidenciát ad vissza a tokenek valószínűségeiből képzett geometriai átlaggal; ez csak ellenőrzési jelzés, nem kalibrált helyességi valószínűség.
+- Az SRT-szerkesztő a gyenge szókonfidenciájú forrásszavakat narancssárga aláhúzással jelzi; a sor lejátszás gombjával a kapcsolódó hangszakasz célzottan meghallgatható.
+- A sorok minőségjelzése egy helyen használja a TokenQuality küszöbét.
+- A magas Whisper no-speech érték önmagában nem töröl sort; a szerkesztő ellenőrzési jelzést mutat.
+- A szószintű pontszámok csak akkor maradnak meg a szövegjavítás után, ha a forrásszavak száma változatlan, hogy elkerüljük a félrevezető kiemelést.
+- A forrás és a pontszámok nem írják át automatikusan a felismert szöveget.
+- Repeated segment suppression now requires low log-probability for all three consecutive duplicates.
+
+## v2.28.8-dev – Review intelligence alapok
+- Új offline `ReviewIntelligence` motor: kritikus tagadás-, szám-, dátum-, confidence-, töredék-, ismétlődés- és üres sor jelzések.
+- Célzott ellenőrzési terv sorszám- és időkerettel; nem indít automatikusan új felismerést.
+- SHA-256 fingerprint az ismételt feldolgozás elkerülésének támogatására.
+- Auditnapló- és benchmark-adatmodellek a visszavonható javításokhoz és mérhető összehasonlításhoz.
+- Hozzáadott egységtesztek és teljes megvalósítási/státusz dokumentum.
+- Ez fejlesztési alap, nem teljesen integrált kiadás: az Android UI/pipeline összekötése és a teljes APK-build még igazolandó.
+
+## v2.30.0 – Gyémánt Edition Update 6
+- Added deterministic pre-export SRT quality checks for invalid timestamps, empty source/translation fields, out-of-order cues, and overlapping cues.
+- Validation reports distinguish blocking errors from warnings and informational notes; checks never mutate subtitle text.
+- Added focused unit tests for invalid durations, empty translations, overlaps, and valid cues.
+
+## v2.30.0 Gyémánt Edition – Update 8
+- Az export előtti felirat-minőségellenőrzés most már a Markdown, TXT, DOCX és PDF exportokra is kiterjed.
+- Az ellenőrzés figyelmeztetéseket mutat, és nem javítja át automatikusan a feliratokat.
+- A minőségkapu közös segédfüggvényt használ a dokumentumexportoknál.
+
+
+## v2.30.0 – Gyémánt Edition Update 9
+- Az export előtti minőségellenőrző párbeszédablak új „Első érintett sor” műveletet kapott.
+- A művelet a jelentés első problémás feliratsorához görget; a szöveget és az időbélyegeket nem módosítja automatikusan.
+- Az exportot a felhasználó külön folytathatja vagy megszakíthatja.
+
+## v2.30.0 – Gyémánt Edition Update 10
+- A minőségellenőrzési ablak teljes hibajegyzéket nyit, nem csak az első nyolc jelzést mutatja.
+- A jegyzék bármely elemére koppintva a megfelelő feliratsorhoz ugrik.
+- Ha az aktív keresési szűrő elrejti a hibás sort, a nézet törli a szűrőt, majd a célzott sorra navigál.
+- A hibajegyzékből történő navigáció nem módosítja a felirat tartalmát.
+
+
+## v2.30.0 – Update 11 (2026-10-28)
+- Új platformfüggetlen terminológia-governance API globális/projekt hatókörrel, jóváhagyási állapotokkal, konfliktusvizsgálattal, hatás-előnézettel és TSV import/exporttal.
+- Új unit tesztek a szótárkezelés kritikus szabályaihoz.
+- Új Platina kiemelőszín-téma.
+- Új `PREMIUM_ROADMAP_HU.md` integrációs és kiadási specifikáció.
+- A teljes Android-build és a UI/pipeline-integráció nincs igazolva; lásd `UPDATE11_HU.md`.
+
+## Update 12 – Premium glossary integration
+- Connected the governed glossary API to Android preferences via `GlossaryStore`.
+- Added a Diamond Glossary Center entry point to Settings, including duplicate-key validation and activation into the existing translation vocabulary pipeline.
+- Preserved the legacy `source=target` vocabulary format and documented the limits of this integration.
+- Kotlin glossary smoke tests passed. Full Gradle/Android build remains unverified because Gradle distribution download was blocked by network access.
+
+## Update 13 – Premium safe retranslation
+- Added `RetranslationPlanner`: explicit preview, manual-translation protection, selected-only apply, revision guard and diff output.
+- Added JUnit tests for safe retranslation planning.

@@ -32,7 +32,7 @@ object SubPrefs {
 
     /** Háttérfutás-kényszerítés (néma hangfolyam) – ha a telefon zárolt képernyőnél lefagyasztja az appot. */
 
-    fun profile(ctx: Context): String = p(ctx).getString("subProfile", "custom") ?: "custom"
+    fun profile(ctx: Context): String = p(ctx).getString("subProfile", "precise") ?: "precise"
     fun setProfile(ctx: Context, id: String) { p(ctx).edit().putString("subProfile", id).apply() }
 }
 
@@ -44,11 +44,17 @@ object OnlinePrefs {
 
     private fun p(ctx: Context) = Prefs(ctx).raw()
 
-    fun mode(ctx: Context): Int = p(ctx).getInt("trMode", OFF)
+    fun mode(ctx: Context): Int = p(ctx).getInt("trMode", AUTO) // alapból: ha van használható online beállítás, az dolgozik
     fun setMode(ctx: Context, v: Int) { p(ctx).edit().putInt("trMode", v).apply() }
 
+    fun translationStyle(ctx: Context): TranslationStyle =
+        TranslationStyle.fromStorage(p(ctx).getString("trStyle", TranslationStyle.NATURAL.storageKey))
+    fun setTranslationStyle(ctx: Context, style: TranslationStyle) {
+        p(ctx).edit().putString("trStyle", style.storageKey).apply()
+    }
+
     fun provider(ctx: Context): OnlineTranslator.Provider =
-        when (p(ctx).getString("trProvider", "anthropic")) {
+        when (p(ctx).getString("trProvider", "deepl")) {
             "openai" -> OnlineTranslator.Provider.OPENAI
             "deepl" -> OnlineTranslator.Provider.DEEPL
             else -> OnlineTranslator.Provider.ANTHROPIC
@@ -61,8 +67,8 @@ object OnlinePrefs {
         }).apply()
     }
 
-    fun apiKey(ctx: Context): String = p(ctx).getString("trKey", "") ?: ""
-    fun setApiKey(ctx: Context, v: String) { p(ctx).edit().putString("trKey", v.trim()).apply() }
+    fun apiKey(ctx: Context): String = SecretStore.get(p(ctx), "trKey")
+    fun setApiKey(ctx: Context, v: String) { SecretStore.set(p(ctx), "trKey", v) }
 
     fun model(ctx: Context): String = p(ctx).getString("trModel", "") ?: ""
     fun setModel(ctx: Context, v: String) { p(ctx).edit().putString("trModel", v.trim()).apply() }
@@ -100,7 +106,8 @@ object OnlinePrefs {
             tgtLang = tgtName,
             informal = SubPrefs.informalHu(ctx),
             glossary = vocab,
-            hint = listOf(hint(ctx), Projects.contextHint(ctx)).filter { it.isNotBlank() }.joinToString("\n")
+            hint = listOf(hint(ctx), Projects.contextHint(ctx)).filter { it.isNotBlank() }.joinToString("\n"),
+            style = translationStyle(ctx)
         )
     }
 }
@@ -115,10 +122,7 @@ object Presets {
     )
 
     val ALL = listOf(
-        P("draft", "Gyors vázlat", "kis modell (ha van), gyors keresés, maximum teljesítmény", 5, 1, "fast"),
-        P("balanced", "Kiegyensúlyozott", "a kiválasztott modell, gyors keresés", 4, 1, "keep"),
-        P("precise", "Pontos", "a legjobb telepített modell, pontosabb (lassabb) keresés", 4, 5, "best"),
-        P("night", "Éjszakai", "pontos beállítás, takarékos CPU – töltőn hagyd", 2, 5, "best")
+        P("precise", "Pontos", "large-v3 modell, pontosabb (lassabb) keresés", 4, 5, "best")
     )
 
     fun byId(id: String): P? = ALL.firstOrNull { it.id == id }

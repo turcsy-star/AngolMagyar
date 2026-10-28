@@ -125,7 +125,7 @@ object LanguageIdHelper {
     }
 
     fun close() {
-        try { client?.close() } catch (_: Exception) {}
+        try { client?.close() } catch (e: Exception) { DiagLog.swallow("LanguageIdHelper", e) }
         client = null
     }
 }

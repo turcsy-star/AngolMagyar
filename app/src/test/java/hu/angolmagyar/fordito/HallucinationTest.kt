@@ -24,11 +24,20 @@ class HallucinationTest {
         assertEquals(0, Hallucination.clean(cues).dropped)
     }
 
-    @Test fun isolatedShortLineInLongSilenceIsDropped() {
+    @Test fun sameSentenceFarApartIsNotRemovedAsHallucination() {
+        val cues = listOf(cue(10, "Ez egy fontos mondat, amit újra elmondok."),
+            cue(400, "Ez egy fontos mondat, amit újra elmondok."),
+            cue(900, "Ez egy fontos mondat, amit újra elmondok."))
+        assertEquals(0, Hallucination.clean(cues).dropped)
+        assertEquals(3, Hallucination.clean(cues).cues.size)
+    }
+
+    @Test fun isolatedShortLineInLongSilenceIsFlaggedButPreserved() {
         val cues = listOf(cue(10, "Szia, hogy vagy?"), cue(12, "Jól, köszönöm."), cue(400, "Ó, igen."), cue(900, "Gyakran kell megbizonyosodnom."))
         val r = Hallucination.clean(cues)
         assertEquals(2, r.isolated)
-        assertEquals(2, r.cues.size)
+        assertEquals(4, r.cues.size)
+        assertEquals(0, r.dropped)
     }
 
     @Test fun denseDialogueAndSingleCueAreUntouched() {
@@ -44,13 +53,14 @@ class HallucinationTest {
 }
 
 class HallucinationLowConfTest {
-    @Test fun veryLowConfidenceShortCueIsRemovedAndReturned() {
+    @Test fun veryLowConfidenceShortCueIsFlaggedAndPreserved() {
         val a = SrtExporter.Cue(0, 2000, "", "Ez egy rendes mondat lesz.")
         val b = SrtExporter.Cue(3000, 5000, "", "Hmm igen", "", -2.0f)
         val c = SrtExporter.Cue(6000, 8000, "", "Még egy rendes mondat jön.")
         val r = Hallucination.clean(listOf(a, b, c))
         assertEquals(1, r.lowConf)
-        assertEquals(listOf(b), r.removed)
-        assertEquals(2, r.cues.size)
+        assertTrue(r.cues.contains(b))
+        assertTrue(r.removed.isEmpty())
+        assertEquals(3, r.cues.size)
     }
 }

@@ -17,6 +17,6 @@ object AsrPrefs {
     fun setWhisperId(ctx: Context, id: String) { p(ctx).edit().putString("whisperModel", id).apply() }
 
     /** Beam-keresés szélessége (1 = gyors/greedy, 3–5 = pontosabb, lassabb). */
-    fun beam(ctx: Context): Int = p(ctx).getInt("whisperBeam", 1).coerceIn(1, 5)
+    fun beam(ctx: Context): Int = p(ctx).getInt("whisperBeam", 5).coerceIn(1, 5)
     fun setBeam(ctx: Context, v: Int) { p(ctx).edit().putInt("whisperBeam", v.coerceIn(1, 5)).apply() }
 }

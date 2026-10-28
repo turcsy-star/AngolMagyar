@@ -111,6 +111,11 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("adaptiveEco", true)
         set(v) { p.edit().putBoolean("adaptiveEco", v).apply() }
 
+    /** Csökkenti a folyamatos díszanimációkat az akkumulátor és az érzékeny felhasználók kímélésére. */
+    var reduceMotion: Boolean
+        get() = p.getBoolean("reduceMotion", false)
+        set(v) { p.edit().putBoolean("reduceMotion", v).apply() }
+
     var saveTranscript: Boolean
         get() = p.getBoolean("saveTranscript", true)
         set(v) { p.edit().putBoolean("saveTranscript", v).apply() }

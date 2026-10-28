@@ -235,6 +235,16 @@ class TranscriptDetailActivity : AppCompatActivity() {
         val s = last / 1000
         val dur = String.format("%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
         val parts = mutableListOf(getString(R.string.tr_entries, cues.size), dur)
+        if (!rawMode) {
+            // Gyors, teljes átiratra vonatkozó összesítés; a soronkénti audit továbbra is heurisztikus.
+            val reviewCount = cues.count { cue ->
+                cue.source.isNotBlank() && cue.target.isNotBlank() &&
+                    cue.source != "…" && cue.target != "…" &&
+                    TranslationQualityAudit.inspect(cue.source, cue.target).needsReview
+            }
+            if (reviewCount > 0) parts.add("◇ Ellenőrzendő sor: $reviewCount")
+            else if (cues.any { it.source.isNotBlank() && it.target.isNotBlank() }) parts.add("✓ Alapellenőrzés kész")
+        }
         if (audio != null) parts.add(getString(R.string.tr_has_audio))
         if (rawMode) parts.add(getString(R.string.td_raw_mode))
         infoView.text = parts.joinToString("  ·  ")
@@ -346,6 +356,19 @@ class TranscriptDetailActivity : AppCompatActivity() {
                     setTextColor(Ui.color(this@TranscriptDetailActivity, R.color.textSecondary))
                     setPadding(0, dp(2), 0, 0)
                 })
+            }
+            // Nem módosítjuk a fordítást: csak azokat a sorokat jelöljük, amelyek emberi ellenőrzést érdemelhetnek.
+            if (c.source.isNotBlank() && c.target.isNotBlank() && c.source != "…" && c.target != "…") {
+                val audit = TranslationQualityAudit.inspect(c.source, c.target)
+                if (audit.needsReview) {
+                    row.addView(TextView(this@TranscriptDetailActivity).apply {
+                        text = "◇ Ellenőrzés javasolt · " + audit.findings.joinToString(" · ") { it.message }
+                        textSize = 11.5f
+                        setTextColor(0xFFB7791F.toInt())
+                        setPadding(dp(8), dp(5), dp(8), dp(5))
+                        setBackgroundColor(0x14D69E2E)
+                    })
+                }
             }
             return row
         }
@@ -667,35 +690,108 @@ class TranscriptDetailActivity : AppCompatActivity() {
         createLauncher.launch(fileName)
     }
 
+    /** Export előtti minőségkapu: hibákat és figyelmeztetéseket mutat, automatikusan nem javít. */
+    private fun confirmSubtitleExport(snap: List<SrtExporter.Cue>, mode: SrtExporter.Mode, onContinue: () -> Unit) {
+        val report = SrtQualityCheck.inspect(snap, mode)
+        if (report.issues.isEmpty()) {
+            onContinue()
+            return
+        }
+        val summary = buildString {
+            append("Hibák: ").append(report.errorCount)
+            append(" · Figyelmeztetések: ").append(report.warningCount).append("\n\n")
+            report.issues.take(8).forEach { issue ->
+                append(if (issue.severity == SrtQualityCheck.Severity.ERROR) "⛔ " else "⚠ ")
+                append("#").append(issue.cueIndex).append(" – ").append(issue.message).append('\n')
+            }
+            if (report.issues.size > 8) append("… és további ").append(report.issues.size - 8).append(" jelzés")
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Export előtti minőségellenőrzés")
+            .setMessage(summary)
+            .setNegativeButton("Mégse", null)
+            .setNeutralButton("Hibák listája") { _, _ ->
+                val labels = report.issues.map { issue ->
+                    val marker = if (issue.severity == SrtQualityCheck.Severity.ERROR) "⛔" else "⚠"
+                    "$marker  #${issue.cueIndex} – ${issue.message}"
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("Érintett feliratsorok (${report.issues.size})")
+                    .setItems(labels.toTypedArray()) { _, which ->
+                        jumpToCue(report.issues[which].cueIndex)
+                    }
+                    .setNegativeButton("Bezárás", null)
+                    .show()
+            }
+        if (report.canExport) {
+            dialog.setPositiveButton("Export folytatása") { _, _ -> onContinue() }
+        } else {
+            dialog.setPositiveButton("Export mégis") { _, _ -> onContinue() }
+        }
+        dialog.show()
+    }
+
+    /** A jelentés 1-alapú sorszámát a szűrt lista tényleges pozíciójára képezi le. */
+    private fun jumpToCue(cueNumber: Int) {
+        if (!::listView.isInitialized || cues.isEmpty()) return
+        val cueIndex = (cueNumber - 1).coerceIn(0, cues.lastIndex)
+        if (cueIndex !in shown) {
+            // A hibás sor akkor is elérhető legyen, ha az aktuális keresés elrejti.
+            if (::searchBox.isInitialized && filterQuery.isNotEmpty()) searchBox.setText("")
+            else applyFilter()
+        }
+        val visiblePosition = shown.indexOf(cueIndex)
+        if (visiblePosition < 0) return
+        listView.smoothScrollToPosition(visiblePosition)
+        listView.post {
+            val child = listView.getChildAt(visiblePosition - listView.firstVisiblePosition)
+            child?.requestFocus()
+        }
+    }
+
     private fun exportSrt(mode: SrtExporter.Mode) {
         val snap = cues.toList()
-        saveAs(baseName() + ".srt") { out ->
-            val m = if (hasTargets(snap)) mode else SrtExporter.Mode.SOURCE_ONLY
-            out.write(SrtExporter.build(snap, m).toByteArray(Charsets.UTF_8))
+        val m = if (hasTargets(snap)) mode else SrtExporter.Mode.SOURCE_ONLY
+        confirmSubtitleExport(snap, m) {
+            saveAs(baseName() + ".srt") { out ->
+                out.write(SrtExporter.build(snap, m).toByteArray(Charsets.UTF_8))
+            }
         }
     }
 
     private fun exportVtt() {
         val snap = cues.toList()
-        saveAs(baseName() + ".vtt") { out ->
-            val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
-            out.write(SrtExporter.buildVtt(snap, m).toByteArray(Charsets.UTF_8))
+        val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
+        confirmSubtitleExport(snap, m) {
+            saveAs(baseName() + ".vtt") { out ->
+                out.write(SrtExporter.buildVtt(snap, m).toByteArray(Charsets.UTF_8))
+            }
         }
+    }
+
+    /** A minőségkapu minden szöveges és dokumentum-export előtt lefut. */
+    private fun confirmDocumentExport(snap: List<SrtExporter.Cue>, onContinue: () -> Unit) {
+        val mode = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
+        confirmSubtitleExport(snap, mode, onContinue)
     }
 
     private fun exportMd() {
         val snap = cues.toList()
         val title = displayTitle()
-        saveAs(baseName() + ".md") { out ->
-            out.write(ExportHelper.toMarkdown(snap, title).toByteArray(Charsets.UTF_8))
+        confirmDocumentExport(snap) {
+            saveAs(baseName() + ".md") { out ->
+                out.write(ExportHelper.toMarkdown(snap, title).toByteArray(Charsets.UTF_8))
+            }
         }
     }
 
     private fun exportTxt() {
         val snap = cues.toList()
         val title = displayTitle()
-        saveAs(baseName() + "-jegyzokonyv.txt") { out ->
-            out.write(ExportHelper.toPlainMinutes(snap, title).toByteArray(Charsets.UTF_8))
+        confirmDocumentExport(snap) {
+            saveAs(baseName() + "-jegyzokonyv.txt") { out ->
+                out.write(ExportHelper.toPlainMinutes(snap, title).toByteArray(Charsets.UTF_8))
+            }
         }
     }
 
@@ -703,9 +799,11 @@ class TranscriptDetailActivity : AppCompatActivity() {
         val snap = cues.toList()
         val title = displayTitle()
         val map = SpeakerNames.fromPrefs(prefs)
-        saveAs(baseName() + ".docx") { out ->
-            val summary = MeetingSummary.generate(snap, title, map)
-            ExportHelper.writeDocx(out, snap, title, summary, hasTargets(snap))
+        confirmDocumentExport(snap) {
+            saveAs(baseName() + ".docx") { out ->
+                val summary = MeetingSummary.generate(snap, title, map)
+                ExportHelper.writeDocx(out, snap, title, summary, hasTargets(snap))
+            }
         }
     }
 
@@ -713,9 +811,11 @@ class TranscriptDetailActivity : AppCompatActivity() {
         val snap = cues.toList()
         val title = displayTitle()
         val map = SpeakerNames.fromPrefs(prefs)
-        saveAs(baseName() + ".pdf") { out ->
-            val summary = MeetingSummary.generate(snap, title, map)
-            ExportHelper.writePdf(out, snap, title, summary, hasTargets(snap))
+        confirmDocumentExport(snap) {
+            saveAs(baseName() + ".pdf") { out ->
+                val summary = MeetingSummary.generate(snap, title, map)
+                ExportHelper.writePdf(out, snap, title, summary, hasTargets(snap))
+            }
         }
     }
 

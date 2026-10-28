@@ -91,9 +91,9 @@ class TaskSetupActivity : AppCompatActivity() {
 
     private fun startLive(mode: String) {
         startActivity(
-            Intent(this, MainActivity::class.java)
+            Intent(this, LiveTranslateActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(MainActivity.EXTRA_AUTO_START, mode)
+                .putExtra(LiveTranslateActivity.EXTRA_AUTO_START, mode)
         )
         finish()
     }

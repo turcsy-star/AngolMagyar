@@ -584,6 +584,10 @@ class SettingsActivity : AppCompatActivity() {
         fixCard.addView(Ui.small(this, "Soronként: szó vagy forrás=helyes forma. Pl.\nOpenAI=OpenAI\nchatgpt=ChatGPT"))
         vocabEdit = fixEdit(prefs.customVocab, "pl.\nOpenAI\nchatgpt=ChatGPT\nbudapest=Budapest")
         fixCard.addView(vocabEdit)
+        fixCard.addView(Ui.small(this, "A Gyémánt szótárközpont ellenőrzi az ütközéseket, kezeli a jóváhagyott terminusokat, és előnézetet ad a várható érintettségről. A régi szótárformátum továbbra is támogatott."))
+        fixCard.addView(Ui.button(this, "Gyémánt szótárközpont megnyitása", false) {
+            showGlossaryManager()
+        })
         tabGroups[2].add(fixCard)
 
         // ---------------------------------------------------------------- rendszer
@@ -620,7 +624,7 @@ class SettingsActivity : AppCompatActivity() {
                 b.alpha = if (k == i) 1f else 0.55f
                 b.setTypeface(null, if (k == i) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
             }
-            try { prefs.settingsTab = i } catch (_: Exception) {}
+            try { prefs.settingsTab = i } catch (e: Exception) { DiagLog.swallow("SettingsActivity", e) }
         }
         tabNames.forEachIndexed { i, n ->
             val b = Ui.smallButton(this, n) { showTab(i) }
@@ -643,6 +647,71 @@ class SettingsActivity : AppCompatActivity() {
         prefs.huFixes = huFixes.text?.toString() ?: ""
         prefs.customVocab = vocabEdit.text?.toString() ?: ""
         prefs.speakerNames = speakerNamesEdit.text?.toString() ?: ""
+    }
+
+    private fun showGlossaryManager() {
+        val store = GlossaryStore(this)
+        val current = store.load()
+        val editor = AppCompatEditText(this).apply {
+            setText(current.filter { it.status == GlossaryGovernance.Status.APPROVED && it.scope == GlossaryGovernance.Scope.GLOBAL }
+                .joinToString("\n") { "${it.source}=${it.target}" }.ifBlank { vocabEdit.text?.toString().orEmpty() })
+            hint = "angol kifejezés=magyar megfelelő"
+            minLines = 7
+            maxLines = 14
+            gravity = Gravity.TOP or Gravity.START
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(4))
+            addView(Ui.small(this@SettingsActivity, "Soronként forrás=cél. Az új bejegyzések azonnal aktívak lesznek a meglévő fordítási folyamatban. A változtatás előtt ellenőrizzük a duplikált forrásokat."))
+            addView(editor)
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Gyémánt szótárközpont")
+            .setView(panel)
+            .setNeutralButton("Ütközések vizsgálata") { _, _ ->
+                val parsed = editor.text?.toString().orEmpty().lineSequence().mapNotNull { line ->
+                    val trimmed = line.trim()
+                    val ix = trimmed.indexOf('=')
+                    if (trimmed.isBlank() || trimmed.startsWith("#") || ix <= 0 || ix == trimmed.lastIndex) null
+                    else trimmed.substring(0, ix).trim() to trimmed.substring(ix + 1).trim()
+                }.toList()
+                val duplicates = parsed.groupBy { GlossaryGovernance.normalize(it.first) }.filterValues { it.size > 1 }
+                val message = if (duplicates.isEmpty()) "Nem találtam azonos forráskifejezésű duplikátumot. Ez formai ellenőrzés; a fordítások jelentésbeli helyességét külön kell ellenőrizni."
+                else "Azonos forráskifejezések többször szerepelnek:\n" + duplicates.keys.joinToString("\n")
+                android.app.AlertDialog.Builder(this).setTitle("Szótárellenőrzés").setMessage(message).setPositiveButton("Rendben", null).show()
+            }
+            .setNegativeButton("Mégse", null)
+            .setPositiveButton("Mentés és aktiválás") { _, _ ->
+                val lines = editor.text?.toString().orEmpty().lineSequence().map { it.trim() }
+                    .filter { it.isNotBlank() && !it.startsWith("#") }
+                val parsed = lines.mapNotNull { line ->
+                    val ix = line.indexOf('=')
+                    val source = if (ix < 0) line else line.substring(0, ix).trim()
+                    val target = if (ix < 0) line else line.substring(ix + 1).trim()
+                    if (source.isBlank() || target.isBlank()) null else source to target
+                }.toList()
+                val duplicateKeys = parsed.groupBy { GlossaryGovernance.normalize(it.first) }.filterValues { it.size > 1 }.keys
+                if (duplicateKeys.isNotEmpty()) {
+                    Toast.makeText(this, "Mentés megszakítva: duplikált forráskifejezések vannak. Futtassa az ütközésvizsgálatot.", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                val entries = parsed.map { (source, target) ->
+                    GlossaryGovernance.Entry(source, target, status = GlossaryGovernance.Status.APPROVED,
+                        note = "A Gyémánt szótárközpontból mentve")
+                }
+                val invalid = entries.firstOrNull { GlossaryGovernance.validate(it).isNotEmpty() }
+                if (invalid != null) {
+                    Toast.makeText(this, GlossaryGovernance.validate(invalid).joinToString(" "), Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                store.save(entries)
+                vocabEdit.setText(parsed.joinToString("\n") { "${it.first}=${it.second}" })
+                Toast.makeText(this, "Szótár mentve és aktiválva (${entries.size} bejegyzés).", Toast.LENGTH_LONG).show()
+            }
+            .show()
     }
 
     private fun applyPreview() {

@@ -1,6 +1,7 @@
 package hu.angolmagyar.fordito.core
 
 import android.content.Context
+import hu.angolmagyar.fordito.TranslationMemory
 import hu.angolmagyar.fordito.core.db.AppDatabase
 import hu.angolmagyar.fordito.core.db.TranslationEntity
 import kotlinx.coroutines.Dispatchers
@@ -16,8 +17,8 @@ class TranslationMemoryRepo(context: Context, private val cap: Int = 5000) {
     private val dao = AppDatabase.get(context).translationDao()
 
     companion object {
-        private val NON = Regex("[^\\p{L}\\p{N}]+")
-        fun key(en: String): String = en.lowercase().replace(NON, " ").trim()
+        /** Ugyanaz az Unicode-normalizálás, mint a fájlalapú memóriában. */
+        fun key(en: String): String = TranslationMemory.key(en)
     }
 
     suspend fun lookup(en: String): String? = withContext(Dispatchers.IO) {

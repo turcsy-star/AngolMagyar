@@ -15,13 +15,31 @@ class TextPolishTest {
         assertTrue(TextPolish.ensurePeriod("short one") == "short one")
     }
 
-    @Test fun hungarianFillersRemoved() {
+    @Test fun contentWordsArePreservedByDefault() {
+        val raw = "Hát ezt most nem így gondoltam. Na, izé, menjünk tovább."
+        val cleaned = TextPolish.cleanWhisperOutput(raw).lowercase()
+        assertTrue(cleaned.contains("hát"))
+        assertTrue(cleaned.contains("na"))
+        assertTrue(cleaned.contains("izé"))
+        assertTrue(cleaned.contains("gondoltam"))
+    }
+
+    @Test fun fillerRemovalRequiresExplicitOptIn() {
         val raw = "Ööö hát izé, szerintem ez jó megoldás."
-        val cleaned = TextPolish.cleanWhisperOutput(raw)
-        assertFalse(cleaned.lowercase().contains("ööö"))
-        assertFalse(cleaned.lowercase().contains("hát"))
-        assertFalse(cleaned.lowercase().contains("izé"))
-        assertTrue(cleaned.lowercase().contains("szerintem") || cleaned.lowercase().contains("megoldás"))
+        val cleaned = TextPolish.cleanWhisperOutput(raw, removeFillers = true).lowercase()
+        assertFalse(cleaned.contains("ööö"))
+        assertFalse(cleaned.contains("hát"))
+        assertFalse(cleaned.contains("izé"))
+        assertTrue(cleaned.contains("szerintem") || cleaned.contains("megoldás"))
+    }
+
+    @Test fun hallucinationPhraseInsideRealSentenceIsPreserved() {
+        val cleaned = TextPolish.cleanWhisperOutput("The phrase thanks for watching was on the slide.")
+        assertTrue(cleaned.lowercase().contains("thanks for watching"))
+    }
+
+    @Test fun standaloneSubtitleCreditIsRemoved() {
+        assertTrue(TextPolish.cleanWhisperOutput("Subtitles by Example Team").isBlank())
     }
 
     @Test fun cleanWhisperCapitalizes() {

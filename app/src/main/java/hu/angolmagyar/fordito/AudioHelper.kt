@@ -38,7 +38,7 @@ object AudioHelper {
                     val n = decodeCore(ex, output, cancel, onProgress)
                     if (n >= 0) return n
                 } finally {
-                    try { ex.release() } catch (_: Exception) {}
+                    try { ex.release() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
                 }
             }
         } catch (e: InterruptedException) {
@@ -61,10 +61,10 @@ object AudioHelper {
                 if (n < 0) throw IllegalStateException("A fájlban nincs hangsáv, vagy nem támogatott a formátuma.")
                 return n
             } finally {
-                try { ex.release() } catch (_: Exception) {}
+                try { ex.release() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
             }
         } finally {
-            try { cache.delete() } catch (_: Exception) {}
+            try { cache.delete() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
         }
     }
 
@@ -79,7 +79,7 @@ object AudioHelper {
             val n = decodeCore(extractor, output, cancel, null)
             if (n >= 0) return n
         } finally {
-            try { extractor.release() } catch (_: Exception) {}
+            try { extractor.release() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
         }
         // Talán már raw PCM – másoljuk
         input.copyTo(output, overwrite = true)
@@ -185,9 +185,9 @@ object AudioHelper {
             if (cancel()) throw InterruptedException("Megszakítva")
             onProgress?.invoke(100)
         } finally {
-            try { outStream.close() } catch (_: Exception) {}
-            try { codec.stop() } catch (_: Exception) {}
-            try { codec.release() } catch (_: Exception) {}
+            try { outStream.close() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
+            try { codec.stop() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
+            try { codec.release() } catch (e: Exception) { DiagLog.swallow("AudioHelper", e) }
         }
         return totalSamples
     }

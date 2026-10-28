@@ -10,24 +10,9 @@ object TextPolish {
 
     // ------------------------------------------------------------------ hallucináció, zaj
 
-    private val HALLUCINATIONS = listOf(
-        Regex("(?i)subtitles? by[^.\\n]*\\.?"),
-        Regex("(?i)thanks? (?:you )?for watching[^.\\n]*\\.?"),
-        Regex("(?i)(?:please )?(?:like and )?subscribe[^.\\n]*\\.?"),
-        Regex("(?i)köszönöm a figyelmet[^.\\n]*\\.?"),
-        Regex("(?i)köszönjük a figyelmet[^.\\n]*\\.?"),
-        Regex("(?i)feliratot? készítette[^.\\n]*\\.?"),
-        Regex("(?i)feliratok? [^.\\n]*készítette[^.\\n]*\\.?"),
-        Regex("(?i)amara\\.org[^\\n]*"),
-        Regex("(?i)\\[[^\\]]*(?:music|zene|applause|taps|laughter|nevetés)[^\\]]*\\]"),
-        Regex("(?i)\\([^)]*(?:music|zene|applause|laughter|nevetés)[^)]*\\)"),
-        Regex("♪+")
-    )
-
     /** Önmagukban zajnak számító töltelékhangok. */
     private val NOISE_WORDS = setOf(
-        "uh", "um", "uhm", "er", "erm", "ah", "eh", "hm", "hmm", "mhm", "mm", "oh", "huh",
-        "ööö", "öö", "őő", "ehm", "öhm", "hmm"
+        "uh", "um", "uhm", "er", "erm", "ööö", "öö", "őő", "ehm", "öhm"
     )
 
     private const val L = "\\p{L}\\p{N}"
@@ -49,8 +34,7 @@ object TextPolish {
         if (words.isEmpty()) return true
         if (words.all { it in NOISE_WORDS }) return true
         // kizárólag hallucinált sor (pl. "Thanks for watching!")
-        var rest = t
-        for (re in HALLUCINATIONS) rest = re.replace(rest, "")
+        val rest = stripHallucinations(t)
         return rest.none { it.isLetterOrDigit() }
     }
 
@@ -63,19 +47,30 @@ object TextPolish {
         .replace(Regex(",\\s*([.!?…])"), "$1")
         .trim()
 
-    private fun stripHallucinations(text: String): String {
-        var r = text
-        for (re in HALLUCINATIONS) r = re.replace(r, "")
-        return r
-    }
+    /**
+     * Csak az önálló, tipikus feliratvégi zajsorokat távolítjuk el. Egy ilyen kifejezés
+     * valódi mondat része is lehet, ezért a szöveg közepén soha nem töröljük.
+     */
+    private val STANDALONE_HALLUCINATION = Regex(
+        "(?i)^\\s*(?:subtitles? by(?: [\\p{L}\\p{N}_ .'-]{1,80})?|thanks(?: you)? for watching|please like and subscribe|köszönöm a figyelmet|köszönjük a figyelmet|feliratot? készítette(?: [\\p{L}\\p{N}_ .'-]{1,80})?|feliratok? [\\p{L}\\p{N}_ .'-]{1,80} készítette|amara\\.org|\\[(?:music|zene|applause|taps|laughter|nevetés)\\]|\\((?:music|zene|applause|laughter|nevetés)\\)|♪+)[.!?…\\s]*$"
+    )
 
-    /** Hallucináció + töltelékszó (magyar és angol) eltávolítása, szóközök, nagybetűs kezdés. */
-    fun cleanWhisperOutput(raw: String): String = clean(raw, hu = true, en = true)
+    private fun stripHallucinations(text: String): String = text
+        .lines()
+        .filterNot { line -> STANDALONE_HALLUCINATION.matches(line.trim()) }
+        .joinToString("\n")
 
-    private fun clean(raw: String, hu: Boolean, en: Boolean): String {
+    /**
+     * Biztonságos tisztítás. Alapértelmezésben megőrzi a hezitálásnak tűnő szavakat is,
+     * mert a „hát”, „na”, „izé” valódi tartalmat hordozhat. Eltávolítás csak explicit kérésre.
+     */
+    fun cleanWhisperOutput(raw: String, removeFillers: Boolean = false): String =
+        clean(raw, hu = true, en = true, removeFillers = removeFillers)
+
+    private fun clean(raw: String, hu: Boolean, en: Boolean, removeFillers: Boolean = false): String {
         var t = stripHallucinations(raw.trim())
-        if (hu) t = FILLERS_HU.replace(t, " ")
-        if (en) t = FILLERS_EN.replace(t, " ")
+        if (removeFillers && hu) t = FILLERS_HU.replace(t, " ")
+        if (removeFillers && en) t = FILLERS_EN.replace(t, " ")
         t = collapse(t)
         return capitalizeFirst(t)
     }
@@ -146,8 +141,12 @@ object TextPolish {
 
     // ------------------------------------------------------------------ nyelvenkénti finomítás
 
-    fun polishEnglish(text: String, vocab: List<Pair<String, String>> = emptyList()): String {
-        var t = clean(text, hu = false, en = true)
+    fun polishEnglish(
+        text: String,
+        vocab: List<Pair<String, String>> = emptyList(),
+        removeFillers: Boolean = false
+    ): String {
+        var t = clean(text, hu = false, en = true, removeFillers = removeFillers)
         if (t.isEmpty()) return t
         t = t.replace(Regex("(?<![$L'])i(?=[ ',.!?])"), "I")
             .replace(Regex("\\bi'(m|ll|ve|d)\\b"), "I'$1")
@@ -155,8 +154,12 @@ object TextPolish {
         return ensurePeriod(capitalizeSentences(t))
     }
 
-    fun polishHungarian(text: String, vocab: List<Pair<String, String>> = emptyList()): String {
-        var t = clean(text, hu = true, en = false)
+    fun polishHungarian(
+        text: String,
+        vocab: List<Pair<String, String>> = emptyList(),
+        removeFillers: Boolean = false
+    ): String {
+        var t = clean(text, hu = true, en = false, removeFillers = removeFillers)
         if (t.isEmpty()) return t
         t = applyVocab(t, vocab)
         return ensurePeriod(capitalizeSentences(t))

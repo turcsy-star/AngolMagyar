@@ -107,7 +107,7 @@ object ModelManager {
     /** A telepített, legnagyobb használható Whisper modell (preferált id előnyben), vagy null. */
     fun bestWhisper(ctx: Context, preferredId: String?): Spec? {
         WHISPER.firstOrNull { it.id == preferredId && isInstalled(ctx, it) }?.let { return it }
-        return listOf(WH_TURBO, WH_MEDIUM, WH_LARGE, WH_SMALL, WH_BASE).firstOrNull { isInstalled(ctx, it) }
+        return listOf(WH_LARGE, WH_TURBO, WH_MEDIUM, WH_SMALL, WH_BASE).firstOrNull { isInstalled(ctx, it) }
     }
 
     fun forLang(lang: String, preferLarge: Boolean, ctx: Context): Spec =
@@ -144,7 +144,7 @@ object ModelManager {
         fun pause() {
             paused = true
             val c = conn
-            if (c != null) Thread { try { c.disconnect() } catch (_: Exception) {} }.start()
+            if (c != null) Thread { try { c.disconnect() } catch (e: Exception) { DiagLog.swallow("ModelManager", e) } }.start()
         }
     }
 
@@ -260,7 +260,7 @@ object ModelManager {
             if (total > 0 && done < total) throw java.io.IOException("hiányos letöltés")
             onBytes(done, total)
         } finally {
-            try { conn.disconnect() } catch (_: Exception) {}
+            try { conn.disconnect() } catch (e: Exception) { DiagLog.swallow("ModelManager", e) }
             ctl.conn = null
         }
     }

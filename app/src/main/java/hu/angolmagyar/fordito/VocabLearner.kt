@@ -31,17 +31,66 @@ object VocabLearner {
             val from = strip(a[i])
             val to = strip(b[i])
             if (from.isEmpty() || to.isEmpty() || from == to) continue
+            // önjavítás: ha az automatikus szabály eredményét visszajavítod az eredeti alakra, a szabály törlődik
+            if (!target && revokeAuto(prefs, from, to)) continue
             if (from.length < 2 || from.length > 40 || to.length > 40) continue
             val key = (if (target) "T|" else "S|") + from.lowercase() + "=" + to
             val n = root.optInt(key, 0) + 1
             root.put(key, n)
             if (n == THRESHOLD && !alreadyKnown(prefs, from, to, target)) {
-                fresh.add(Suggestion(from, to, target, n))
+                val sg = Suggestion(from, to, target, n)
+                if (auto(prefs) && from.all { it.isLetter() || it == '\'' || it == '-' } && to.all { it.isLetter() || it == '\'' || it == '-' }) {
+                    // a szótár magától épül: a háromszor azonos javítás szabállyá válik
+                    accept(prefs, sg)
+                    logAuto(prefs, sg)
+                } else fresh.add(sg)
             }
         }
         prefs.fixLearnJson = root.toString()
         return fresh
     }
+
+    /** Az automatikus (önállóan tanult) angol javítások szövege: soronként "régi=új". */
+    fun autoRules(prefs: Prefs): String = prefs.raw().getString("autoRulesEn", "") ?: ""
+    fun setAutoRules(prefs: Prefs, v: String) { prefs.raw().edit().putString("autoRulesEn", v).apply() }
+
+    /** Új automatikus szabályok felvétele (a meglévőket nem duplázza; legfeljebb 200 sor). */
+    fun addAutoRules(prefs: Prefs, rules: Map<String, String>) {
+        if (rules.isEmpty()) return
+        val have = autoRules(prefs).lines().filter { it.isNotBlank() }.toMutableList()
+        val keys = have.map { it.substringBefore('=').trim().lowercase() }.toHashSet()
+        for ((from, to) in rules) if (from.lowercase() !in keys) {
+            have.add("$from=$to")
+            logAuto(prefs, Suggestion(from, to, false, 0))
+        }
+        setAutoRules(prefs, have.takeLast(200).joinToString("\n"))
+    }
+
+    /** @return true, ha a [to]→[from] visszajavítás egy automatikus szabályt érvénytelenített. */
+    private fun revokeAuto(prefs: Prefs, current: String, wanted: String): Boolean {
+        // a szabály: wanted=current (az eredeti alakot cseréltük "current"-re); a felhasználó visszaírta "wanted"-re
+        val lines = autoRules(prefs).lines().filter { it.isNotBlank() }
+        val keep = lines.filterNot {
+            it.substringBefore('=').trim().equals(wanted, true) && it.substringAfter('=').trim().equals(current, true)
+        }
+        if (keep.size == lines.size) return false
+        setAutoRules(prefs, keep.joinToString("\n"))
+        return true
+    }
+
+    fun auto(prefs: Prefs): Boolean = prefs.raw().getBoolean("vocabAuto", true)
+    fun setAuto(prefs: Prefs, v: Boolean) { prefs.raw().edit().putBoolean("vocabAuto", v).apply() }
+
+    fun logAuto(prefs: Prefs, s: Suggestion) {
+        val old = prefs.raw().getString("vocabAutoLog", "") ?: ""
+        val line = "${s.from} → ${s.to}" + if (s.target) " (magyar)" else " (angol)"
+        val lines = (old.lines().filter { it.isNotBlank() } + line).takeLast(20)
+        prefs.raw().edit().putString("vocabAutoLog", lines.joinToString("\n")).apply()
+    }
+
+    /** Az automatikusan tanult szabályok naplója (utolsó 20). */
+    fun autoLog(prefs: Prefs): List<String> =
+        (prefs.raw().getString("vocabAutoLog", "") ?: "").lines().filter { it.isNotBlank() }
 
     private fun alreadyKnown(prefs: Prefs, from: String, to: String, target: Boolean): Boolean {
         val rule = from.lowercase() + "=" + to.lowercase()

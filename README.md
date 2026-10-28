@@ -1,3 +1,9 @@
+# AngolMagyar v2.28.7 – pontosabb, tartalomhű átirat és prioritásos ellenőrzés
+
+Ez a kiadás a meglévő Whisper/Vosk, VAD, fordítási memória, SRT-szerkesztő és Material 3 felület megtartásával a legfontosabb minőségi kockázatokat kezeli. A gyanús felismerést a rendszer jelzi, de nem törli automatikusan csak azért, mert rövid, magányos vagy alacsony a logprob értéke.
+
+A változásokat, korlátokat és ellenőrzési lépéseket a `QUALITY_IMPROVEMENTS_HU.md` és a `BUILD_STATUS_HU.md` tartalmazza.
+
 # AngolMagyar v2.23.0 – javított, egységesített csomag
 
 Ez a kiadás a v2.22.2 hibáit javítja, és az újdonságokat a tesztekkel együtt hozza.
@@ -34,3 +40,7 @@ Ez a kiadás a v2.22.2 hibáit javítja, és az újdonságokat a tesztekkel egy�
 ./gradlew :app:assembleDebug :wear:assembleDebug
 ./gradlew :app:testDebugUnitTest
 ```
+
+## Gyémánt Edition – Update 12
+
+A magyar frissítési jegyzeteket lásd az `UPDATE12_HU.md` fájlban. A Beállítások → Haladó → Javítólisták és szótár részben elérhető a Gyémánt szótárközpont. A szótár módosításait a felhasználó menti és aktiválja; a korábbi fordítások automatikus felülírása nem történik meg. A teljes Android-build állapotát és a korlátozásokat a frissítési jegyzet dokumentálja.
