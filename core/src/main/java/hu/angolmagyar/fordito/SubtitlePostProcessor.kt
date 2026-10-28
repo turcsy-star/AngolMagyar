@@ -70,6 +70,8 @@ object SubtitlePostProcessor {
             val normalized = result
                 .replace(Regex("[ \\t]+([,.;:!?…])"), "$1")
                 .replace(Regex("([!?]){3,}"), "$1")
+                .replace(Regex("!{2,}"), "!")
+                .replace(Regex("\\?{2,}"), "?")
                 .replace(Regex("([,;:])\\1+"), "$1")
                 .replace(Regex("[ \\t]{2,}"), " ")
                 .trim()
@@ -89,7 +91,7 @@ object SubtitlePostProcessor {
             }
         }
 
-        if (Regex("\\b(?:TODO|FIXME|\\[unclear\\]|\\[inaudible\\])\\b", RegexOption.IGNORE_CASE).containsMatchIn(result)) {
+        if (Regex("\\bTODO\\b|\\bFIXME\\b|\\[(?:unclear|inaudible)\\]", RegexOption.IGNORE_CASE).containsMatchIn(result)) {
             notes += "Ellenőrizd a bizonytalan vagy szerkesztői jelöléseket."
         }
         if (Regex("\\b\\w{25,}\\b").containsMatchIn(result)) {
