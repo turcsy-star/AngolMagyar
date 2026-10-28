@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -44,7 +46,7 @@ android {
     // Saját release kulcs: a projekt gyökerében lévő keystore.properties (storeFile, storePassword, keyAlias, keyPassword)
     // vagy KEYSTORE_FILE / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD környezeti változók. Ha egyik sincs,
     // a release a debug kulccsal íródik alá (csak saját tesztelésre).
-    val ksProps = java.util.Properties().apply {
+    val ksProps = Properties().apply {
         val f = rootProject.file("keystore.properties")
         if (f.exists()) f.inputStream().use { load(it) }
     }
