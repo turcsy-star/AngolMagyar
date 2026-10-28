@@ -110,6 +110,8 @@ import hu.angolmagyar.fordito.OnlinePrefs
 import hu.angolmagyar.fordito.OnlineSettingsDialog
 import hu.angolmagyar.fordito.ModelsActivity
 import hu.angolmagyar.fordito.Prefs
+import hu.angolmagyar.fordito.Presets
+import hu.angolmagyar.fordito.AsrPrefs
 import hu.angolmagyar.fordito.PhrasebookActivity
 import hu.angolmagyar.fordito.PhrasebookStore
 import hu.angolmagyar.fordito.TranslationStyle

@@ -90,7 +90,7 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             if (currentPractice == null) {
                 PremiumCard(Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PremiumSectionTitle("Minden ismétlés kész!", "Most nincs esedékes kifejezés.")
+                        PremiumSectionTitle("Minden ismétlés kész!", subtitle = "Most nincs esedékes kifejezés.")
                         Text("A sikeres válaszok egyre hosszabb időköz után térnek vissza. A gyakorlás teljesen helyi.",
                             style = MaterialTheme.typography.bodyMedium)
                     }
@@ -128,7 +128,7 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
         } else if (filtered.isEmpty()) {
             PremiumCard(Modifier.fillMaxWidth()) {
                 Column {
-                    PremiumSectionTitle("Még nincs mentett kifejezés", "Élő fordításnál a Mentés gombbal adhatsz hozzá mondatokat.")
+                    PremiumSectionTitle("Még nincs mentett kifejezés", subtitle = "Élő fordításnál a Mentés gombbal adhatsz hozzá mondatokat.")
                     Spacer(Modifier.height(6.dp))
                     Text("A szókincstár kézzel mentett elemeket tárol; a beszélgetéseket nem menti automatikusan.",
                         style = MaterialTheme.typography.bodySmall)

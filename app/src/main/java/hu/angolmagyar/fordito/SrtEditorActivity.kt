@@ -1032,7 +1032,7 @@ class SrtEditorActivity : AppCompatActivity() {
                     textSize = 14f
                     setTextColor(Ui.color(this@SrtEditorActivity, R.color.textPrimary))
                     setPadding(0, dp(4), 0, 0)
-                    textIsSelectable = true
+                    setTextIsSelectable(true)
                 })
                 card.addView(sourceBox, LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
