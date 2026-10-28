@@ -152,5 +152,5 @@ dependencies {
     // Compose screenshot smoke test (Robolectric + Roborazzi)
     testImplementation("androidx.compose.ui:ui-test-junit4")
     testImplementation("org.robolectric:robolectric:4.14.1")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.44.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.44.0")
 }
