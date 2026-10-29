@@ -6,6 +6,7 @@ package hu.angolmagyar.fordito
  *
  * Két szabály (mindkettő óvatos, és a végén a hívó kiírja, hány blokkot dobott el):
  *  A) ismétlődő hosszabb mondat: a harmadik, egymást követő azonos szöveg gyanús és eltávolítható;
+ *  A2) sűrű roham: legalább 4 egymást követő, lehetetlenül gyors blokk (összeomlott időbélyeg, ismételgetett szöveg);
  *  B) magányos rövid sor és C) alacsony logprob csak jelzés, automatikusan nem törlünk valódi beszédet.
  * A magányos vagy bizonytalan szegmens lehet halk, de helyes megszólalás is.
  */
@@ -29,6 +30,21 @@ object Hallucination {
 
     private fun words(c: SrtExporter.Cue): Int = key(c).split(' ').count { it.isNotEmpty() }
 
+    /**
+     * Lehetetlenül gyors blokk: a szöveg karakterszáma a blokk saját hosszához, illetve a következő blokk kezdetéig
+     * hátralévő időhöz képest (a kisebbikhez) meghaladja a megadott karakter/mp értéket. 12 karakternél rövidebb
+     * szöveget nem ítélünk meg.
+     */
+    private fun tooFast(list: List<SrtExporter.Cue>, idx: Int, maxCps: Double): Boolean {
+        val c = list[idx]
+        val chars = maxOf(c.source.length, c.target.length)
+        if (chars < 12) return false
+        val own = c.endMs - c.startMs
+        val gap = if (idx + 1 < list.size) list[idx + 1].startMs - c.startMs else own
+        val dur = maxOf(100L, minOf(own, gap))
+        return chars * 1000.0 / dur > maxCps
+    }
+
     fun clean(
         cues: List<SrtExporter.Cue>,
         minRepeatWords: Int = QualityRules.REPEAT_MIN_WORDS,
@@ -37,7 +53,9 @@ object Hallucination {
         isolatedGapMs: Long = QualityRules.ISOLATED_GAP_MS,
         isolatedMaxWords: Int = QualityRules.ISOLATED_MAX_WORDS,
         lowConfLp: Float = QualityRules.REVIEW_LP,
-        lowConfMaxWords: Int = 8
+        lowConfMaxWords: Int = 8,
+        burstMaxCps: Double = 35.0,
+        burstMinRun: Int = 4
     ): Result {
         if (cues.size < 2) return Result(cues, 0, 0)
         val sorted = cues.sortedBy { it.startMs }
@@ -62,13 +80,31 @@ object Hallucination {
             afterA.add(c)
         }
 
+        // A2) sűrű roham: a Whisper néha a darab végén összeomló időbélyeggel ismételgeti a szöveget, így 1–2 mp-be
+        // több tucat karakternyi blokk kerül. Ez nem emberi beszéd (35 karakter/mp fölött), és a szöveg a környező
+        // blokkokban már szerepel. Egyetlen vagy két gyors blokkot (pl. rövid közbeszólás) nem érintünk.
+        val kept = ArrayList<SrtExporter.Cue>(afterA.size)
+        var bi = 0
+        while (bi < afterA.size) {
+            var bj = bi
+            while (bj < afterA.size && tooFast(afterA, bj, burstMaxCps)) bj++
+            if (bj - bi >= burstMinRun) {
+                for (k in bi until bj) removed.add(afterA[k])
+                repeats += bj - bi
+                bi = bj
+            } else {
+                kept.add(afterA[bi])
+                bi++
+            }
+        }
+
         // B) magányos rövid sor a hosszú csendben
         var isolated = 0
-        val out = ArrayList<SrtExporter.Cue>(afterA.size)
-        for (i in afterA.indices) {
-            val c = afterA[i]
-            val prevGap = if (i == 0) Long.MAX_VALUE else c.startMs - afterA[i - 1].endMs
-            val nextGap = if (i == afterA.size - 1) Long.MAX_VALUE else afterA[i + 1].startMs - c.endMs
+        val out = ArrayList<SrtExporter.Cue>(kept.size)
+        for (i in kept.indices) {
+            val c = kept[i]
+            val prevGap = if (i == 0) Long.MAX_VALUE else c.startMs - kept[i - 1].endMs
+            val nextGap = if (i == kept.size - 1) Long.MAX_VALUE else kept[i + 1].startMs - c.endMs
             val alone = prevGap >= isolatedGapMs && nextGap >= isolatedGapMs &&
                 !(prevGap == Long.MAX_VALUE && nextGap == Long.MAX_VALUE)
             if (alone && words(c) <= isolatedMaxWords) isolated++

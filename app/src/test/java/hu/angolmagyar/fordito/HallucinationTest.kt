@@ -19,6 +19,35 @@ class HallucinationTest {
         assertEquals(3, r.cues.size)
     }
 
+    @Test fun collapsedTimestampBurstIsRemoved() {
+        fun c(s: Long, e: Long, en: String, hu: String) = SrtExporter.Cue(s, e, en, hu)
+        val cues = listOf(
+            c(10_000, 15_000, "Are you feeling better now?", "Jobban érzed magad most?"),
+            c(20_630, 21_132, "And the storm approaches, and they're afraid,", "És a vihar megközelíti,"),
+            c(20_630, 21_130, "Not their week, you know, not at all.", "Nem a hétük, tudod, egyáltalán nem."),
+            c(21_172, 21_672, "and they're afraid, and it's just not.", "és félnek, és csak nem."),
+            c(21_172, 21_672, "They are really afraid of the storm.", "Nagyon félnek a vihartól."),
+            c(21_380, 21_880, "The sailors grab everything they have.", "A tengerészek megragadnak mindent."),
+            c(21_630, 22_140, "And it is simply not their lucky week.", "És egyszerűen nem az ő szerencsés hetük."),
+            c(22_620, 25_105, "I'm so good at storytelling.", "Annyira jó vagyok a mesemondásban.")
+        )
+        val r = Hallucination.clean(cues)
+        assertEquals(6, r.dropped)
+        assertEquals(listOf(10_000L, 22_620L), r.cues.map { it.startMs })
+    }
+
+    @Test fun shortFastRunBelowThresholdIsKept() {
+        fun c(s: Long, e: Long, en: String, hu: String) = SrtExporter.Cue(s, e, en, hu)
+        val cues = listOf(
+            c(10_000, 12_000, "Are you feeling better now?", "Jobban érzed magad most?"),
+            c(20_630, 21_130, "Not their week, you know, not at all.", "Nem a hétük, tudod, egyáltalán nem."),
+            c(21_172, 21_672, "They are really afraid of the storm.", "Nagyon félnek a vihartól."),
+            c(21_630, 22_140, "And it is simply not their lucky week.", "És egyszerűen nem az ő szerencsés hetük."),
+            c(24_000, 26_000, "I'm so good at storytelling.", "Annyira jó vagyok a mesemondásban.")
+        )
+        assertEquals(0, Hallucination.clean(cues).dropped)
+    }
+
     @Test fun shortRepeatedFillerIsKept() {
         val cues = (0 until 8).map { cue(it * 5, "Rendben.") } + cue(60, "Igen, persze.")
         assertEquals(0, Hallucination.clean(cues).dropped)

@@ -27,7 +27,19 @@ class PipelineView @JvmOverloads constructor(
     private var phase = 0f
     private val doneAt = LongArray(5)
     private var initialized = false
-    private val pairs = arrayOf("Hello" to "Szia", "Thanks" to "Kösz", "Yes" to "Igen", "Good morning" to "Jó reggelt")
+    private var liveHeard = ""
+    private var liveTranslated = ""
+
+    /** A valódi, éppen hallott és lefordított mondat (rövidítve jelenik meg az aktív lépés fölött). */
+    fun setLive(heard: String, translated: String) {
+        liveHeard = heard
+        liveTranslated = translated
+    }
+
+    private fun shortText(s: String, max: Int = 22): String {
+        val t = s.trim().replace(Regex("\\s+"), " ")
+        return if (t.length <= max) t else t.take(max - 1).trimEnd() + "…"
+    }
 
     private val d = resources.displayMetrics.density
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -92,7 +104,11 @@ class PipelineView @JvmOverloads constructor(
                 c.drawRoundRect(cx + (k - 2) * 8f * d - 3f * d, baseY - 9f * d, cx + (k - 2) * 8f * d + 3f * d, baseY - 3f * d, 1.5f * d, 1.5f * d, p)
             }
             3 -> { // felismerés + fordítás: az angol szó magyarrá alakul
-                val pr = pairs[((System.currentTimeMillis() / 1600) % pairs.size).toInt()]
+                val first = shortText(liveHeard)
+                val second = shortText(liveTranslated)
+                // ha még nincs valódi szöveg, nem mutatunk kitalált példát
+                if (first.isEmpty()) return
+                val pr = first to (if (second.isEmpty()) "…" else second)
                 text.typeface = Typeface.DEFAULT_BOLD
                 val oldC = text.color
                 val showFirst = phase < 0.5f

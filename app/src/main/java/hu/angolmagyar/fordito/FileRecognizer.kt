@@ -191,7 +191,16 @@ class FileRecognizer(
                             cb?.invoke(percent, "Whisper felismerés: $percent%")
                         }
                     }
-                    override fun onSegment(t0: Long, t1: Long, text: ByteArray) {}
+                    override fun onSegment(t0: Long, t1: Long, text: ByteArray) {
+                        // élő kijelzés: az éppen felismert mondat és a videó-időpontja (t0/t1: 10 ms-os egység a darab elejétől)
+                        val s = String(text, Charsets.UTF_8).trim()
+                        if (s.isBlank() || cancel.get()) return
+                        val a = t0 * 10L
+                        val b = t1 * 10L
+                        val from = if (timeMap != null) timeMap.toOrig(a) else offsetMs + a
+                        val to = if (timeMap != null) maxOf(timeMap.toOrig(b), from + 200) else offsetMs + b
+                        SrtJob.setLiveHeard(s, from, to)
+                    }
                 }, vadModel = vadPath)
         }
         if (cancel.get()) return emptyList()
@@ -623,7 +632,14 @@ class FileRecognizer(
         val toHu = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
         val tasks = srcs.map { t.translate(it) }
         val done = java.util.concurrent.atomic.AtomicInteger(0)
-        for (k in tasks) k.addOnCompleteListener(direct) { done.incrementAndGet() }
+        for ((ti, k) in tasks.withIndex()) k.addOnCompleteListener(direct) {
+            done.incrementAndGet()
+            // élő kijelzés: a legutóbb elkészült fordítás a forrásmondatával
+            if (k.isSuccessful) {
+                val r = k.result
+                if (!r.isNullOrBlank()) SrtJob.setLiveTranslated(srcs[ti], postTarget(r, toHu))
+            }
+        }
         val n = srcs.size
         var last = -1
         var lastChange = System.currentTimeMillis()

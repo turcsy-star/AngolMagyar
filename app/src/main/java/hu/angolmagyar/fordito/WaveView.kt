@@ -10,8 +10,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Hang burkológörbe a feliratkészítés közben: kész = fehér, hátralévő = szürke; zöld csak az a kis ablak (~30 mp),
- * amelyiken a felismerés éppen dolgozik – az nagyon lassan, finoman lüktet.
+ * Hang burkológörbe a feliratkészítés közben: kész = zöld, hátralévő = szürke; az a kis ablak (~30 mp),
+ * amelyiken a felismerés éppen dolgozik, piros és fehér között pulzál.
  */
 class WaveView @JvmOverloads constructor(
     ctx: Context, attrs: AttributeSet? = null
@@ -26,7 +26,7 @@ class WaveView @JvmOverloads constructor(
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var pulse = 0f
     private val pulseAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 2800
+        duration = 1300
         repeatCount = android.animation.ValueAnimator.INFINITE
         interpolator = android.view.animation.LinearInterpolator()
         addUpdateListener {
@@ -86,7 +86,7 @@ class WaveView @JvmOverloads constructor(
         }
     }
 
-    /** 0 = hátralévő (szürke), 1 = éppen dolgozik (zöld), 2 = kész (fehér) az idő (ms) alapján. */
+    /** 0 = hátralévő (szürke), 1 = éppen dolgozik (piros–fehér pulzáló), 2 = kész (zöld) az idő (ms) alapján. */
     private fun stateAt(tMs: Long, progress: Float, t: Float): Int {
         if (ranges.size >= 2 && chunkState.size * 2 <= ranges.size) {
             var i = 0
@@ -97,7 +97,7 @@ class WaveView @JvmOverloads constructor(
                 i += 2
             }
             if (last < 0) return chunkState.getOrElse(0) { 0 }
-            // az éppen dolgozott szakaszon belül: a kurzor előtt kész (fehér); a kurzor után egy ~30 mp-es ablak zöld
+            // az éppen dolgozott szakaszon belül: a kurzor előtt kész (zöld); a kurzor után egy ~30 mp-es ablak piros–fehér
             // (ezen dolgozik a Whisper), ami még távolabb van, az szürke
             if (chunkState[last] == 1) {
                 val cur = cursorMs(last)
@@ -125,8 +125,9 @@ class WaveView @JvmOverloads constructor(
         if (n > 0) {
             val gap = max(1f, w / n * 0.18f)
             val bw = max(1.5f, w / n - gap)
-            val doneC = Ui.color(context, R.color.textPrimary)
-            val activeC = Ui.color(context, R.color.ok)
+            val doneC = Ui.color(context, R.color.ok)
+            val activeRed = 0xFFFF4D4D.toInt()
+            val activeWhite = 0xFFFFFFFF.toInt()
             val idleC = 0x66888AA0
             val progress = overallProgress()
             for (i in 0 until n) {
@@ -139,10 +140,10 @@ class WaveView @JvmOverloads constructor(
                 barPaint.color = when (st) {
                     2 -> doneC
                     1 -> {
-                        // lassú, finom lüktetés: kissé változó fényesség és magasság
+                        // pulzálás: a szín piros és fehér között vált, a magasság is lüktet (a hullám végigfut az ablakon)
                         val k = 0.5f + 0.5f * kotlin.math.sin(pulse * 2f * Math.PI.toFloat() - i * 0.12f)
-                        barH = bh * (0.94f + 0.12f * k)
-                        (activeC and 0x00FFFFFF) or ((150 + (105 * k).toInt()) shl 24)
+                        barH = bh * (0.85f + 0.3f * k)
+                        androidx.core.graphics.ColorUtils.blendARGB(activeRed, activeWhite, k)
                     }
                     else -> idleC
                 }

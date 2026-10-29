@@ -226,6 +226,18 @@ object SrtJob {
     @Volatile var preview: List<String> = emptyList()
     /** Ugyanez szerkezetesen (átirat-folyam). */
     @Volatile var previewCues: List<SrtExporter.Cue> = emptyList()
+    /** Élő szöveg a képernyőhöz: az éppen hallott mondat az időpontjával (ms), és a legutóbb lefordított mondat. */
+    @Volatile var liveHeard = ""
+    @Volatile var liveHeardStartMs = 0L
+    @Volatile var liveHeardEndMs = 0L
+    @Volatile var liveSource = ""
+    @Volatile var liveTranslated = ""
+    fun setLiveHeard(text: String, startMs: Long, endMs: Long) {
+        liveHeardStartMs = startMs; liveHeardEndMs = endMs; liveHeard = text
+    }
+    fun setLiveTranslated(source: String, translated: String) {
+        liveSource = source; liveTranslated = translated
+    }
     /** Hullámforma-nézet: a hang burkolója (0..1), a teljes hossz és a darabok időtartományai (kezdet, vég – ms). */
     @Volatile var waveEnv: FloatArray = FloatArray(0)
     @Volatile var waveTotalMs = 0L
@@ -323,6 +335,11 @@ object SrtJob {
         curChunkStartMs = 0
         preview = emptyList()
         previewCues = emptyList()
+        liveHeard = ""
+        liveHeardStartMs = 0L
+        liveHeardEndMs = 0L
+        liveSource = ""
+        liveTranslated = ""
         waveEnv = FloatArray(0)
         waveTotalMs = 0L
         waveRanges = LongArray(0)

@@ -132,6 +132,8 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var langLine: TextView
     private lateinit var barTotal: BarRow
     private lateinit var posText: TextView
+    private lateinit var heardText: TextView
+    private lateinit var transText: TextView
     private var glossEn: android.widget.EditText? = null
     private var glossHu: android.widget.EditText? = null
     private var glossAuto: android.widget.EditText? = null
@@ -1013,6 +1015,23 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(posText, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(8) })
+        // élő szöveg: mit hall éppen a felismerő, és mit fordít
+        heardText = Ui.small(this, "").apply {
+            gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE
+            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
+        }
+        head.addView(heardText, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(2) })
+        transText = Ui.small(this, "").apply {
+            gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE
+            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.primary))
+        }
+        head.addView(transText, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(8) })
         engineLine = Ui.small(this, "").apply { gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE }
         head.addView(engineLine, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1155,7 +1174,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         previewBox.addView(previewText)
         flow = TranscriptFlow(previewText)
         // közvetlenül a hullám pozíciója alá
-        head.addView(previewBox, head.indexOfChild(posText) + 1)
+        head.addView(previewBox, head.indexOfChild(transText) + 1)
         g.addView(progressSection)
 
         // ---------- kész: összegzés
@@ -1268,7 +1287,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             val a = r[2 * i]
             val b = r[2 * i + 1]
             val cur = a + ((b - a) * fr.getOrElse(i) { 0.0 }.coerceIn(0.0, 1.0)).toLong()
-            "Éppen: ${fmtDur(cur)} (${fmtDur(a)} – ${fmtDur(b)}) · ${i + 1}/${st.size}. darab"
+            val winEnd = minOf(cur + 30_000L, b)
+            "Éppen: ${fmtDur(cur)} – ${fmtDur(winEnd)}  (szakasz: ${fmtDur(a)} – ${fmtDur(b)} · ${i + 1}/${st.size}. darab)"
         } + if (act.size > 2) " …" else ""
     }
 
@@ -1702,6 +1722,17 @@ class FileSubtitleActivity : AppCompatActivity() {
             wave.setProgress(job.chunkState.copyOf(), job.chunkFracCopy())
         }
         posText.text = positionLabel(job)
+        val heard = job.liveHeard
+        if (job.running && heard.isNotBlank()) {
+            heardText.text = "Hallott (${fmtDur(job.liveHeardStartMs)} – ${fmtDur(job.liveHeardEndMs)}): „$heard”"
+            heardText.visibility = View.VISIBLE
+        } else heardText.visibility = View.GONE
+        val tr = job.liveTranslated
+        if (job.running && tr.isNotBlank()) {
+            transText.text = "Fordítás: „$tr”"
+            transText.visibility = View.VISIBLE
+        } else transText.visibility = View.GONE
+        pipeline.setLive(heard, tr)
         engineLine.text = SrtJob.engineText().let { t ->
             if (SrtJob.names.isNotEmpty()) t + (if (t.isNotEmpty()) "\n" else "") + "Nevek: " + SrtJob.names.joinToString(", ") else t
         }
