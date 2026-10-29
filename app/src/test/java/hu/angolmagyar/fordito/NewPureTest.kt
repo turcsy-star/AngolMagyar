@@ -42,7 +42,7 @@ class EnvelopeTest {
     }
 }
 
-class TranslationMemoryTest {
+class TranslationMemoryBasicsTest {
     @Test fun lookupIgnoresCaseAndPunctuation() {
         val tm = TranslationMemory()
         tm.put("Come here, now!", "Gyere ide, most!")

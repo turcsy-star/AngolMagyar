@@ -14,7 +14,7 @@ class PhrasebookStoreTest {
     private lateinit var store: PhrasebookStore
 
     @Before fun setUp() {
-        val context = RuntimeEnvironment.getApplication<android.app.Application>()
+        val context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences("local_phrasebook_v1", 0).edit().clear().commit()
         store = PhrasebookStore(context)
     }
