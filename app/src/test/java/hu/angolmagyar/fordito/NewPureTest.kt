@@ -72,7 +72,7 @@ class QualityReportTest {
     @Test fun countsAndWorst() {
         val cues = listOf(
             SrtExporter.Cue(0, 2000, "Hello there my friend.", "Szia barátom."),
-            SrtExporter.Cue(2500, 4000, "Okay then.", "Rendben."),
+            SrtExporter.Cue(2500, 4000, "Okay then.", "Okay then."),
             SrtExporter.Cue(4100, 6000, "Fine.", "")
         )
         val r = QualityReport.build(cues)

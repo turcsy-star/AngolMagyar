@@ -28,7 +28,7 @@ object LineQuality {
             val p = (if (hasTarget) prev.target else prev.source).trim()
             if (p.equals(shown, ignoreCase = true) && words(shown) >= 2) out.add("ismétlődés")
         }
-        if (c.lp.isFinite() && c.lp < QualityRules.REVIEW_LP) out.add("bizonytalan felismerés")
+        if (!c.lp.isFinite() || c.lp < QualityRules.REVIEW_LP) out.add("bizonytalan felismerés")
         if (c.wordConfidence.any { TokenQuality.needsReview(it) }) out.add("gyenge szókonfidencia")
         if (c.noSpeechProb.isFinite() && c.noSpeechProb >= 0.8f) out.add("beszéd/csend ellenőrzése")
         if (words(en) <= 2 && en.isNotEmpty() && en.last() !in SENT_END && next != null && next.startMs - c.endMs < 1500)
