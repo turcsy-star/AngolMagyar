@@ -272,22 +272,33 @@ class SettingsActivity : AppCompatActivity() {
         })
         dirCard.addView(Ui.small(this, "Globális Infinity Luxury téma — a kiválasztott paletta a Compose Material 3 felület színeit is vezérli."))
         val luxuryThemes = android.widget.RadioGroup(this).apply { orientation = android.widget.RadioGroup.VERTICAL }
-        listOf(
-            "platinum" to "Platinum Silver",
-            "obsidian" to "Obsidian Black",
-            "gold" to "Royal Gold",
-            "arctic" to "Arctic Diamond",
-            "sapphire" to "Midnight Sapphire"
-        ).forEach { (key, title) ->
+        val paletteRows = listOf(
+            Triple("platinum", "Platinum Silver", intArrayOf(0xFF080B10.toInt(), 0xFFC8D0DA.toInt(), 0xFF8EA6C0.toInt())),
+            Triple("obsidian", "Obsidian Black", intArrayOf(0xFF030405.toInt(), 0xFFB6BEC8.toInt(), 0xFF737F8C.toInt())),
+            Triple("gold", "Royal Gold", intArrayOf(0xFF100D08.toInt(), 0xFFD6B36A.toInt(), 0xFF9F7A36.toInt())),
+            Triple("arctic", "Arctic Diamond", intArrayOf(0xFF071018.toInt(), 0xFF8ADCF2.toInt(), 0xFF4FAFCB.toInt())),
+            Triple("sapphire", "Midnight Sapphire", intArrayOf(0xFF050A18.toInt(), 0xFF78B8FF.toInt(), 0xFF53E7FF.toInt()))
+        )
+        paletteRows.forEach { (key, title, swatchColors) ->
             luxuryThemes.addView(RadioButton(this).apply {
                 id = View.generateViewId()
                 text = title
+                minHeight = dp(48)
                 isChecked = prefs.luxuryThemeId == key
+                val swatch = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, swatchColors).apply {
+                    cornerRadius = dp(7).toFloat()
+                    setStroke(dp(1), 0x66FFFFFF)
+                    setSize(dp(68), dp(22))
+                }
+                swatch.setBounds(0, 0, dp(68), dp(22))
+                setCompoundDrawables(null, null, swatch, null)
+                compoundDrawablePadding = dp(12)
+                contentDescription = "$title színpaletta előnézettel"
                 setOnClickListener { prefs.luxuryThemeId = key }
             })
         }
         dirCard.addView(luxuryThemes)
-        dirCard.addView(Ui.small(this, "A módosítás a fő Compose-felületen a Beállításokból visszatérve automatikusan frissül. A klasszikus View-képernyők külön témázása nem változik."))
+        dirCard.addView(Ui.small(this, "A színcsíkok a háttér, a fő kiemelőszín és a másodlagos fény színét mutatják. A módosítás a fő Compose-felületen a Beállításokból visszatérve frissül; a klasszikus View-képernyők külön témázása későbbi migráció."))
         dirCard.addView(switchRow("Csökkentett animáció", prefs.reduceMotion) {
             prefs.reduceMotion = it
         })

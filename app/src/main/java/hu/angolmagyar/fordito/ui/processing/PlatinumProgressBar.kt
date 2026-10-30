@@ -29,7 +29,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
@@ -47,6 +46,7 @@ import hu.angolmagyar.fordito.ui.design.PremiumMotion
  */
 internal fun safeProgressPercent(pct: Int): Int = pct.coerceIn(0, 100)
 
+@Composable
 fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: Modifier = Modifier) {
     val known = pct >= 0
     val safePct = safeProgressPercent(pct)
@@ -57,7 +57,6 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
 
     Column(
         modifier.fillMaxWidth().semantics {
-            role = Role.ProgressBar
             if (known) {
                 progressBarRangeInfo = ProgressBarRangeInfo(safePct.toFloat(), 0f..100f)
                 contentDescription = "Letöltés: $safePct százalék"

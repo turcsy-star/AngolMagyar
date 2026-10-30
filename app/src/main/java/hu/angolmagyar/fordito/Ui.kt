@@ -23,6 +23,8 @@ import android.widget.TextView
 import androidx.appcompat.widget.AppCompatButton
 import androidx.appcompat.widget.AppCompatImageButton
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.graphics.toArgb
+import hu.angolmagyar.fordito.ui.design.LuxuryPalettes
 
 /** Közös, kézzel épített UI-elemek (téma-érzékeny színekkel). */
 object Ui {
@@ -46,6 +48,22 @@ object Ui {
             return try {
                 ContextCompat.getColor(ctx, if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
             } catch (_: Exception) { ContextCompat.getColor(ctx, res) }
+        }
+        // Infinity Luxury paletta: a régi View-alapú képernyők is ugyanazt a palettát használják,
+        // mint a Compose felület. Így a kártyák, hátterek, szövegek és kiemelések együtt frissülnek.
+        val prefs = Prefs(ctx)
+        if (prefs.platinumTheme) {
+            val palette = LuxuryPalettes.byId(prefs.luxuryThemeId)
+            when (res) {
+                R.color.bg -> return palette.background.toArgb()
+                R.color.card -> return palette.surface.toArgb()
+                R.color.textPrimary -> return palette.text.toArgb()
+                R.color.textSecondary -> return palette.text.copy(alpha = 0.72f).toArgb()
+                R.color.stroke -> return palette.edge.copy(alpha = 0.58f).toArgb()
+                R.color.primary -> return palette.accent.toArgb()
+                R.color.primaryDim -> return palette.accent.copy(alpha = 0.88f).toArgb()
+                R.color.accentGlow -> return palette.glow.toArgb()
+            }
         }
         // választott kiemelőszín-téma (az indigó az alap, az nem változtat semmit)
         if (res == R.color.primary || res == R.color.primaryDim || res == R.color.accentGlow) {

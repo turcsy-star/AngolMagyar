@@ -104,6 +104,7 @@ import hu.angolmagyar.fordito.Accent
 import hu.angolmagyar.fordito.App
 import hu.angolmagyar.fordito.AppState
 import hu.angolmagyar.fordito.DiagnosticsActivity
+import hu.angolmagyar.fordito.ui.PlatinumIntelligenceActivity
 import hu.angolmagyar.fordito.FileSubtitleActivity
 import hu.angolmagyar.fordito.ModelDownloadService
 import hu.angolmagyar.fordito.ModelManager
@@ -227,6 +228,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
                     onModels = { startActivity(Intent(this, ModelsActivity::class.java)) },
                     onSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
                     onDiagnostics = { startActivity(Intent(this, DiagnosticsActivity::class.java)) },
+                    onIntelligence = { startActivity(Intent(this, PlatinumIntelligenceActivity::class.java)) },
                     onOverlay = {
                         startActivity(Intent(
                             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -280,6 +282,7 @@ fun HomeScreen(
     onModels: () -> Unit,
     onSettings: () -> Unit,
     onDiagnostics: () -> Unit,
+    onIntelligence: () -> Unit,
     onOverlay: () -> Unit,
     onPause: () -> Unit,
     onStop: () -> Unit
@@ -350,6 +353,12 @@ fun HomeScreen(
 
             DownloadBanner(onClick = onModels)
             TranslationComfortCard()
+            HeroCard(
+                title = "Platinum Intelligence Suite",
+                subtitle = "Prémium eszközközpont, diagnosztika és fejlesztési státuszok.",
+                icon = Icons.Rounded.CloudDownload,
+                onClick = onIntelligence
+            )
             StateCards(error = snap.lastError?.message, onDiagnostics = onDiagnostics, onModels = onModels)
 
             Staggered(2, shown) {
