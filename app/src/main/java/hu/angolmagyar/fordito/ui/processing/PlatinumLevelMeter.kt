@@ -118,8 +118,9 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
 
 /** View-burkoló a View-alapú Élő fordítás képernyőhöz. */
 class PlatinumLevelView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
+    private val reduced = PremiumMotion.reduced(ctx)
+
     init {
-        val reduced = PremiumMotion.reduced(ctx)
         addView(ComposeView(ctx).apply { setContent { PlatinumLevelMeter(reduced) } },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
