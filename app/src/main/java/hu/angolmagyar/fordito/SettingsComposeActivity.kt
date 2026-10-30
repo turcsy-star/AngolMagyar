@@ -36,8 +36,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,7 +49,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import android.os.Build
 
 /**
  * Compose-alapú Beállítások – Megjelenés / kényelem szekció.
@@ -69,16 +66,22 @@ class SettingsComposeActivity : ComponentActivity() {
                     android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                     android.content.res.Configuration.UI_MODE_NIGHT_YES)
             val scheme = when {
-                prefs.oledBlack && dark -> darkColorScheme(
-                    primary = Color(0xFF818CF8),
-                    background = Color.Black,
-                    surface = Color(0xFF0A0A0A),
-                    surfaceVariant = Color(0xFF111111)
+                dark -> darkColorScheme(
+                    primary = Color(0xFF60A5FA), secondary = Color(0xFF22D3EE),
+                    tertiary = Color(0xFF38BDF8),
+                    background = if (prefs.oledBlack) Color.Black else Color(0xFF070B16),
+                    surface = if (prefs.oledBlack) Color(0xFF080D18) else Color(0xFF111C30),
+                    surfaceVariant = Color(0xFF17243A),
+                    onBackground = Color(0xFFEEF5FF), onSurface = Color(0xFFEEF5FF),
+                    onSurfaceVariant = Color(0xFFA9BBD6), outline = Color(0xFF263650)
                 )
-                Build.VERSION.SDK_INT >= 31 && dark -> dynamicDarkColorScheme(ctx)
-                Build.VERSION.SDK_INT >= 31 -> dynamicLightColorScheme(ctx)
-                dark -> darkColorScheme(primary = Color(0xFF818CF8))
-                else -> lightColorScheme(primary = Color(0xFF4F46E5))
+                else -> lightColorScheme(
+                    primary = Color(0xFF2563EB), secondary = Color(0xFF0891B2),
+                    tertiary = Color(0xFF0EA5E9), background = Color(0xFFF3F6FC),
+                    surface = Color.White, surfaceVariant = Color(0xFFEAF0FA),
+                    onBackground = Color(0xFF101827), onSurface = Color(0xFF101827),
+                    onSurfaceVariant = Color(0xFF58677D), outline = Color(0xFFD7E1F2)
+                )
             }
             MaterialTheme(colorScheme = scheme) {
                 SettingsComposeScreen(

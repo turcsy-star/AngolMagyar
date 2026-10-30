@@ -157,6 +157,7 @@ class SettingsActivity : AppCompatActivity() {
 
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         column.addView(Ui.title(this, "Beállítások"))
+        column.addView(Ui.heroHeader(this, "CONTROL CENTER", "Saját munkakörnyezet", "Finomhangold a felismerést, a fordítást, a megjelenést és az alkalmazás viselkedését."))
         val tabGroups = listOf(ArrayList<View>(), ArrayList<View>(), ArrayList<View>())
         val tabBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -263,6 +264,33 @@ class SettingsActivity : AppCompatActivity() {
         }
         dirCard.addView(dirRadios)
         dirCard.addView(Ui.small(this, "Magyar → angol irányhoz töltsd le a magyar Vosk modellt is a főképernyőn."))
+        dirCard.addView(switchRow("Prémium (Blue Cinematic) feldolgozó kártya", prefs.premiumProcessingUi) {
+            prefs.premiumProcessingUi = it
+        })
+        dirCard.addView(switchRow("Platinum Luxury téma (kikapcsolva: Blue Cinematic)", prefs.platinumTheme) {
+            prefs.platinumTheme = it
+        })
+        dirCard.addView(Ui.small(this, "Globális Infinity Luxury téma — a kiválasztott paletta a Compose Material 3 felület színeit is vezérli."))
+        val luxuryThemes = android.widget.RadioGroup(this).apply { orientation = android.widget.RadioGroup.VERTICAL }
+        listOf(
+            "platinum" to "Platinum Silver",
+            "obsidian" to "Obsidian Black",
+            "gold" to "Royal Gold",
+            "arctic" to "Arctic Diamond",
+            "sapphire" to "Midnight Sapphire"
+        ).forEach { (key, title) ->
+            luxuryThemes.addView(RadioButton(this).apply {
+                id = View.generateViewId()
+                text = title
+                isChecked = prefs.luxuryThemeId == key
+                setOnClickListener { prefs.luxuryThemeId = key }
+            })
+        }
+        dirCard.addView(luxuryThemes)
+        dirCard.addView(Ui.small(this, "A módosítás a fő Compose-felületen a Beállításokból visszatérve automatikusan frissül. A klasszikus View-képernyők külön témázása nem változik."))
+        dirCard.addView(switchRow("Csökkentett animáció", prefs.reduceMotion) {
+            prefs.reduceMotion = it
+        })
         dirCard.addView(switchRow("Beszélgetés: automatikus irányváltás", prefs.autoLangSwitch) {
             prefs.autoLangSwitch = it
         })

@@ -163,6 +163,7 @@ class DiagnosticsActivity : AppCompatActivity() {
         column.removeAllViews()
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         column.addView(Ui.title(this, "Előkészítés"))
+        column.addView(Ui.heroHeader(this, "SYSTEM CHECK", "Minden készen áll?", "Ellenőrizd az engedélyeket, a modelleket és a háttérben futáshoz szükséges beállításokat."))
         val rows = rows()
         val bad = rows.count { it.ok == false }
         column.addView(

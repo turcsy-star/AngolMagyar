@@ -274,6 +274,7 @@ class LiveTranslateActivity : AppCompatActivity() {
             NavTransitions.open(this, SettingsActivity::class.java)
         })
         column.addView(header)
+        column.addView(Ui.heroHeader(this, "LIVE TRANSLATION", "Élő fordítás", "Valós idejű beszédfelismerés és fordítás – válaszd ki a hangforrást, majd indítsd el a mikrofont vagy a belső hangot."))
 
         // Státusz sáv
         val dirLabel = when {
@@ -593,6 +594,14 @@ class LiveTranslateActivity : AppCompatActivity() {
             max = 100
         }
         card.addView(meter)
+        if (prefs.platinumTheme) {
+            // Platinum téma: a valós hangszintből gördülő oszlopmérő váltja a sima sávot
+            meterText.visibility = View.GONE
+            meter.visibility = View.GONE
+            card.addView(hu.angolmagyar.fordito.ui.processing.PlatinumLevelView(this), LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = (8 * resources.displayMetrics.density).toInt() })
+        }
         if (prefs.polyMode) {
             // többnyelvű mód: két panel (eredeti | fordítás), beszélő- és nyelvjelöléssel, alul a célnyelv-választóval
             val lp = LivePanels(this, prefs)

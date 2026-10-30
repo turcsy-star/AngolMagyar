@@ -178,7 +178,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
     }
     private lateinit var engineLine: TextView
-    private lateinit var pipeline: PipelineView
+    private lateinit var pipeline: PipelineHost
     private lateinit var wave: WaveView
     private lateinit var checkView: CheckView
     private var shownEnv: FloatArray? = null
@@ -1001,8 +1001,9 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(langLine)
 
         // összesítő: egyetlen sáv + eltelt / hátra / kész (a lépés- és darab-sorok ezeket nem ismétlik)
-        pipeline = PipelineView(this)
-        head.addView(pipeline, LinearLayout.LayoutParams(
+        val pipelineView: View = if (Prefs(this).premiumProcessingUi) CinematicPipelineView(this) else PipelineView(this)
+        pipeline = pipelineView as PipelineHost
+        head.addView(pipelineView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
         wave = WaveView(this)

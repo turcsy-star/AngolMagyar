@@ -1,6 +1,7 @@
 package hu.angolmagyar.fordito
 
 import android.animation.AnimatorSet
+import android.animation.ValueAnimator
 import android.animation.ObjectAnimator
 import android.content.Context
 import android.content.res.ColorStateList
@@ -75,6 +76,10 @@ object Ui {
     /** ScrollView, amelyben az oszlop vízszintesen középre kerül. */
     fun scrollOf(ctx: Context, column: View): ScrollView =
         ScrollView(ctx).apply {
+            isFillViewport = true
+            clipToPadding = false
+            setBackgroundColor(color(ctx, R.color.bg))
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
             addView(
                 column,
                 FrameLayout.LayoutParams(
@@ -85,6 +90,73 @@ object Ui {
             )
         }
 
+    /**
+     * Prémium, kék cinematic fejléc a régi View-alapú képernyőkhöz.
+     * Nem helyettesít funkciót: csak vizuális hierarchiát és rövid belépési animációt ad.
+     */
+    fun heroHeader(ctx: Context, eyebrow: String, heading: String, detail: String): LinearLayout {
+        val wrap = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(ctx, 20), dp(ctx, 20), dp(ctx, 20), dp(ctx, 20))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                intArrayOf(0xFF10284B.toInt(), 0xFF0B1730.toInt(), 0xFF101827.toInt())
+            ).apply {
+                cornerRadius = dp(ctx, 24).toFloat()
+                setStroke(dp(ctx, 1), 0x665AA9FF)
+            }
+            elevation = dp(ctx, 5).toFloat()
+            alpha = 0f
+            translationY = dp(ctx, 12).toFloat()
+        }
+        // Finom, neon-cyan fénycsík: egységes filmes motívum minden régi View-képernyőn.
+        wrap.addView(View(ctx).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF22D3EE.toInt(), 0xFF60A5FA.toInt(), 0x0022D3EE))
+            layoutParams = LinearLayout.LayoutParams(dp(ctx, 76), dp(ctx, 3)).apply {
+                bottomMargin = dp(ctx, 13)
+            }
+        })
+        wrap.addView(TextView(ctx).apply {
+            text = eyebrow.uppercase()
+            textSize = 10f
+            letterSpacing = 0.18f
+            setTextColor(0xFF67D8FF.toInt())
+            setTypeface(typeface, Typeface.BOLD)
+        })
+        wrap.addView(TextView(ctx).apply {
+            text = heading
+            textSize = 25f
+            letterSpacing = -0.025f
+            setTextColor(0xFFF1F7FF.toInt())
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(0, dp(ctx, 7), 0, dp(ctx, 4))
+        })
+        wrap.addView(TextView(ctx).apply {
+            text = detail
+            textSize = 13f
+            setTextColor(0xFFB7C9E4.toInt())
+            setLineSpacing(dp(ctx, 2).toFloat(), 1f)
+        })
+        wrap.layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(ctx, 8) }
+        wrap.animate().alpha(1f).translationY(0f).setStartDelay(45)
+            .setDuration(520).setInterpolator(DecelerateInterpolator(1.7f)).start()
+        return wrap
+    }
+
+    /** Egységes, élénk kék szakaszjelölő a hosszú képernyők hierarchiájához. */
+    fun sectionLabel(ctx: Context, label: String): TextView =
+        TextView(ctx).apply {
+            text = label.uppercase()
+            textSize = 11f
+            letterSpacing = 0.14f
+            setTextColor(0xFF60A5FA.toInt())
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(dp(ctx, 2), dp(ctx, 18), 0, dp(ctx, 5))
+        }
+
     fun card(ctx: Context): LinearLayout =
         LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -92,12 +164,28 @@ object Ui {
             setPadding(pad, pad, pad, pad)
             // finom, üveges hatás: a kártya színe enyhén a kiemelőszín felé árnyalódik
             val base = color(ctx, R.color.card)
-            val tint = androidx.core.graphics.ColorUtils.blendARGB(base, color(ctx, R.color.primary), 0.06f)
-            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(base, tint)).apply {
+            val tint = androidx.core.graphics.ColorUtils.blendARGB(base, color(ctx, R.color.accentGlow), 0.085f)
+            background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
+                androidx.core.graphics.ColorUtils.blendARGB(base, color(ctx, R.color.primaryDim), 0.055f),
+                tint,
+                base
+            )).apply {
                 cornerRadius = dp(ctx, 20).toFloat()
-                setStroke(dp(ctx, 1), androidx.core.graphics.ColorUtils.setAlphaComponent(color(ctx, R.color.stroke), 200))
+                setStroke(dp(ctx, 1), androidx.core.graphics.ColorUtils.setAlphaComponent(color(ctx, R.color.accentGlow), 76))
             }
-            elevation = dp(ctx, 2).toFloat()
+            elevation = dp(ctx, 3).toFloat()
+            // Rövid, visszafogott cascade-enter. Nem érinti a listener-eket vagy a tartalomállapotot.
+            val reducedMotion = try {
+                Prefs(ctx).reduceMotion || android.provider.Settings.Global.getFloat(
+                    ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
+                ) == 0f
+            } catch (_: Exception) { false }
+            alpha = if (reducedMotion) 1f else 0f
+            translationY = if (reducedMotion) 0f else dp(ctx, 9).toFloat()
+            if (!reducedMotion) post {
+                if (isAttachedToWindow) animate().alpha(1f).translationY(0f)
+                    .setDuration(360).setInterpolator(DecelerateInterpolator(1.5f)).start()
+            }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT

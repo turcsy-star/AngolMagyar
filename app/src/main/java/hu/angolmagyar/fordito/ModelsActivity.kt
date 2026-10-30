@@ -54,6 +54,7 @@ class ModelsActivity : AppCompatActivity() {
     private var downloading = false
     private var progressBar: ProgressBar? = null
     private var progressText: TextView? = null
+    private var platProgress: hu.angolmagyar.fordito.ui.processing.PlatinumProgressView? = null
     private var pauseBtn: android.widget.Button? = null
     private var cancelBtn: android.widget.Button? = null
     private var showMoreLangs = false
@@ -245,6 +246,8 @@ class ModelsActivity : AppCompatActivity() {
 
         root.addView(Ui.button(this, "← Vissza", false) { finish() })
         root.addView(Ui.title(this, "Modellek"))
+        root.addView(Ui.heroHeader(this, "AI MODEL CENTER", "Felismerő modellek", "Offline beszédfelismerés és fordítás. Válassz modellt a készüléked teljesítményéhez igazítva."))
+        root.addView(Ui.sectionLabel(this, "Elérhető motorok"))
 
         // --- Vosk felismerők
         val vCard = Ui.card(this)
@@ -472,6 +475,18 @@ class ModelsActivity : AppCompatActivity() {
         }
         dCard.addView(bar)
         dCard.addView(label)
+        platProgress = null
+        if (downloading && Prefs(this).platinumTheme) {
+            // Platina haladássáv a sima helyett (a régi sáv és felirat rejtve marad, de tovább frissül)
+            bar.visibility = View.GONE
+            label.visibility = View.GONE
+            platProgress = hu.angolmagyar.fordito.ui.processing.PlatinumProgressView(this).also {
+                it.set(progPct, progMsg)
+                dCard.addView(it, LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (10 * resources.displayMetrics.density).toInt() })
+            }
+        }
         if (downloading) {
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             pauseBtn = Ui.button(this, "", true) { onPauseResume() }
@@ -561,6 +576,7 @@ class ModelsActivity : AppCompatActivity() {
                     if (p >= 0) progress = p.coerceIn(0, 100)
                 }
                 progressText?.text = msg
+                platProgress?.set(p, msg)
                 updatePauseUi()
                 if (finished) {
                     downloading = false
@@ -690,6 +706,7 @@ class ModelsActivity : AppCompatActivity() {
             pausing = false
             progMsg = progMsg.substringBefore(" · ") + " · szüneteltetve"
             progressText?.text = progMsg
+            platProgress?.set(progPct, progMsg)
             updatePauseUi()
             return
         }
@@ -752,6 +769,7 @@ class ModelsActivity : AppCompatActivity() {
                 else { it.isIndeterminate = false; it.progress = pct.coerceIn(0, 100) }
             }
             progressText?.text = msg
+            platProgress?.set(pct, msg)
         }
     }
 

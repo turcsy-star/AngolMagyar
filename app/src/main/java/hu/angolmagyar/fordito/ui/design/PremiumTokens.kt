@@ -14,8 +14,8 @@ object PremiumShapes {
 object PremiumPalette {
     /** Subtle outline opacity keeps cards distinct without a heavy metallic border. */
     const val cardStrokeAlpha = 0.22f
-    val platinum = Color(0xFFD8DEE8)
-    val champagneGold = Color(0xFFD6B56D)
-    val deepGraphite = Color(0xFF171A20)
-    val pearl = Color(0xFFF6F3ED)
+    val electricBlue = Color(0xFF60A5FA)
+    val cyanGlow = Color(0xFF22D3EE)
+    val deepNavy = Color(0xFF070B16)
+    val ice = Color(0xFFEEF5FF)
 }

@@ -17,7 +17,7 @@ import kotlin.math.sin
  */
 class PipelineView @JvmOverloads constructor(
     ctx: Context, attrs: AttributeSet? = null
-) : View(ctx, attrs) {
+) : View(ctx, attrs), PipelineHost {
 
     private val labels = arrayOf("Előkészítés", "Hang", "Betöltés", "Felismerés + fordítás", "Mentés")
     private var states = IntArray(labels.size)
@@ -31,7 +31,7 @@ class PipelineView @JvmOverloads constructor(
     private var liveTranslated = ""
 
     /** A valódi, éppen hallott és lefordított mondat (rövidítve jelenik meg az aktív lépés fölött). */
-    fun setLive(heard: String, translated: String) {
+    override fun setLive(heard: String, translated: String) {
         liveHeard = heard
         liveTranslated = translated
     }
@@ -62,7 +62,7 @@ class PipelineView @JvmOverloads constructor(
     private fun hasActive() = states.any { it == SrtJob.ACTIVE }
     private fun popping(): Boolean { val now = System.currentTimeMillis(); return doneAt.any { now - it < 600 } }
 
-    fun set(newStates: IntArray, activePct: Int) {
+    override fun set(newStates: IntArray, activePct: Int) {
         val n = minOf(newStates.size, states.size)
         var changed = pct != activePct
         val now = System.currentTimeMillis()

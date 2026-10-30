@@ -1,3 +1,38 @@
+# V2.48.0 – akadálymentes folyamatjelző és tesztelhetőség
+
+- A platina folyamatjelző Compose-szemantikája most valódi `ProgressBar` szerepet és 0–100 közötti tartományt ad a képernyőolvasóknak.
+- Ismeretlen haladásnál indeterminált állapotot jelent, nem ad meg kitalált százalékot.
+- A százalékot korlátozó segédfüggvény tiszta Kotlin-függvény lett (nem Composable), így a meglévő JUnit tesztek közvetlenül hívhatják.
+- Verzió: 2.48.0 (`versionCode` 4800).
+- Ellenőrzés: a forrásmódosítás és a ZIP-csomag készítése elvégezhető; Android/Gradle tesztfuttatás nem igazolt, mert a `services.gradle.org` DNS-feloldása meghiúsult a környezetben.
+
+# Platinum Ultra Extreme UI v12
+
+- Új, részletes Platinum Ultra állapotközpont a kezdőképernyőn.
+- Valós hangszint-, munkamenet- és feladat-előrehaladás megjelenítése.
+- A meglévő funkcionális folyamatok változatlanok.
+
+## Diamond Blue UI v11 – Diamond Experience
+- Új, vektorosan rajzolt zafírmedál a kezdőképernyőn, forgó fénygyűrűvel és finom pulzáló aurával.
+- Valós aktív/készenléti állapotjelzés; csökkentett mozgás és energiatakarékos mód támogatása.
+- Részletek: DIAMOND_BLUE_V11_HU.md
+
+## Platinum Luxury v7 (nem fordított forrásállapot)
+- Platina hangszintmérő az Élő fordításban, platina letöltési haladássáv a Modellkezelőben.
+- Részletek: PREMIUM_UI_PLATINUM_V7_HU.md
+
+## Platinum Luxury v6 (nem fordított forrásállapot)
+- Interaktív, összekapcsolt folyamatábra animált adatáramlással, érintéses csomópont-részletek, üvegkártyák, haladás-grafikon.
+- Részletek: PREMIUM_UI_PLATINUM_V6_HU.md
+
+## Platinum Luxury v5 (nem fordított forrásállapot)
+- Platina műszer (60 osztás, szegmensgyűrű), ékköves folyamatvonal lépésenkénti idővel, gravírozott statisztikák, befejezési pecsét; téma-kapcsoló a beállításokban.
+- Részletek: PREMIUM_UI_PLATINUM_V5_HU.md
+
+## Blue Cinematic v4 (nem fordított forrásállapot)
+- Új cinematic feldolgozó kártya (ProcessingPanel) a SrtJob valós adataiból; kapcsolható és csökkentett animációs móddal.
+- Részletek: PREMIUM_UI_BLUE_CINEMATIC_V4_HU.md
+
 # Változásnapló
 
 ## v2.45.0 – élő folyamat-kijelzés, tisztább átirat és fordítás
@@ -207,3 +242,32 @@ Lásd az előző csomagok README-it (a v2.22.2 nem fordult le, ezért nem javaso
 ## Update 13 – Premium safe retranslation
 - Added `RetranslationPlanner`: explicit preview, manual-translation protection, selected-only apply, revision guard and diff output.
 - Added JUnit tests for safe retranslation planning.
+
+## Platinum Ultra Extreme UI v13
+- Platinum Spectrum: 32 oszlopos, valós állapothoz kötött vizualizáció.
+- Pulzáló aktív állapotjelző, animált progresszió és képernyőolvasó-leírás.
+
+
+## Platinum Ultra Extreme UI v14 – javított teljes csomag
+- A v13 teljes forrásfája alapján újracsomagolt, integritásellenőrzött kiadás.
+- A kezelőfelület verziójelzése V14-re frissítve.
+- A Platinum Spectrum vizualizáció és a korábbi alkalmazásfunkciók megőrizve.
+- A csomagolás ellenőrizhető; az Android/Gradle build külön környezeti függőség, sikeressége csak tényleges fordítással igazolható.
+
+
+## Platinum Ultra Extreme UI v15 – Infinity Edition
+- Frissített Platinum Infinity fejléc, állapotközpont-cím és lábléc.
+- 40 csatornás, magasabb és sűrűbb Platinum Spectrum vizualizáció.
+- A meglévő, tényleges hangszint- és feldolgozási adatokhoz kötött működés megőrizve.
+- Teljes forráscsomag újracsomagolva; Android build sikeressége nincs igazolva.
+
+
+## 2.46.0 – Platinum Ultra Extreme v16
+- A Platinum Ultra Console megjelenített mérési és feladatértékei tartománykorlátozást kaptak.
+- V16 felületi verziójelzés és 2.46.0 alkalmazásverzió.
+- A buildkörnyezet hálózati korlátozása miatt az APK összeállítása nem volt igazolható.
+
+## 2.47.0 / V17 – Infinity Luxury Plus
+- A letöltési folyamat százalékértéke minden UI-felületen egységesen 0–100 közé korlátozott.
+- Az ismeretlen haladás továbbra is százalék nélküli animált jelzést használ.
+- Új egységtesztek a haladássáv százalékos határértékeihez.

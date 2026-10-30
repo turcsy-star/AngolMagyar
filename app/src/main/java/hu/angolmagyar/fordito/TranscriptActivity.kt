@@ -96,6 +96,7 @@ class TranscriptActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginStart = dp(8) }
         )
         content.addView(header)
+        content.addView(Ui.heroHeader(this, "LIBRARY", "Mentett átiratok", "Keresd vissza, szűrd és kezeld a korábbi beszélgetéseidet."), LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(4), dp(16), dp(8)) })
 
         // ---- keresés
         searchBox = AppCompatEditText(this).apply {

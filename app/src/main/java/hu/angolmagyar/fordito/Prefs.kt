@@ -86,6 +86,26 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("highContrast", false)
         set(v) { p.edit().putBoolean("highContrast", v).apply() }
 
+    /** Blue Cinematic v4 feldolgozó kártya (kikapcsolva a régi PipelineView jelenik meg). */
+    var premiumProcessingUi: Boolean
+        get() = p.getBoolean("premiumProcessingUi", true)
+        set(v) { p.edit().putBoolean("premiumProcessingUi", v).apply() }
+
+    /** Platinum Luxury téma a feldolgozó kártyán (kikapcsolva: Blue Cinematic). */
+    var platinumTheme: Boolean
+        get() = p.getBoolean("platinumTheme", true)
+        set(v) { p.edit().putBoolean("platinumTheme", v).apply() }
+
+    /** Globális prémium megjelenés: platinum, obsidian, gold, arctic vagy sapphire. */
+    var luxuryThemeId: String
+        get() = p.getString("luxuryThemeId", "platinum") ?: "platinum"
+        set(v) { p.edit().putString("luxuryThemeId", v).apply() }
+
+    /** Csökkentett animációs mód (a rendszer animációskapcsolóját is figyeljük). */
+    var reduceMotion: Boolean
+        get() = p.getBoolean("reduceMotion", false)
+        set(v) { p.edit().putBoolean("reduceMotion", v).apply() }
+
     var atTop: Boolean
         get() = p.getBoolean("atTop", false)
         set(v) { p.edit().putBoolean("atTop", v).apply() }
@@ -110,11 +130,6 @@ class Prefs(ctx: Context) {
     var adaptiveEco: Boolean
         get() = p.getBoolean("adaptiveEco", true)
         set(v) { p.edit().putBoolean("adaptiveEco", v).apply() }
-
-    /** Csökkenti a folyamatos díszanimációkat az akkumulátor és az érzékeny felhasználók kímélésére. */
-    var reduceMotion: Boolean
-        get() = p.getBoolean("reduceMotion", false)
-        set(v) { p.edit().putBoolean("reduceMotion", v).apply() }
 
     var saveTranscript: Boolean
         get() = p.getBoolean("saveTranscript", true)

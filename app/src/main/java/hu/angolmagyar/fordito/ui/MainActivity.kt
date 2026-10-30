@@ -91,6 +91,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -126,6 +127,7 @@ import hu.angolmagyar.fordito.ui.design.StatusPill
 import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.design.PremiumSectionTitle
 import hu.angolmagyar.fordito.ui.design.PremiumTranslationCard
+import hu.angolmagyar.fordito.ui.design.DiamondBrandMark
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
@@ -141,6 +143,7 @@ import hu.angolmagyar.fordito.LiveTranslateActivity as LiveActivity
 class MainActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private lateinit var prefs: Prefs
+    private var appliedThemeSignature: String? = null
 
     /**
      * Első indításkor magától letölti az alap modelleket (Whisper large-v3 + offline fordító), ha még nincs
@@ -175,10 +178,30 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 
+    /** A Beállításokból visszatérve azonnal alkalmazza a módosított Compose-témát. */
+    private fun themeSignature(): String = listOf(
+        prefs.luxuryThemeId,
+        prefs.platinumTheme.toString(),
+        prefs.oledBlack.toString()
+    ).joinToString("|")
+
+    override fun onResume() {
+        super.onResume()
+        if (!::prefs.isInitialized) return
+        val current = themeSignature()
+        val previous = appliedThemeSignature
+        if (previous != null && current != previous) {
+            // Frissítsük az összehasonlítás alapját a recreate() előtt, hogy ne induljon újra végtelenül.
+            appliedThemeSignature = current
+            recreate()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         prefs = Prefs(this)
+        appliedThemeSignature = themeSignature()
         if (!prefs.onboarded && savedInstanceState == null) {
             startActivity(Intent(this, SetupWizardActivity::class.java))
         }
@@ -314,12 +337,22 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Staggered(0, shown) { Header(running = snap.running || jobRunning, error = snap.lastError != null) }
+            Staggered(1, shown) { DiamondExperiencePanel(active = snap.running || jobRunning) }
+            Staggered(2, shown) {
+                PlatinumUltraConsole(
+                    active = snap.running,
+                    jobRunning = jobRunning,
+                    elapsed = elapsed,
+                    level = AppState.level.coerceIn(0f, 1f),
+                    jobPct = jobPct
+                )
+            }
 
             DownloadBanner(onClick = onModels)
             TranslationComfortCard()
             StateCards(error = snap.lastError?.message, onDiagnostics = onDiagnostics, onModels = onModels)
 
-            Staggered(1, shown) {
+            Staggered(2, shown) {
                 HeroCard(
                     title = "Indítás: felirat készítése",
                     subtitle = "Válassz videót vagy hangfájlt: pontos magyar felirat, egy érintésre.",
@@ -336,7 +369,7 @@ fun HomeScreen(
                 JobCard(pct = jobPct, message = jobMsg, onOpen = onOpenJob)
             }
 
-            Staggered(2, shown) {
+            Staggered(3, shown) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     PremiumSectionTitle(
                         title = "Gyors műveletek",
@@ -374,7 +407,7 @@ fun HomeScreen(
             }
 
             if (!snap.running) {
-                Staggered(3, shown) {
+                Staggered(4, shown) {
                     OutlinedButton(
                         onClick = onMic,
                         modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -386,9 +419,9 @@ fun HomeScreen(
                 }
             }
 
-            Staggered(4, shown) { ThemePicker() }
+            Staggered(5, shown) { ThemePicker() }
 
-            Staggered(4, shown) {
+            Staggered(5, shown) {
                 Column {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         TextButton(onClick = onModels) { Text("Modellek") }
@@ -404,6 +437,384 @@ fun HomeScreen(
         }
     }
 }
+
+
+
+/**
+ * Platinum Ultra Console v12: a detailed, accessible status surface.
+ * All values come from live app state; no decorative/fabricated activity metrics.
+ */
+@Composable
+private fun PlatinumUltraConsole(
+    active: Boolean,
+    jobRunning: Boolean,
+    elapsed: String,
+    level: Float,
+    jobPct: Int
+) {
+    val onyx = Color(0xFF090B10)
+    val graphite = Color(0xFF171B23)
+    val platinum = Color(0xFFF0EFEA)
+    val steel = Color(0xFF9CA6B5)
+    val champagne = Color(0xFFE6D5A8)
+    val mint = Color(0xFF72D6AD)
+    val status = when {
+        active -> "ÉLŐ FORDÍTÁS AKTÍV"
+        jobRunning -> "FELDOLGOZÁS FOLYAMATBAN"
+        else -> "RENDSZER KÉSZENLÉTBEN"
+    }
+    val statusColor = if (active || jobRunning) mint else champagne
+    // A szolgáltatásból érkező értékek megjelenítés előtt korlátozva vannak;
+    // hibás vagy átmeneti állapotban sem csúszhat 0–100% tartományon kívül a UI.
+    val safeLevel = level.coerceIn(0f, 1f)
+    val safeJobPct = jobPct.coerceIn(0, 100)
+    val levelPercent = (safeLevel * 100).toInt()
+    val pulseTransition = rememberInfiniteTransition(label = "platinum_status_pulse")
+    val statusPulse by pulseTransition.animateFloat(
+        initialValue = 0.58f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "status_pulse"
+    )
+    val animatedLevel by animateFloatAsState(
+        targetValue = if (active) safeLevel else if (jobRunning) safeJobPct / 100f else 0.04f,
+        animationSpec = tween(durationMillis = 260),
+        label = "platinum_level"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = onyx),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF252B36), graphite, Color(0xFF0B0D12))
+                    )
+                )
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "PLATINUM  /  ULTRA CONSOLE",
+                        color = champagne,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Text(
+                        "Állapotközpont",
+                        color = platinum,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(Color(0xFFFAF7ED), Color(0xFF9DA6B3), Color(0xFF4B5360))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(Modifier.size(27.dp)) {
+                        val c = center
+                        val r = size.minDimension * 0.42f
+                        drawLine(Color(0xFF171B23), Offset(c.x, c.y - r), Offset(c.x + r, c.y + r * 0.72f), 2.dp.toPx())
+                        drawLine(Color(0xFF171B23), Offset(c.x + r, c.y + r * 0.72f), Offset(c.x - r, c.y + r * 0.72f), 2.dp.toPx())
+                        drawLine(Color(0xFF171B23), Offset(c.x - r, c.y + r * 0.72f), Offset(c.x, c.y - r), 2.dp.toPx())
+                        drawLine(Color(0xFF171B23), Offset(c.x, c.y - r), Offset(c.x, c.y + r * 0.72f), 1.dp.toPx())
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(Color.White.copy(alpha = 0.055f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    Modifier
+                        .size(9.dp)
+                        .graphicsLayer { alpha = if (active || jobRunning) statusPulse else 1f; scaleX = if (active || jobRunning) statusPulse else 1f; scaleY = if (active || jobRunning) statusPulse else 1f }
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+                Spacer(Modifier.size(9.dp))
+                Text(
+                    status,
+                    color = statusColor,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                Text("V16", color = steel, style = MaterialTheme.typography.labelSmall)
+            }
+
+            // Decorative spectrum is a direct visualization of the measured input level.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black.copy(alpha = 0.22f))
+                    .padding(horizontal = 12.dp, vertical = 10.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("PLATINUM SPECTRUM  ·  40 CSATORNA", color = steel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text(if (active) "BEMENET AKTÍV" else if (jobRunning) "FELADAT AKTÍV" else "NYUGALMI ÁLLAPOT", color = statusColor, style = MaterialTheme.typography.labelSmall)
+                }
+                Spacer(Modifier.height(8.dp))
+                Canvas(
+                    Modifier.fillMaxWidth().height(34.dp)
+                        .semantics { contentDescription = "Hangszint vizualizáció: $levelPercent százalék" }
+                ) {
+                    val bars = 40
+                    val gap = 2.dp.toPx()
+                    val barWidth = ((size.width - gap * (bars - 1)) / bars).coerceAtLeast(1f)
+                    for (i in 0 until bars) {
+                        val centerBias = 1f - kotlin.math.abs(i - (bars - 1) / 2f) / (bars / 2f)
+                        val normalized = if (active) (safeLevel * (0.35f + centerBias * 0.65f)).coerceIn(0.06f, 1f) else if (jobRunning) (safeJobPct / 100f) * (0.25f + centerBias * 0.55f) else 0.08f
+                        val barHeight = (size.height * normalized).coerceAtLeast(2.dp.toPx())
+                        val x = i * (barWidth + gap)
+                        drawRoundRect(
+                            color = if (active) Color(0xFF9CCDF5).copy(alpha = 0.45f + normalized * 0.55f) else champagne.copy(alpha = 0.3f + normalized * 0.6f),
+                            topLeft = Offset(x, (size.height - barHeight) / 2f),
+                            size = Size(barWidth, barHeight),
+                            cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+                        )
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PlatinumMetric(
+                    modifier = Modifier.weight(1f),
+                    label = "HANGSZINT",
+                    value = "$levelPercent%",
+                    detail = if (active) "Mikrofon / hangforrás" else "Nincs aktív mérés",
+                    accent = Color(0xFF9CCDF5)
+                )
+                PlatinumMetric(
+                    modifier = Modifier.weight(1f),
+                    label = "MUNKAMENET",
+                    value = if (active && elapsed.isNotBlank()) elapsed else if (jobRunning) "$safeJobPct%" else "—",
+                    detail = if (active) "Eltelt idő" else if (jobRunning) "Feladat előrehaladása" else "Nincs futó feladat",
+                    accent = champagne
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(
+                        if (active) "Bemeneti jelszint" else if (jobRunning) "Feldolgozási folyamat" else "Készenléti állapot",
+                        color = platinum,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        if (active) "$levelPercent%" else if (jobRunning) "$safeJobPct%" else "OK",
+                        color = steel,
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+                if (jobRunning && !active) {
+                    LinearProgressIndicator(
+                        progress = { safeJobPct / 100f },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)),
+                        color = champagne,
+                        trackColor = Color.White.copy(alpha = 0.12f)
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        progress = { animatedLevel },
+                        modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)),
+                        color = if (active) Color(0xFF9CCDF5) else mint.copy(alpha = 0.75f),
+                        trackColor = Color.White.copy(alpha = 0.12f)
+                    )
+                }
+            }
+
+            Text(
+                "PLATINUM INFINITY V16  •  KORLÁTOZOTT MÉRÉSI ÉRTÉKEK  •  40 CSATORNÁS SPEKTRUM",
+                color = steel.copy(alpha = 0.82f),
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlatinumMetric(
+    modifier: Modifier = Modifier,
+    label: String,
+    value: String,
+    detail: String,
+    accent: Color
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(Color.White.copy(alpha = 0.09f), Color.White.copy(alpha = 0.025f))
+                )
+            )
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text(label, color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Text(
+            value,
+            color = Color(0xFFF5F3ED),
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            detail,
+            color = Color(0xFF9CA6B5),
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Diamond Experience hero: a lightweight, vector-rendered sapphire medallion.
+ * Uses the existing reduced-motion and power-save preferences; no bitmap or network assets.
+ */
+@Composable
+private fun DiamondExperiencePanel(active: Boolean) {
+    val context = LocalContext.current
+    val reducedMotion = remember(context) {
+        Prefs(context).reduceMotion ||
+            ((context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
+    }
+    val transition = rememberInfiniteTransition(label = "diamondExperience")
+    val rotation = if (reducedMotion) 0f else {
+        val value by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(18000, easing = LinearEasing), RepeatMode.Restart),
+            label = "diamondOrbit"
+        )
+        value
+    }
+    val shimmer = if (reducedMotion) 0.42f else {
+        val value by transition.animateFloat(
+            initialValue = 0.18f,
+            targetValue = 0.72f,
+            animationSpec = infiniteRepeatable(tween(2600, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            label = "diamondGlow"
+        )
+        value
+    }
+
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Canvas(Modifier.size(104.dp).semantics { contentDescription = "Zafírkék gyémánt embléma" }) {
+                val c = Offset(size.width / 2f, size.height / 2f)
+                val radius = size.minDimension * 0.40f
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        listOf(Color(0xFF36CFFF).copy(alpha = 0.22f * shimmer), Color.Transparent),
+                        center = c,
+                        radius = radius * 1.55f
+                    ),
+                    radius = radius * 1.55f,
+                    center = c
+                )
+                drawCircle(
+                    brush = Brush.sweepGradient(
+                        listOf(Color(0xFFBCEEFF), Color(0xFF287BDF), Color(0xFF43E5FF), Color(0xFFBCEEFF)),
+                        center = c
+                    ),
+                    radius = radius,
+                    style = Stroke(width = size.minDimension * 0.025f)
+                )
+                drawArc(
+                    brush = Brush.sweepGradient(
+                        listOf(Color.Transparent, Color(0xFF8DEBFF), Color(0xFF397FEA), Color.Transparent),
+                        center = c
+                    ),
+                    startAngle = rotation,
+                    sweepAngle = 112f,
+                    useCenter = false,
+                    topLeft = Offset(c.x - radius * 1.16f, c.y - radius * 1.16f),
+                    size = androidx.compose.ui.geometry.Size(radius * 2.32f, radius * 2.32f),
+                    style = Stroke(width = size.minDimension * 0.045f)
+                )
+                val top = Offset(c.x, c.y - radius * 0.72f)
+                val right = Offset(c.x + radius * 0.68f, c.y - radius * 0.10f)
+                val bottom = Offset(c.x, c.y + radius * 0.76f)
+                val left = Offset(c.x - radius * 0.68f, c.y - radius * 0.10f)
+                val center = Offset(c.x, c.y + radius * 0.06f)
+                val gem = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(top.x, top.y); lineTo(right.x, right.y); lineTo(bottom.x, bottom.y)
+                    lineTo(left.x, left.y); close()
+                }
+                drawPath(gem, Brush.linearGradient(listOf(Color(0xFFE5FAFF), Color(0xFF55BFFF), Color(0xFF124A9F))))
+                drawLine(Color.White.copy(alpha = 0.86f), top, center, strokeWidth = size.minDimension * 0.018f)
+                drawLine(Color.White.copy(alpha = 0.54f), top, left, strokeWidth = size.minDimension * 0.014f)
+                drawLine(Color(0xFFB9F2FF).copy(alpha = 0.72f), center, right, strokeWidth = size.minDimension * 0.014f)
+                drawLine(Color(0xFF071F50), left, bottom, strokeWidth = size.minDimension * 0.018f)
+                drawLine(Color(0xFF071F50), bottom, right, strokeWidth = size.minDimension * 0.018f)
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Text(
+                    "DIAMOND EXPERIENCE",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (active) "A motor dolgozik" else "Prémium fordítási központ",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    "Zafírkék felület · intelligens feldolgozás · letisztult vezérlés",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                StatusPill(
+                    label = if (active) "AKTÍV FOLYAMAT" else "DIAMOND BLUE",
+                    accent = if (active) MaterialTheme.colorScheme.secondary else Color(0xFF70CFFF)
+                )
+            }
+        }
+    }
+}
+
 
 /** Gyors elérés: célnyelv és feliratfordítási mód, a beállítások mély menüje nélkül. */
 @Composable
@@ -559,6 +970,7 @@ private fun Header(running: Boolean, error: Boolean) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            DiamondBrandMark(modifier = Modifier.size(38.dp), animated = !lowMotion)
             Text(
                 "Angol–Magyar",
                 style = MaterialTheme.typography.headlineMedium,
@@ -568,7 +980,7 @@ private fun Header(running: Boolean, error: Boolean) {
             StatusPill(label = "✦ GYÉMÁNT")
         }
         Text(
-            text = "Intelligens átirat · pontosabb fordítás",
+            text = "INTELLIGENS ÁTIRAT  ·  AI FORDÍTÁS  ·  OFFLINE KÉSZENLÉT",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
@@ -673,34 +1085,69 @@ private fun TileCard(
 
 @Composable
 private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
-    val progress by animateFloatAsState(pct / 100f, tween(500), label = "jobPct")
+    val progress by animateFloatAsState(pct / 100f, tween(850, easing = FastOutSlowInEasing), label = "jobPct")
+    val transition = rememberInfiniteTransition(label = "cinematicPipeline")
+    val pulse by transition.animateFloat(
+        initialValue = 0.58f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(1050, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pipelinePulse"
+    )
+    val stages = listOf("Hang", "Betöltés", "Felismerés", "Fordítás", "Mentés")
+    val activeStage = when {
+        pct >= 96 -> 4
+        pct >= 76 -> 3
+        pct >= 43 -> 2
+        pct >= 18 -> 1
+        else -> 0
+    }
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
     ) {
-        Column(Modifier.padding(18.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("FOLYAMATBAN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text("Intelligens feldolgozás", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(58.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))) {
+                    Text("$pct%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+            // Cinematic stage rail: the active node breathes; completed nodes remain visibly confirmed.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                stages.forEachIndexed { index, stage ->
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Box(Modifier.size(if (index == activeStage) 24.dp else 18.dp)
+                            .clip(CircleShape)
+                            .background(when {
+                                index < activeStage -> Color(0xFF22C7A0)
+                                index == activeStage -> MaterialTheme.colorScheme.primary.copy(alpha = pulse)
+                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+                            }), contentAlignment = Alignment.Center) {
+                            if (index < activeStage) Text("✓", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            else if (index == activeStage) Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+                        }
+                        Text(stage, style = MaterialTheme.typography.labelSmall, color = if (index <= activeStage) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(10.dp).clip(CircleShape)
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF2563EB), Color(0xFF22D3EE), Color(0xFF60A5FA)))))
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Felirat készül", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text("$pct%", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text("Teljes folyamat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
-            Spacer(Modifier.height(10.dp))
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp))
-            )
             if (message.isNotBlank()) {
-                Text(
-                    message, style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
+                Text(message, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Text(
-                "Érintsd meg a részletekért", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
-                modifier = Modifier.padding(top = 4.dp)
-            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Részletes folyamat és napló", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Rounded.PlayArrow, contentDescription = "Részletek", tint = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }
