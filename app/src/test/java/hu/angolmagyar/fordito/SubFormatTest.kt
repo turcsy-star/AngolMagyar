@@ -44,6 +44,12 @@ class SubFormatTest {
         assertTrue(out[1].endMs - out[1].startMs >= 1000)
     }
 
+    @Test fun closeNextCueDoesNotOverlap() {
+        val out = SubFormat.fixTiming(listOf(cue(31_149, 31_649, "Oh, my god."), cue(31_400, 36_130, "Well, I thought I was your girlfriend.")))
+        assertTrue(out[0].endMs <= out[1].startMs)
+        assertTrue(out[0].endMs - out[0].startMs >= 200)
+    }
+
     @Test fun parseAndBuildRawRoundTrip() {
         val srt = "1\n00:00:01,000 --> 00:00:02,500\nHello\nworld\n\n2\n00:01:00,000 --> 00:01:03,000\nBye\n\n"
         val cues = SubFormat.parseSrt(srt)

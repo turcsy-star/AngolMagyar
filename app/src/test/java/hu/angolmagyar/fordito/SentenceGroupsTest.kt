@@ -45,6 +45,19 @@ class SentenceGroupsTest {
         assertEquals(target, parts.joinToString(" ").trim().replace(Regex("\\s+"), " "))
     }
 
+    @Test fun distributePrefersSentenceEndOverDanglingComma() {
+        val target = "Ó, ez, ez nem jó. Ó, mit csinálsz később? Szükséged van bármilyen segítségre?"
+        val parts = SentenceGroups.distribute(target, listOf(78, 60))
+        assertEquals(listOf("Ó, ez, ez nem jó. Ó, mit csinálsz később?", "Szükséged van bármilyen segítségre?"), parts)
+    }
+
+    @Test fun distributeNeverLeavesAPartEmptyWhenWordsAreEnough() {
+        val parts = SentenceGroups.distribute("Egy kettő három négy", listOf(1, 1, 100, 1))
+        assertEquals(4, parts.size)
+        assertTrue(parts.all { it.isNotBlank() })
+        assertEquals("Egy kettő három négy", parts.joinToString(" "))
+    }
+
     @Test fun distributeSingleAndEmpty() {
         assertEquals(listOf("Szia világ"), SentenceGroups.distribute("Szia világ", listOf(10)))
         assertEquals(listOf("", ""), SentenceGroups.distribute("", listOf(5, 5)))

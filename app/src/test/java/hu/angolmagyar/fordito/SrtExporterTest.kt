@@ -10,6 +10,14 @@ class SrtExporterTest {
         assertEquals("01:02:03,456", SrtExporter.formatTime(3_723_456))
     }
 
+    @Test fun assTimeAndDialogue() {
+        assertEquals("0:00:01.50", SrtExporter.formatTimeAss(1500))
+        assertEquals("1:02:03.45", SrtExporter.formatTimeAss(3_723_450))
+        val ass = SrtExporter.buildAss(listOf(SrtExporter.Cue(1500, 3000, "Hello there", "Szia")), SrtExporter.Mode.BOTH)
+        assertTrue(ass.contains("Dialogue: 0,0:00:01.50,0:00:03.00,Default,,0,0,0,,{\\i1}Hello there{\\i0}\\NSzia"))
+        assertTrue(ass.contains("[V4+ Styles]"))
+    }
+
     @Test fun formatTimeVtt() {
         assertEquals("00:00:01.500", SrtExporter.formatTimeVtt(1500))
     }

@@ -398,7 +398,8 @@ class SrtJobService : Service() {
             val res = results.getOrNull(k)?.takeIf { it.isNotEmpty() } ?: continue
             val oldLp = input.subList(g.first, g.last + 1).map { it.lp.toDouble() }.average()
             val newLp = res.map { it.lp.toDouble() }.average()
-            if (newLp > oldLp + 0.12) {
+            DiagLog.log("MÁSODIK MENET szakasz ${g.first + 1}–${g.last + 1}: régi lp=${"%.2f".format(oldLp)}, új lp=${"%.2f".format(newLp)}")
+            if (newLp > oldLp + 0.05) {
                 val spk = input[g.first].speaker
                 for (i in g.last downTo g.first) out.removeAt(i)
                 out.addAll(g.first, res.map { it.copy(speaker = spk) })

@@ -145,6 +145,44 @@ object SrtExporter {
         return sb.toString()
     }
 
+    /** ASS (Advanced SubStation Alpha) időbélyeg: H:MM:SS.cc (századmásodperc). */
+    fun formatTimeAss(ms: Long): String {
+        val cs = (ms.coerceAtLeast(0L) + 5L) / 10L
+        val h = cs / 360_000L
+        val m = (cs / 6_000L) % 60L
+        val s = (cs / 100L) % 60L
+        val c = cs % 100L
+        return String.format(Locale.US, "%d:%02d:%02d.%02d", h, m, s, c)
+    }
+
+    /** ASS felirat (stílusozható; Aegisub, VLC, mpv). Kétnyelvű módban a forrássor dőlt. */
+    fun buildAss(cues: List<Cue>, mode: Mode): String {
+        val sb = StringBuilder()
+        sb.append("[Script Info]\n")
+        sb.append("ScriptType: v4.00+\nPlayResX: 1920\nPlayResY: 1080\nWrapStyle: 0\nScaledBorderAndShadow: yes\n\n")
+        sb.append("[V4+ Styles]\n")
+        sb.append("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, ")
+        sb.append("Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, ")
+        sb.append("MarginL, MarginR, MarginV, Encoding\n")
+        sb.append("Style: Default,Arial,58,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,3,1,2,80,80,60,1\n\n")
+        sb.append("[Events]\n")
+        sb.append("Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+        fun esc(s: String) = s.replace("{", "(").replace("}", ")")
+        for (c in cues) {
+            val srcLines = if (mode == Mode.TARGET_ONLY) emptyList() else SubFormat.wrapBalanced(esc(c.source))
+            val tgtLines = if (mode == Mode.SOURCE_ONLY) emptyList() else SubFormat.wrapBalanced(esc(c.target))
+            val all = srcLines + tgtLines
+            if (all.isEmpty() || all.all { it.isBlank() }) continue
+            val body = prefixSpeaker(c, all.joinToString("\n")).split("\n")
+            val italicCount = if (mode == Mode.BOTH && tgtLines.isNotEmpty()) srcLines.size else 0
+            val text = body.mapIndexed { i, l -> if (i < italicCount) "{\\i1}" + l + "{\\i0}" else l }.joinToString("\\N")
+            val end = if (c.endMs <= c.startMs) c.startMs + 2000 else c.endMs
+            sb.append("Dialogue: 0,").append(formatTimeAss(c.startMs)).append(',').append(formatTimeAss(end))
+            sb.append(",Default,,0,0,0,,").append(text).append('\n')
+        }
+        return sb.toString()
+    }
+
     private val STAMP_LINE by lazy { Regex("""^\[(\d{2}):(\d{2}):(\d{2})\]\s?(.*)$""") }
     private val SPEAKER_PREFIX by lazy { Regex("""^\{([^\}]*)\}\s*""") }
 

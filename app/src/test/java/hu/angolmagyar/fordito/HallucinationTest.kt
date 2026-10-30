@@ -48,6 +48,13 @@ class HallucinationTest {
         assertEquals(0, Hallucination.clean(cues).dropped)
     }
 
+    @Test fun loopedTextIsRecognizedAndNormalTextIsNot() {
+        assertTrue(Hallucination.looksLooped(
+            "and they're afraid and it's just not and they're afraid and it's just not and they're afraid and it's just not"))
+        assertTrue(!Hallucination.looksLooped("So the sailors come and they're charging onto the boat and they see this big whale"))
+        assertTrue(!Hallucination.looksLooped(""))
+    }
+
     @Test fun shortRepeatedFillerIsKept() {
         val cues = (0 until 8).map { cue(it * 5, "Rendben.") } + cue(60, "Igen, persze.")
         assertEquals(0, Hallucination.clean(cues).dropped)

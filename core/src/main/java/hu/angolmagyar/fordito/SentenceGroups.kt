@@ -66,7 +66,30 @@ object SentenceGroups {
         return out
     }
 
-    /** A cél-szöveg szétosztása a forrásblokkok hosszának arányában, lehetőleg írásjelnél vágva. */
+    /** Magyar szavak, amelyekre egy sor nem végződhet szépen (névelő, kötőszó, igekötő). */
+    private val HU_DANGLING = setOf(
+        "a", "az", "egy", "és", "hogy", "de", "vagy", "meg", "is", "mint", "mert", "ha", "ki", "el", "fel", "le", "be", "át"
+    )
+
+    /** A vágás "ára" a cand. szó után (kisebb = szebb): mondatvégi írásjel a legjobb, a függő szó a legrosszabb. */
+    private fun cutCost(words: List<String>, cand: Int): Double {
+        if (cand >= words.size) return 0.0
+        val w = words[cand - 1]
+        var c = when (w.last()) {
+            '.', '?', '!', '…' -> 0.0
+            ',', ';', ':' -> 1.0
+            else -> 2.5
+        }
+        val core = w.lowercase().filter { it.isLetterOrDigit() }
+        if (core in HU_DANGLING) c += 2.0
+        return c
+    }
+
+    /**
+     * A cél-szöveg szétosztása a forrásblokkok hosszának arányában. A vágáspontot az arányos helytől legfeljebb
+     * 4 szóval arrébb keresi: a mondatvégi írásjel a legjobb, utána a vessző; kötőszó, névelő után nem vág szívesen.
+     * (A fordítás szórendje eltér az angoltól, ezért a tisztán arányos vágás gyakran mondat közepére esne.)
+     */
     fun distribute(target: String, srcLens: List<Int>): List<String> {
         val n = srcLens.size
         if (n == 0) return emptyList()
@@ -79,19 +102,22 @@ object SentenceGroups {
         var acc = 0
         for (i in 0 until n) {
             acc += srcLens[i]
-            var e = if (i == n - 1) words.size
-            else (words.size * acc.toDouble() / total).roundToInt().coerceIn(used, words.size)
-            if (i < n - 1) {
-                // szívesebben vágunk írásjel után (max. 2 szóval arrébb)
-                var found = -1
-                for (d in 0..2) {
-                    for (cand in intArrayOf(e - d, e + d)) {
-                        if (found < 0 && cand > used && cand < words.size && words[cand - 1].last() in ",.;:!?…") {
-                            found = cand
-                        }
-                    }
+            var e: Int
+            if (i == n - 1) {
+                e = words.size
+            } else {
+                val ideal = words.size * acc.toDouble() / total
+                // ha elég szó van, minden résznek jusson legalább egy
+                val enough = words.size - used >= n - i
+                val minE = minOf(words.size, used + (if (enough) 1 else 0))
+                val maxE = maxOf(minE, words.size - (if (enough) n - 1 - i else 0))
+                val base = ideal.roundToInt().coerceIn(minE, maxE)
+                e = base
+                var bestCost = Double.MAX_VALUE
+                for (cand in maxOf(minE, base - 4)..minOf(maxE, base + 4)) {
+                    val cost = kotlin.math.abs(cand - ideal) * 0.6 + cutCost(words, cand)
+                    if (cost < bestCost - 1e-9) { bestCost = cost; e = cand }
                 }
-                if (found >= 0) e = found
             }
             out.add(words.subList(used, e).joinToString(" "))
             used = e

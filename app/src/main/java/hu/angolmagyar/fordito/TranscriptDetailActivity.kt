@@ -662,6 +662,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         add(R.string.td_export_srt_both) { exportSrt(SrtExporter.Mode.BOTH) }
         add(R.string.td_export_srt_target) { exportSrt(SrtExporter.Mode.TARGET_ONLY) }
         add(R.string.td_export_vtt) { exportVtt() }
+        add(R.string.td_export_ass) { exportAss() }
         add(R.string.td_export_md) { exportMd() }
         add(R.string.td_export_txt) { exportTxt() }
         add(R.string.td_export_docx) { exportDocx() }
@@ -765,6 +766,16 @@ class TranscriptDetailActivity : AppCompatActivity() {
         confirmSubtitleExport(snap, m) {
             saveAs(baseName() + ".vtt") { out ->
                 out.write(SrtExporter.buildVtt(snap, m).toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+
+    private fun exportAss() {
+        val snap = cues.toList()
+        val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
+        confirmSubtitleExport(snap, m) {
+            saveAs(baseName() + ".ass") { out ->
+                out.write(SrtExporter.buildAss(snap, m).toByteArray(Charsets.UTF_8))
             }
         }
     }

@@ -106,7 +106,10 @@ object SubFormat {
             val maxEnd = c.startMs + maxOf(3500L, chars * 110L)
             if (end > maxEnd) end = maxEnd
             val next = cues.getOrNull(i + 1)?.startMs
-            if (next != null && end > next - 40) end = maxOf(c.startMs + 500, next - 40)
+            if (next != null && end > next - 40) {
+                // ha a következő blokk közel kezdődik, nem lógunk bele (legalább 200 ms látszik)
+                end = if (next - 40 >= c.startMs + 500) next - 40 else maxOf(next - 40, c.startMs + 200)
+            }
             out.add(c.copy(endMs = end))
         }
         return out

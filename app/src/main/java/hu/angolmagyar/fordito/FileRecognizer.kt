@@ -169,7 +169,8 @@ class FileRecognizer(
         val prompt = WhisperPrompt.build(
             lang = lang,
             castNames = castNames,
-            prevTail = prevTail,
+            // ismétlési hurokra utaló előző szöveget nem adunk tovább kontextusnak (a hurkot folytatná)
+            prevTail = if (Hallucination.looksLooped(prevTail)) "" else prevTail,
             domain = "subtitle",
             terms = TextPolish.parseVocab(Prefs(ctx).customVocab).map { it.second }
         )

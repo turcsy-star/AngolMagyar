@@ -1,5 +1,18 @@
 # Változásnapló
 
+## v2.45.0 – élő folyamat-kijelzés, tisztább átirat és fordítás
+- **Folyamat-hullámforma**: a kész rész zöld, a hátralévő szürke, az éppen feldolgozott ~30 mp-es ablak piros és fehér között pulzál.
+- **Élő pozíció és szöveg**: a hullám alatt „Éppen: tól – ig” (és a szakasz határai), alatta az éppen hallott mondat időpontjával és az utoljára lefordított mondat (offline fordításnál soronként élőben). A folyamat-ikon fölötti kitalált példapár helyett a valódi szöveg látszik.
+- **Hallucináció-szűrő**: sűrű, lehetetlenül gyors (35 karakter/mp fölötti) blokk-sorozat (≥4 egymás után) kiszűrése – az összeomlott időbélyegű Whisper-ismétlések ellen. Két új teszttel.
+- **Ismétlési hurok védelem**: ha az előző darab szövege hurokra utal (ugyanaz a háromszavas sorozat ≥3-szor), nem kerül kontextusként a következő darab Whisper-promptjába.
+- **Második menet**: az elfogadási küszöb 0,12-ről 0,05-re csökkent (azonos a célzott ellenőrzésével), és a napló kiírja a szakaszonkénti régi és új lp értéket a diagnosztikához.
+- **Fordítás szétosztása**: a lefordított mondat darabolása már nem az arányos helyen vág vakon, hanem a közeli mondatvégi írásjelet keresi (±4 szó), kötőszó/névelő után nem vág szívesen, és minden résznek jut szó.
+- **Időzítés**: ha a következő blokk közel kezdődik, az előző nem lóg bele (legalább 200 ms látszik) – nincs több átfedés.
+- **Export**: ASS (Advanced SubStation) a jegyzőkönyv exportmenüjében; kétnyelvű módban a forrássor dőlt.
+- **Minőségmérés**: `TextMetrics.chrF` (karakter n-gram F-érték) a regressziós tesztekhez a WER mellé.
+- A NaN naplóvalószínűség „bizonytalan felismerés” jelölést kap; a régi, elavult `MainActivity.kt` törölve; a tesztek fordítási hibái javítva.
+- **Nem készült** (fordító, eszköz vagy fiók nélkül itt nem ellenőrizhető, vagy beállítás kell): online fordítás beállítása (DeepL/Claude kulcs), visszafordításos ellenőrzés, a whisper.cpp dekódolási paramétereinek (no_context, hőmérséklet) módosítása, turbo + large-v3 kétmenetes mód, szószintű időbélyeg-igazítás, szereplő-kötőjelezés, szószintű kiemelés lejátszás közben, termikus ütemezés finomítása.
+
 ## v2.29.0 – célzott ellenőrzés, napló, benchmark, biztonság, prémium ellenőrző lap
 - **Prémium minőségellenőrző lap** (alulról felcsúszó): animált pontgyűrű, súlyosság-szűrők, színes kártyák, koppintásra sorra ugrás; a szerkesztőben minőség-kártya jelzi a pontot.
 - **Célzott újrafelismerés**: csak a kritikus/magas jelzésű sorok hangszakasza fut újra nagyobb nyalábbal (large-v3-mal, ha van); a javaslatokat soronként választod ki, semmi sem íródik át magától.

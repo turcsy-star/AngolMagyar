@@ -23,6 +23,23 @@ object Hallucination {
 
     private val NON_WORD = Regex("[^\\p{L}\\p{N}]+")
 
+    /**
+     * True, ha a szöveg ismétlési hurokra utal: ugyanaz a háromszavas sorozat legalább [minRepeats]-szer szerepel.
+     * Az ilyen szöveget nem szabad kontextusként (prompt) a következő Whisper-darabnak átadni, mert a hurkot folytatná.
+     */
+    fun looksLooped(text: String, minRepeats: Int = 3): Boolean {
+        val w = text.lowercase().split(NON_WORD).filter { it.isNotEmpty() }
+        if (w.size < 3 * minRepeats) return false
+        val counts = HashMap<String, Int>()
+        for (i in 0..w.size - 3) {
+            val k = w[i] + " " + w[i + 1] + " " + w[i + 2]
+            val n = (counts[k] ?: 0) + 1
+            if (n >= minRepeats) return true
+            counts[k] = n
+        }
+        return false
+    }
+
     private fun textOf(c: SrtExporter.Cue): String = c.target.ifBlank { c.source }
 
     private fun key(c: SrtExporter.Cue): String =

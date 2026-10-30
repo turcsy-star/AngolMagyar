@@ -137,6 +137,7 @@
     <string name="td_export_srt_both">SRT (source + translation)</string>
     <string name="td_export_srt_target">SRT (translation only)</string>
     <string name="td_export_vtt">VTT (WebVTT)</string>
+    <string name="td_export_ass">ASS (Advanced SubStation)</string>
     <string name="td_export_md">Markdown</string>
     <string name="td_export_txt">Minutes (TXT)</string>
     <string name="td_export_docx">Word (DOCX, with summary)</string>
