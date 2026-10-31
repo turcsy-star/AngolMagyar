@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- A videó melletti mentés a mappa-engedélyen (SAF) megy; a "Minden fájl elérése" csak a debug manifestben van. -->
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:largeHeap="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.App">
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <activity android:name=".ui.BackupCenterActivity" android:exported="false" android:label="Infinity Backup Center" />
+        <activity android:name=".ui.LearningAnalyticsActivity" android:exported="false" android:label="Learning Analytics Diamond" />
+        <activity android:name=".ui.ReviewCoachActivity" android:exported="false" android:label="Intelligens ismétlő" />
+        <activity android:name=".ui.NextWaveToolsActivity" android:exported="false" android:label="Next Wave Tools" />
+
+        <activity
+            android:name=".ui.PlatinumIntelligenceActivity"
+            android:exported="false"
+            android:label="Platinum Intelligence Suite" />
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!-- Részletes élő-fordítás képernyő. A Wear, a gyorscsempe, a parancsikonok és a feladat-beállító
+             (EXTRA_AUTO_START) ezt indítják – v2.22.2-ben ez hiányzott a manifestből (ActivityNotFoundException). -->
+        <activity
+            android:name=".LiveTranslateActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:launchMode="singleTop" />
+        <activity
+            android:name=".LiveFullscreenActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SettingsComposeActivity"
+            android:exported="false"
+            android:label="Megjelenés"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".DiagnosticsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SetupWizardActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".PrivacyActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".TaskSetupActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ModelsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".TranscriptActivity"
+            android:exported="false" />
+        <activity
+            android:name=".PhrasebookActivity"
+            android:exported="false"
+            android:label="Saját szókincstár" />
+
+        <activity
+            android:name=".TranscriptDetailActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".FileSubtitleActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".SrtEditorActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".TranslateService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection|microphone" />
+
+        <service
+            android:name=".ModelDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Offline model download and verification for speech recognition." />
+        </service>
+
+        <service
+            android:name=".SrtJobService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Long-running offline subtitle transcription and translation." />
+        </service>
+
+        <service
+            android:name=".NightJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
+        <service
+            android:name=".QuickTile"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_translate"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    
+        <service
+            android:name=".service.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+    </application>
+
+</manifest>

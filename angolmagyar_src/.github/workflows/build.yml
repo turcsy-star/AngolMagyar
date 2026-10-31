@@ -1,0 +1,47 @@
+name: Build, test and package APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Prepare Gradle wrapper
+        run: chmod +x ./gradlew
+      - name: Install Android NDK and CMake
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --install "ndk;27.2.12479018" "cmake;3.22.1"
+          test -f "$SDK/ndk/27.2.12479018/source.properties"
+      - name: Core unit tests
+        run: ./gradlew :core:test --stacktrace
+      - name: App unit tests (includes Compose screenshot smoke test)
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Publish APK, test reports and screenshot outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: angolmagyar-debug-apk-and-reports
+          if-no-files-found: warn
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/reports/tests/**
+            app/build/test-results/testDebugUnitTest/**
+            app/build/outputs/roborazzi/**
+            core/build/reports/tests/**
+            core/build/test-results/test/**

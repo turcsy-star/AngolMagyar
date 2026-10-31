@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#070B16</color>
+    <color name="bgElevated">#0D1424</color>
+    <color name="card">#111C30</color>
+    <color name="stroke">#263650</color>
+    <color name="primary">#60A5FA</color>
+    <color name="primaryDim">#2563EB</color>
+    <color name="onPrimary">#FFFFFF</color>
+    <color name="textPrimary">#EEF5FF</color>
+    <color name="textSecondary">#A9BBD6</color>
+    <color name="ok">#62C59A</color>
+    <color name="warn">#60A5FA</color>
+    <color name="err">#FF7777</color>
+    <color name="accentGlow">#38BDF8</color>
+    <color name="ic_launcher_bg">#171719</color>
+    <color name="overlayScrim">#CC000000</color>
+    <color name="chipBg">#33FFFFFF</color>
+    <!-- OLED pure black (Prefs.oledBlack) -->
+    <color name="bgOled">#000000</color>
+    <color name="bgElevatedOled">#0A0A0A</color>
+    <color name="cardOled">#111111</color>
+</resources>

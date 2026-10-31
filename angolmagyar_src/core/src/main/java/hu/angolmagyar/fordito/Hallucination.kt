@@ -1,0 +1,133 @@
+package hu.angolmagyar.fordito
+
+/**
+ * A Whisper hajlamos "hallucinálni", ha zajt, nyögést vagy hosszú csendet kap: ugyanazt a mondatot ismételgeti,
+ * vagy magányos, értelmetlen sort ír a hosszú szünetek közepére. Ez a szűrő a kész blokkokat tisztítja meg.
+ *
+ * Két szabály (mindkettő óvatos, és a végén a hívó kiírja, hány blokkot dobott el):
+ *  A) ismétlődő hosszabb mondat: a harmadik, egymást követő azonos szöveg gyanús és eltávolítható;
+ *  A2) sűrű roham: legalább 4 egymást követő, lehetetlenül gyors blokk (összeomlott időbélyeg, ismételgetett szöveg);
+ *  B) magányos rövid sor és C) alacsony logprob csak jelzés, automatikusan nem törlünk valódi beszédet.
+ * A magányos vagy bizonytalan szegmens lehet halk, de helyes megszólalás is.
+ */
+object Hallucination {
+
+    data class Result(
+        val cues: List<SrtExporter.Cue>, val repeats: Int, val isolated: Int,
+        val lowConf: Int = 0, val removed: List<SrtExporter.Cue> = emptyList()
+    ) {
+        /** Csak a ténylegesen eltávolított blokkok száma. A többi számláló figyelmeztetés, nem törlés. */
+        val dropped: Int get() = removed.size
+        val flagged: Int get() = isolated + lowConf
+    }
+
+    private val NON_WORD = Regex("[^\\p{L}\\p{N}]+")
+
+    /**
+     * True, ha a szöveg ismétlési hurokra utal: ugyanaz a háromszavas sorozat legalább [minRepeats]-szer szerepel.
+     * Az ilyen szöveget nem szabad kontextusként (prompt) a következő Whisper-darabnak átadni, mert a hurkot folytatná.
+     */
+    fun looksLooped(text: String, minRepeats: Int = 3): Boolean {
+        val w = text.lowercase().split(NON_WORD).filter { it.isNotEmpty() }
+        if (w.size < 3 * minRepeats) return false
+        val counts = HashMap<String, Int>()
+        for (i in 0..w.size - 3) {
+            val k = w[i] + " " + w[i + 1] + " " + w[i + 2]
+            val n = (counts[k] ?: 0) + 1
+            if (n >= minRepeats) return true
+            counts[k] = n
+        }
+        return false
+    }
+
+    private fun textOf(c: SrtExporter.Cue): String = c.target.ifBlank { c.source }
+
+    private fun key(c: SrtExporter.Cue): String =
+        textOf(c).lowercase().replace(NON_WORD, " ").trim()
+
+    private fun words(c: SrtExporter.Cue): Int = key(c).split(' ').count { it.isNotEmpty() }
+
+    /**
+     * Lehetetlenül gyors blokk: a szöveg karakterszáma a blokk saját hosszához, illetve a következő blokk kezdetéig
+     * hátralévő időhöz képest (a kisebbikhez) meghaladja a megadott karakter/mp értéket. 12 karakternél rövidebb
+     * szöveget nem ítélünk meg.
+     */
+    private fun tooFast(list: List<SrtExporter.Cue>, idx: Int, maxCps: Double): Boolean {
+        val c = list[idx]
+        val chars = maxOf(c.source.length, c.target.length)
+        if (chars < 12) return false
+        val own = c.endMs - c.startMs
+        val gap = if (idx + 1 < list.size) list[idx + 1].startMs - c.startMs else own
+        val dur = maxOf(100L, minOf(own, gap))
+        return chars * 1000.0 / dur > maxCps
+    }
+
+    fun clean(
+        cues: List<SrtExporter.Cue>,
+        minRepeatWords: Int = QualityRules.REPEAT_MIN_WORDS,
+        maxSameText: Int = 2,
+        repeatWindowMs: Long = 30_000L,
+        isolatedGapMs: Long = QualityRules.ISOLATED_GAP_MS,
+        isolatedMaxWords: Int = QualityRules.ISOLATED_MAX_WORDS,
+        lowConfLp: Float = QualityRules.REVIEW_LP,
+        lowConfMaxWords: Int = 8,
+        burstMaxCps: Double = 35.0,
+        burstMinRun: Int = 4
+    ): Result {
+        if (cues.size < 2) return Result(cues, 0, 0)
+        val sorted = cues.sortedBy { it.startMs }
+
+        // A) ismétlődő hosszabb mondat
+        val seen = HashMap<String, Pair<Int, Long>>() // ismétlésszám + utolsó előfordulás vége
+        val afterA = ArrayList<SrtExporter.Cue>(sorted.size)
+        val removed = ArrayList<SrtExporter.Cue>()
+        var repeats = 0
+        var lowConf = 0
+        for (c in sorted) {
+            if (words(c) >= minRepeatWords) {
+                val k = key(c)
+                val previous = seen[k]
+                val n = if (previous != null && c.startMs - previous.second in 0..repeatWindowMs)
+                    previous.first + 1 else 1
+                seen[k] = n to c.endMs
+                if (n > maxSameText) { repeats++; removed.add(c); continue }
+            }
+            // A logprob önmagában nem bizonyítja, hogy a szöveg hibás. Megőrizzük, a szerkesztő jelzi.
+            if (c.lp.isFinite() && c.lp < lowConfLp && words(c) <= lowConfMaxWords) lowConf++
+            afterA.add(c)
+        }
+
+        // A2) sűrű roham: a Whisper néha a darab végén összeomló időbélyeggel ismételgeti a szöveget, így 1–2 mp-be
+        // több tucat karakternyi blokk kerül. Ez nem emberi beszéd (35 karakter/mp fölött), és a szöveg a környező
+        // blokkokban már szerepel. Egyetlen vagy két gyors blokkot (pl. rövid közbeszólás) nem érintünk.
+        val kept = ArrayList<SrtExporter.Cue>(afterA.size)
+        var bi = 0
+        while (bi < afterA.size) {
+            var bj = bi
+            while (bj < afterA.size && tooFast(afterA, bj, burstMaxCps)) bj++
+            if (bj - bi >= burstMinRun) {
+                for (k in bi until bj) removed.add(afterA[k])
+                repeats += bj - bi
+                bi = bj
+            } else {
+                kept.add(afterA[bi])
+                bi++
+            }
+        }
+
+        // B) magányos rövid sor a hosszú csendben
+        var isolated = 0
+        val out = ArrayList<SrtExporter.Cue>(kept.size)
+        for (i in kept.indices) {
+            val c = kept[i]
+            val prevGap = if (i == 0) Long.MAX_VALUE else c.startMs - kept[i - 1].endMs
+            val nextGap = if (i == kept.size - 1) Long.MAX_VALUE else kept[i + 1].startMs - c.endMs
+            val alone = prevGap >= isolatedGapMs && nextGap >= isolatedGapMs &&
+                !(prevGap == Long.MAX_VALUE && nextGap == Long.MAX_VALUE)
+            if (alone && words(c) <= isolatedMaxWords) isolated++
+            // Magányos rövid szegmens is lehet valódi megszólalás; automatikus törlés helyett jelöljük.
+            out.add(c)
+        }
+        return Result(out, repeats, isolated, lowConf, removed.sortedBy { it.startMs })
+    }
+}
