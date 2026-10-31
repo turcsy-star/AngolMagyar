@@ -52,4 +52,4 @@ jobs:
             app/build/test-results/testDebugUnitTest/**
             app/build/outputs/roborazzi/**
             core/build/reports/tests/**
-            core/build/test-results/test/**
+            core/build/test-results/**
