@@ -13,6 +13,9 @@ interface DictionaryDao {
     @Query("SELECT * FROM dictionary_entries ORDER BY english COLLATE NOCASE ASC")
     suspend fun all(): List<DictionaryEntity>
 
+    @Query("SELECT * FROM dictionary_entries ORDER BY updatedAt DESC LIMIT :limit")
+    suspend fun recent(limit: Int = 5000): List<DictionaryEntity>
+
     @Query("SELECT * FROM dictionary_entries WHERE englishKey LIKE '%' || :query || '%' OR hungarian LIKE '%' || :query || '%' ORDER BY english COLLATE NOCASE LIMIT 100")
     suspend fun search(query: String): List<DictionaryEntity>
 

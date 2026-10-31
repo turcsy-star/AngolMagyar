@@ -64,7 +64,8 @@ class PlatinumIntelligenceActivity : ComponentActivity() {
                     onBackup = { open(BackupCenterActivity::class.java) },
                     onAnalytics = { open(LearningAnalyticsActivity::class.java) },
                     onDashboard = { open(PlatinumGlobalDashboardActivity::class.java) },
-                    onUltimate = { open(UltimateEcosystemActivity::class.java) }
+                    onUltimate = { open(UltimateEcosystemActivity::class.java) },
+                    onOfflineIntelligence = { open(OfflineIntelligenceCenterActivity::class.java) }
                 )
             }
         }
@@ -89,7 +90,8 @@ private fun IntelligenceHub(
     onBackup: () -> Unit,
     onAnalytics: () -> Unit,
     onDashboard: () -> Unit,
-    onUltimate: () -> Unit
+    onUltimate: () -> Unit,
+    onOfflineIntelligence: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = Prefs(context)
@@ -117,6 +119,7 @@ private fun IntelligenceHub(
             HubAction("🎬 Felirat- és médiafeldolgozás", "Fájl kiválasztása és felirat-munkafolyamat", "Elérhető", onSubtitles)
             HubAction("📚 Saját szókincstár", "Mentett kifejezések + SpacedRepetition ismétlés (P4)", "Kész · P4", onPhrasebook)
             HubAction("🧠 Intelligens ismétlő", "Esedékes szókártyák és adaptív ismétlési ütemezés", "Új", onReview)
+            HubAction("✨ Offline Intelligence Center", "Fordításminőség-ellenőrzés, helyi memória-keresés és ismétlési állapot", "Új · Phase7", onOfflineIntelligence)
             HubAction("💎 Learning Analytics Diamond", "Napi célok, 7 napos trendek és 30 napos tanulási mutatók", "Új · v2.63.0", onAnalytics)
             HubAction("📊 Platinum Global Dashboard", "Egységes állapotközpont, modulok és gyorsműveletek", "Új · v2.66.0", onDashboard)
             HubAction("💾 Infinity Backup Center", "Szótár, fordítási memória és ismétlési adatok exportja és visszaállítása", "Új", onBackup)
