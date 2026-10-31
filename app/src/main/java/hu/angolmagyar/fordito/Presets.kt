@@ -26,6 +26,14 @@ object SubPrefs {
     fun hallucFilter(ctx: Context): Boolean = p(ctx).getBoolean("subHalluc", true)
     fun setHallucFilter(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subHalluc", v).apply() }
 
+    /** Második menet a fordításon: tulajdonnevek és ismétlődő mondatok egységesítése az egész videóra. */
+    fun consistency(ctx: Context): Boolean = p(ctx).getBoolean("subConsistency", true)
+    fun setConsistency(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subConsistency", v).apply() }
+
+    /** Párbeszéd gondolatjellel ("- Szia.\n- Szervusz!") a "Beszélő:" előtag helyett, ha váltakozó beszélők gyors egymásutánban szólnak. */
+    fun dialogueDash(ctx: Context): Boolean = p(ctx).getBoolean("subDialogDash", false)
+    fun setDialogueDash(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subDialogDash", v).apply() }
+
     /** Beszélőnként más szín az SRT-ben (<font color>). */
     fun speakerColors(ctx: Context): Boolean = p(ctx).getBoolean("subSpkColors", false)
     fun setSpeakerColors(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("subSpkColors", v).apply() }
@@ -68,7 +76,7 @@ object OnlinePrefs {
     }
 
     fun apiKey(ctx: Context): String = SecretStore.get(p(ctx), "trKey")
-    fun setApiKey(ctx: Context, v: String) { SecretStore.set(p(ctx), "trKey", v) }
+    fun setApiKey(ctx: Context, v: String): Boolean = SecretStore.set(p(ctx), "trKey", v)
 
     fun model(ctx: Context): String = p(ctx).getString("trModel", "") ?: ""
     fun setModel(ctx: Context, v: String) { p(ctx).edit().putString("trModel", v.trim()).apply() }
@@ -94,7 +102,7 @@ object OnlinePrefs {
     }
 
     fun config(ctx: Context, srcName: String, tgtName: String): OnlineTranslator.Config? {
-        if (!usable(ctx)) return null
+        if (!usable(ctx) || !EndpointPolicy.isAllowed(baseUrl(ctx))) return null
         val prov = provider(ctx)
         val vocab = TextPolish.parseVocab(Prefs(ctx).customVocab)
         return OnlineTranslator.Config(

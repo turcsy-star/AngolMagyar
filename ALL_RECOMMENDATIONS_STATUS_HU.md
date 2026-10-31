@@ -25,3 +25,12 @@ Ez a dokumentum elkülöníti a ténylegesen bekerült fejlesztéseket a tovább
 
 - Elkészült: helyi szókincsismétlés, fordítás felfedése, „Tudtam” / „Nem tudtam” értékelés és fokozatos időzítés. Részletek: `ULTIMATE_2.44.0_HU.md`.
 - Továbbra is hátralévő tételek: kontextusmagyarázat, kiejtéslabor, teljes Compose-migráció, valódi golden screenshot összehasonlítás és fizikai eszközös ellenőrzés.
+
+
+## 2.55.0 – következő fejlesztési hullám
+
+- Smart Context Translation: első, szabályalapú kontextus-brief eszköz elkészült; teljes szemantikai elemzés és generatív alternatívák még nincsenek.
+- Translation Quality: meglévő ellenőrző motor UI-integrációja elkészült; teljes nyelvtani/terminológiai ellenőrzés nem állítható.
+- Infinity Global UI és Platinum Motion: meglévő infrastruktúra megjelenítve, teljes képernyőmigráció és profilintegráció továbbra is hátralék.
+- Build és fizikai Android-eszközteszt: külön igazolandó.
+\n\n## 2.56.0 – Ultimate Intelligence\n\n- Dual Translation: két változat összehasonlítása a meglévő auditmotor figyelmeztetéseivel; nincs automatikus minőségi rangsor.\n- Dictionary Pro Offline: 26 gyakori többjelentésű szó helyi keresése példamondatokkal.\n- Pronunciation Master: Android TextToSpeech, US/UK locale választással; telepített hangadat szükséges.\n- Infinity Quality Dashboard: szó- és karakterszám, szóarány, auditjelzések.\n- Generatív Infinity AI Engine: csak integrációs előkészítés; külső AI-szolgáltatás nincs bekapcsolva.\n- Build és fizikai eszközteszt: igazolandó.\n

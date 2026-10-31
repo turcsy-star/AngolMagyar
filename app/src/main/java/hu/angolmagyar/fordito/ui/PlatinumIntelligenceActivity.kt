@@ -58,7 +58,13 @@ class PlatinumIntelligenceActivity : ComponentActivity() {
                     onModels = { open(ModelsActivity::class.java) },
                     onDiagnostics = { open(DiagnosticsActivity::class.java) },
                     onPrivacy = { open(PrivacyActivity::class.java) },
-                    onSettings = { open(SettingsActivity::class.java) }
+                    onSettings = { open(SettingsActivity::class.java) },
+                    onNextWave = { open(NextWaveToolsActivity::class.java) },
+                    onReview = { open(ReviewCoachActivity::class.java) },
+                    onBackup = { open(BackupCenterActivity::class.java) },
+                    onAnalytics = { open(LearningAnalyticsActivity::class.java) },
+                    onDashboard = { open(PlatinumGlobalDashboardActivity::class.java) },
+                    onUltimate = { open(UltimateEcosystemActivity::class.java) }
                 )
             }
         }
@@ -77,7 +83,13 @@ private fun IntelligenceHub(
     onModels: () -> Unit,
     onDiagnostics: () -> Unit,
     onPrivacy: () -> Unit,
-    onSettings: () -> Unit
+    onSettings: () -> Unit,
+    onNextWave: () -> Unit,
+    onReview: () -> Unit,
+    onBackup: () -> Unit,
+    onAnalytics: () -> Unit,
+    onDashboard: () -> Unit,
+    onUltimate: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = Prefs(context)
@@ -100,27 +112,34 @@ private fun IntelligenceHub(
             }
         }
         HubSection("AZONNAL HASZNÁLHATÓ", "A csomagban már meglévő képernyők") {
+            HubAction("💎 Platinum Infinity Diamond 4.1", "Mind a tíz prémium fejlesztési pillér egyetlen helyi tanulási központban", "Új · 4.2.0", onUltimate)
             HubAction("🎙 Élő fordítás", "Kétirányú beszédmód és hangfeldolgozás", "Elérhető", onLive)
             HubAction("🎬 Felirat- és médiafeldolgozás", "Fájl kiválasztása és felirat-munkafolyamat", "Elérhető", onSubtitles)
-            HubAction("📚 Saját szókincstár", "Mentett kifejezések és tanulási munkafolyamat", "Elérhető", onPhrasebook)
+            HubAction("📚 Saját szókincstár", "Mentett kifejezések + SpacedRepetition ismétlés (P4)", "Kész · P4", onPhrasebook)
+            HubAction("🧠 Intelligens ismétlő", "Esedékes szókártyák és adaptív ismétlési ütemezés", "Új", onReview)
+            HubAction("💎 Learning Analytics Diamond", "Napi célok, 7 napos trendek és 30 napos tanulási mutatók", "Új · v2.63.0", onAnalytics)
+            HubAction("📊 Platinum Global Dashboard", "Egységes állapotközpont, modulok és gyorsműveletek", "Új · v2.66.0", onDashboard)
+            HubAction("💾 Infinity Backup Center", "Szótár, fordítási memória és ismétlési adatok exportja és visszaállítása", "Új", onBackup)
             HubAction("🗂 Átiratok", "Korábbi beszélgetések és átiratok", "Elérhető", onTranscripts)
             HubAction("📦 Modellek és offline mód", "Elérhető modellek kezelése", "Elérhető", onModels)
             HubAction("🛡 Adatvédelem", "Adatkezelési és helyi adatokkal kapcsolatos beállítások", "Elérhető", onPrivacy)
             HubAction("⚙ Diagnosztika", "Engedélyek, modellek és készülékállapot ellenőrzése", "Elérhető", onDiagnostics)
         }
         HubSection("KÖVETKEZŐ FEJLESZTÉSI HULLÁM", "Az alábbi ötletek nem mind kész funkciók; az állapotot külön jelezzük.") {
-            HubAction("💎 Infinity Global UI", "A klasszikus View-képernyők teljes paletta-migrációja", "Részben kész", onSettings, roadmap = true)
-            HubAction("✨ Platinum Motion Engine", "Egységes mozgásrendszer és automatikus animációcsökkentés", "Részben kész", onSettings, roadmap = true)
-            HubAction("🧠 Smart Context Translation", "Kontextus, kétértelműség és hangnem szerinti alternatívák", "Fejlesztendő", onSettings, roadmap = true)
-            HubAction("📊 Translation Quality", "Ellenőrizhető nyelvtani és terminológiai figyelmeztetések", "Fejlesztendő", onDiagnostics, roadmap = true)
+            HubAction("💎 Infinity Global UI", "Központi paletta, design tokenek és migrációs checklist", "Részben kész · v3.00", onNextWave, roadmap = true)
+            HubAction("✨ Platinum Motion Engine", "Mozgásprofilok, skálázás és automatikus animációcsökkentés", "Részben kész · v3.00", onNextWave, roadmap = true)
+            HubAction("🧠 Smart Context + Translation Memory", "Kontextus, memória-javaslat, minőségflag-ek (P2/P3)", "Kész · P2-P3", onNextWave, roadmap = true)
+            HubAction("📊 Translation Quality Intelligence", "Szám/tagadás/név jelzések + prémium kártya (P3)", "Kész · P3", onNextWave, roadmap = true)
+            HubAction("🔀 Hybrid Translation Engine", "Offline/online motorválasztás, fallback, adatvédelmi kapcsolók", "Kész (core) · v2.65.0", onNextWave, roadmap = true)
             HubAction("🔁 Dual Translation", "Két fordítási változat összehasonlítása", "Fejlesztendő", onSettings, roadmap = true)
             HubAction("📖 Dictionary Pro", "Bővített szótári jelentések, szófajok és példák", "Bővítendő", onPhrasebook, roadmap = true)
             HubAction("🗣 Pronunciation Coach", "Kiejtésgyakorlás és megbízható beszédértékelés", "Fejlesztendő", onLive, roadmap = true)
-            HubAction("📄 Document Translator", "PDF/DOCX import, OCR és formázásmegőrzés", "Fejlesztendő", onSubtitles, roadmap = true)
-            HubAction("🔤 Subtitle Translator Pro", "SRT-alapú fordítás és export", "Alapfunkció elérhető", onSubtitles, roadmap = true)
-            HubAction("⚡ Performance & Cache", "Mért teljesítmény, gyorsítótár-szabályok és erőforrásadatok", "Részben kész", onDiagnostics, roadmap = true)
-            HubAction("🧪 Quality Testing", "Build-, regressziós és fizikai eszközös tesztelés", "Kiadás előtt szükséges", onDiagnostics, roadmap = true)
-            HubAction("♿ Accessibility Suite", "Kontraszt, nagy betűméret és képernyőolvasó-ellenőrzés", "Folyamatos fejlesztés", onSettings, roadmap = true)
+            HubAction("📄 Document / Camera (P8)", "Szerződéses API kész; CameraX/OCR csak eszközteszt után READY", "Specifikáció · nem READY", onSubtitles, roadmap = true)
+            HubAction("🔤 Subtitle + Meeting Workflow", "SRT, összefoglaló, minőségjelzés, tanulási jelöltek (P5-P7)", "Kész · P5-P7", onSubtitles, roadmap = true)
+            HubAction("⚡ Performance & Regression Suite", "Latency, heap, beépített core regressziós készlet", "Kész (core) · v2.67.0", onNextWave, roadmap = true)
+            HubAction("💎 Diamond Integration Gate", "Kiadási checklist, regresszió, modul-térkép (v3.00)", "Kész (core) · v3.00.0", onNextWave, roadmap = true)
+            HubAction("🧪 Quality Testing", "Build-, eszközös és arany-referencia WER mérés", "Részben kész · Benchmark megvan", onDiagnostics, roadmap = true)
+            HubAction("♿ Accessibility Suite (P10)", "Kontraszt-arány, touch target, reduceMotion, checklist", "Részben kész · P10", onSettings, roadmap = true)
         }
         Text("Megjegyzés: a központ nem állítja késznek azokat a funkciókat, amelyekhez még fejlesztés, külső motor vagy eszközteszt szükséges.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))

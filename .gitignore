@@ -8,3 +8,11 @@ app/build/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Signing material and local secrets
+keystore.properties
+*.jks
+*.keystore
+!app/debug.keystore
+*.p12
+*.pfx

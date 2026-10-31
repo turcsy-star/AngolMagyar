@@ -46,6 +46,15 @@ class LiveFullscreenActivity : AppCompatActivity() {
                 Ui.dp(this@LiveFullscreenActivity, 16), Ui.dp(this@LiveFullscreenActivity, 12))
             setBackgroundColor(Ui.color(this@LiveFullscreenActivity, R.color.bg))
         }
+        if (prefs.platinumTheme || prefs.premiumProcessingUi) {
+            root.addView(
+                hu.angolmagyar.fordito.ui.processing.DiamondLiveView(this),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = Ui.dp(this@LiveFullscreenActivity, 8) }
+            )
+        }
         root.addView(panels.root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(Ui.smallButton(this, "A−") { scale -= 0.15f; panels.scale(scale) })

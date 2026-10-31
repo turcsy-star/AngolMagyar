@@ -451,6 +451,7 @@ class SrtEditorActivity : AppCompatActivity() {
         toolsBox.addView(ur)
         if (cues.any { it.speaker.isNotBlank() }) toolsBox.addView(Ui.smallButton(this, "Beszélők nevei…") { renameSpeakers() })
         if (!rich) return
+        toolsBox.addView(Ui.smallButton(this, "Következő ellenőrizendő sor (fontosság szerint) ▶") { jumpToNextReview() })
         toolsBox.addView(Ui.smallButton(this, "Szótár újraalkalmazása + javított sorok újrafordítása") { reapplyGlossary() })
         if (hasTarget) {
             toolsBox.addView(Ui.smallButton(this, "Gyanús sorok javítása (online)") {
@@ -516,6 +517,19 @@ class SrtEditorActivity : AppCompatActivity() {
                     toast("Referenciának mentve. Újrafuttatás után a Benchmark összeveti az eredményt.")
                 }
             })
+    }
+
+    private var reviewPos = -1
+
+    /** A legfontosabb jelzésű sortól lefelé léptet (körbeér); a rangsor csak ellenőrzési sorrend, nem helyességi ítélet. */
+    private fun jumpToNextReview() {
+        applyRows()
+        val ranked = ReviewPriority.rank(cues)
+        if (ranked.isEmpty()) { toast("Nincs ellenőrizendő jelzésű sor."); return }
+        reviewPos = (reviewPos + 1) % ranked.size
+        val top = ranked[reviewPos]
+        toast("${reviewPos + 1}/${ranked.size}. sor: #${top.index + 1} – ${top.reasons.joinToString(", ")}")
+        jumpToLine(top.index)
     }
 
     private fun jumpToLine(index: Int) {

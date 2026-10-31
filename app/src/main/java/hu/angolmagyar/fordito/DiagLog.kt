@@ -155,9 +155,15 @@ object DiagLog {
         return sb.toString()
     }
 
-    /** Megosztás (levél, üzenet…) – a jelentés szövegként megy. */
+    /** Megosztásra szánt jelentés: fájlnevek, útvonalak, URI-k, e-mailek, IP-címek és kulcsok kicserélve. */
+    fun shareable(ctx: Context): String {
+        val r = ReportAnonymizer.anonymize(report(ctx))
+        return r.text + "\n\n(Anonimizált jelentés: ${r.replaced} érzékeny elem kicserélve.)"
+    }
+
+    /** Megosztás (levél, üzenet…) – a jelentés szövegként megy, anonimizálva. */
     fun share(ctx: Context) {
-        val text = report(ctx)
+        val text = shareable(ctx)
         try {
             val i = Intent(Intent.ACTION_SEND)
                 .setType("text/plain")
@@ -171,7 +177,7 @@ object DiagLog {
     fun copy(ctx: Context) {
         try {
             val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("Hibajelentés", report(ctx).takeLast(90_000)))
+            cm.setPrimaryClip(ClipData.newPlainText("Hibajelentés", shareable(ctx).takeLast(90_000)))
         } catch (_: Exception) {
         }
     }

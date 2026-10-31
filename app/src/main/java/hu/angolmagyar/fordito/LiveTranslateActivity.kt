@@ -595,12 +595,13 @@ class LiveTranslateActivity : AppCompatActivity() {
         }
         card.addView(meter)
         if (prefs.platinumTheme) {
-            // Platinum téma: a valós hangszintből gördülő oszlopmérő váltja a sima sávot
+            // Platinum / Diamond: prémium élő színház (fázis + spektrum + élő szöveg)
             meterText.visibility = View.GONE
             meter.visibility = View.GONE
-            card.addView(hu.angolmagyar.fordito.ui.processing.PlatinumLevelView(this), LinearLayout.LayoutParams(
+            val lpMeter = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = (8 * resources.displayMetrics.density).toInt() })
+            ).apply { topMargin = (8 * resources.displayMetrics.density).toInt() }
+            card.addView(hu.angolmagyar.fordito.ui.processing.DiamondLiveView(this), lpMeter)
         }
         if (prefs.polyMode) {
             // többnyelvű mód: két panel (eredeti | fordítás), beszélő- és nyelvjelöléssel, alul a célnyelv-választóval

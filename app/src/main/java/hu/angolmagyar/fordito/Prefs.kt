@@ -98,13 +98,26 @@ class Prefs(ctx: Context) {
 
     /** Globális prémium megjelenés: platinum, obsidian, gold, arctic vagy sapphire. */
     var luxuryThemeId: String
-        get() = p.getString("luxuryThemeId", "platinum") ?: "platinum"
+        get() = p.getString("luxuryThemeId", "forest") ?: "forest"
         set(v) { p.edit().putString("luxuryThemeId", v).apply() }
 
     /** Csökkentett animációs mód (a rendszer animációskapcsolóját is figyeljük). */
     var reduceMotion: Boolean
         get() = p.getBoolean("reduceMotion", false)
         set(v) { p.edit().putBoolean("reduceMotion", v).apply() }
+
+    /**
+     * Mozgásprofil: full | subtle | reduced | none
+     * A reduceMotion=true mindig none-ra esik vissza a PremiumMotion-ben.
+     */
+    var motionProfile: String
+        get() = p.getString("motionProfile", "full") ?: "full"
+        set(v) { p.edit().putString("motionProfile", v).apply() }
+
+    /** Diamond Cinema Mode: maximális parallax/flare/lower-third (csak FULL profil mellett). */
+    var diamondCinemaMode: Boolean
+        get() = p.getBoolean("diamondCinemaMode", true)
+        set(v) { p.edit().putBoolean("diamondCinemaMode", v).apply() }
 
     var atTop: Boolean
         get() = p.getBoolean("atTop", false)

@@ -221,8 +221,13 @@ class FileRecognizer(
             if (weakRepeat) continue
             prev2 = prev1; prev1 = t
             prev2Lp = prev1Lp; prev1Lp = sg.avgLogProb
-            val t0 = if (timeMap != null) timeMap.toOrig(sg.startMs) else offsetMs + sg.startMs
-            val t1 = if (timeMap != null) maxOf(timeMap.toOrig(sg.endMs), t0 + 200) else offsetMs + sg.endMs
+            // szóidők alapján szűkített határok (csak ha a tokenidők megbízhatók; egyébként az eredeti marad)
+            val tight = WordTiming.tighten(
+                sg.startMs, sg.endMs,
+                sg.tokens.filter { it.text.isNotBlank() && !it.text.trim().startsWith("<|") }.map { WordTiming.Span(it.startMs, it.endMs) }
+            )
+            val t0 = if (timeMap != null) timeMap.toOrig(tight.first) else offsetMs + tight.first
+            val t1 = if (timeMap != null) maxOf(timeMap.toOrig(tight.second), t0 + 200) else offsetMs + tight.second
             // A szegmens- és szóminőséget külön kezeljük: az avgLogProb a teljes szegmensé,
             // az egyes szavak kiemelését a TokenScore alapú wordConfidence végzi.
             out.addAll(splitLong(Raw(t0, t1, t, sg.avgLogProb, sg.wordConfidence, sg.noSpeech)))

@@ -267,23 +267,55 @@ object ModelManager {
 
     fun installFromZip(ctx: Context, spec: Spec, zipFile: File, onProgress: (Int, String) -> Unit) {
         onProgress(80, "Kicsomagolás…")
-        val tmp = File(ctx.cacheDir, "unzip_tmp_${spec.id}")
-        tmp.deleteRecursively()
-        tmp.mkdirs()
-        unzip(zipFile, tmp, onProgress)
-        val found = tmp.walkTopDown().firstOrNull { File(it, "am").isDirectory }
-            ?: throw IllegalStateException("Érvénytelen Vosk ZIP (nincs am mappa).")
         val target = dir(ctx, spec)
-        target.deleteRecursively()
-        found.copyRecursively(target, overwrite = true)
+        val parent = target.parentFile ?: throw IllegalStateException("Érvénytelen modell célmappa.")
+        if (!parent.exists() && !parent.mkdirs()) throw java.io.IOException("Nem hozható létre a modellmappa.")
+        val tmp = File(parent, ".${spec.dirName}.extracting")
+        val staged = File(parent, ".${spec.dirName}.staged")
+        val backup = File(parent, ".${spec.dirName}.backup")
         tmp.deleteRecursively()
-        if (!isInstalled(ctx, spec)) throw IllegalStateException("Telepítés sikertelen.")
+        staged.deleteRecursively()
+        backup.deleteRecursively()
+        var activated = false
+        try {
+            if (!tmp.mkdirs()) throw java.io.IOException("Nem hozható létre az ideiglenes mappa.")
+            unzip(zipFile, tmp, onProgress)
+            val found = tmp.walkTopDown().firstOrNull { File(it, "am").isDirectory }
+                ?: throw IllegalStateException("Érvénytelen Vosk ZIP (nincs am mappa).")
+            found.copyRecursively(staged, overwrite = true)
+            if (!File(staged, "am").isDirectory) throw IllegalStateException("A staging modell hiányos.")
+            if (target.exists() && !target.renameTo(backup)) throw java.io.IOException("A meglévő modell nem menthető biztonságosan.")
+            if (!staged.renameTo(target)) {
+                if (backup.exists()) backup.renameTo(target)
+                throw java.io.IOException("Az új modell atomikus aktiválása sikertelen.")
+            }
+            activated = true
+            if (!isInstalled(ctx, spec)) throw IllegalStateException("Telepítés sikertelen.")
+            backup.deleteRecursively()
+        } catch (e: Exception) {
+            if (backup.exists()) {
+                target.deleteRecursively()
+                if (!backup.renameTo(target)) {
+                    throw IllegalStateException("A modelltelepítés hibázott, és a korábbi modell visszaállítása sem sikerült.", e)
+                }
+            } else if (activated) {
+                target.deleteRecursively()
+            }
+            throw e
+        } finally {
+            tmp.deleteRecursively()
+            staged.deleteRecursively()
+            if (target.exists()) backup.deleteRecursively()
+        }
     }
 
     private fun unzip(zip: File, dest: File, onProgress: (Int, String) -> Unit) {
         val destCanon = dest.canonicalPath
         ZipFile(zip).use { zf ->
             val entries = zf.entries().asSequence().toList()
+            val metadata = entries.map { e -> ArchiveSafetyPolicy.EntryMetadata(e.name, e.size, e.compressedSize) }
+            val rejection = ArchiveSafetyPolicy.validate(metadata)
+            if (rejection != null) throw SecurityException("Nem biztonságos modell ZIP: $rejection")
             var i = 0
             for (e in entries) {
                 val f = File(dest, e.name)

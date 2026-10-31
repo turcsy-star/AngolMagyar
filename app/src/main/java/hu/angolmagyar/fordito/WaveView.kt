@@ -24,6 +24,7 @@ class WaveView @JvmOverloads constructor(
     private var chunkFrac = DoubleArray(0)
 
     private val barPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val platinum = Prefs(ctx).platinumTheme || Prefs(ctx).premiumProcessingUi
     private var pulse = 0f
     private val pulseAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 1300
@@ -125,10 +126,10 @@ class WaveView @JvmOverloads constructor(
         if (n > 0) {
             val gap = max(1f, w / n * 0.18f)
             val bw = max(1.5f, w / n - gap)
-            val doneC = Ui.color(context, R.color.ok)
-            val activeRed = 0xFFFF4D4D.toInt()
-            val activeWhite = 0xFFFFFFFF.toInt()
-            val idleC = 0x66888AA0
+            val doneC = if (platinum) 0xFF5FD3A0.toInt() else Ui.color(context, R.color.ok)
+            val activeRed = if (platinum) 0xFFE6D5A8.toInt() else 0xFFFF4D4D.toInt()
+            val activeWhite = if (platinum) 0xFFBFD7EA.toInt() else 0xFFFFFFFF.toInt()
+            val idleC = if (platinum) 0x664A505B else 0x66888AA0
             val progress = overallProgress()
             for (i in 0 until n) {
                 val x = i * (w / n) + gap / 2f

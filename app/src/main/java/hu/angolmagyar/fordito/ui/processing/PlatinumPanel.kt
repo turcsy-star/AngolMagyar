@@ -129,6 +129,10 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
                     }
                 }
                 Hairline()
+                // Prémium folyamat-színház: aktuális művelet + lépésvizualizáció + élő jel
+                if (state.running || state.finished || state.stages.isNotEmpty()) {
+                    DiamondProcessTheater(state = state, reduced = reduced)
+                }
                 PlatinumFlowGraph(state, selected, { selected = it }, reduced)
                 AnimatedVisibility(
                     visible = selected != null,
@@ -139,14 +143,6 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
                     if (nd != null) NodeDetail(nd, state, reduced)
                 }
                 if (history.size >= 2) PlatinumGlassCard(Modifier.fillMaxWidth(), reduced) { PlatinumSparkline(history.toList()) }
-                state.stages.firstOrNull { it.status == StageStatus.RUNNING || it.status == StageStatus.WARNING }?.let { a ->
-                    val line = listOf(a.title, a.detail).filter { it.isNotBlank() }.joinToString(" – ")
-                    Text(line, color = PlatinumColors.TextDim, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                if (state.running && state.heard.isNotBlank())
-                    Text("„${state.heard}”", color = PlatinumColors.Text, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (state.running && state.translated.isNotBlank())
-                    Text("→ ${state.translated}", color = PlatinumColors.IceBlue, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val note = state.errorMessage?.let { it to PlatinumColors.Ruby } ?: state.warningMessage?.let { it to PlatinumColors.Amber }
                 if (note != null) Text(
                     (if (note.second == PlatinumColors.Ruby) "✕ " else "⚠ ") + note.first, color = note.second, fontSize = 12.sp,

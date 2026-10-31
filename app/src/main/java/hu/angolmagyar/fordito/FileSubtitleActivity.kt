@@ -46,6 +46,9 @@ class FileSubtitleActivity : AppCompatActivity() {
         const val EXTRA_AUTOSTART = "autostart" // fájlválasztó azonnal
         const val EXTRA_TGT = "tgt" // célnyelv: hu/en/de/…
         const val EXTRA_KIND = "kind" // SrtJobService.KIND_TRANSCRIPT / KIND_SUBTITLE
+        /** Kezdőlap JobCard / portal: animált belépés a folyamat panelre. */
+        const val EXTRA_FROM_PORTAL = "from_portal"
+        const val SHARED_PIPELINE = "diamond_pipeline_portal"
 
         private val PICK_TYPES = arrayOf(
             "audio/*", "video/*",
@@ -554,6 +557,18 @@ class FileSubtitleActivity : AppCompatActivity() {
             isChecked = SubPrefs.speakerColors(this@FileSubtitleActivity)
             setOnCheckedChangeListener { _, c -> SubPrefs.setSpeakerColors(this@FileSubtitleActivity, c) }
         })
+        advBox.addView(SwitchCompat(this).apply {
+            text = "Egységesítés: nevek írásmódja és ismétlődő mondatok fordítása az egész videón"
+            minHeight = dp(52)
+            isChecked = SubPrefs.consistency(this@FileSubtitleActivity)
+            setOnCheckedChangeListener { _, c -> SubPrefs.setConsistency(this@FileSubtitleActivity, c) }
+        })
+        advBox.addView(SwitchCompat(this).apply {
+            text = "Párbeszéd gondolatjellel (- Szia. / - Szervusz!) a \"Beszélő:\" előtag helyett"
+            minHeight = dp(52)
+            isChecked = SubPrefs.dialogueDash(this@FileSubtitleActivity)
+            setOnCheckedChangeListener { _, c -> SubPrefs.setDialogueDash(this@FileSubtitleActivity, c) }
+        })
         advBox.addView(Ui.button(this, "Szótár (nevek, javítások)…", false) { showGlossary() })
         card.addView(collapsible("Formázás és szűrők", advBox))
         refreshProfiles()
@@ -1003,9 +1018,23 @@ class FileSubtitleActivity : AppCompatActivity() {
         // összesítő: egyetlen sáv + eltelt / hátra / kész (a lépés- és darab-sorok ezeket nem ismétlik)
         val pipelineView: View = if (Prefs(this).premiumProcessingUi) CinematicPipelineView(this) else PipelineView(this)
         pipeline = pipelineView as PipelineHost
+        pipelineView.transitionName = SHARED_PIPELINE
         head.addView(pipelineView, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
+        if (intent.getBooleanExtra(EXTRA_FROM_PORTAL, false)) {
+            progressSection.post {
+                try {
+                    (progressSection.parent as? android.view.View)?.requestRectangleOnScreen(
+                        android.graphics.Rect(0, 0, progressSection.width, progressSection.height),
+                        true
+                    )
+                } catch (_: Exception) { }
+                pipelineView.animate()?.alpha(0.7f)?.setDuration(120)?.withEndAction {
+                    pipelineView.animate()?.alpha(1f)?.setDuration(280)?.start()
+                }?.start()
+            }
+        }
         wave = WaveView(this)
         head.addView(wave, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT

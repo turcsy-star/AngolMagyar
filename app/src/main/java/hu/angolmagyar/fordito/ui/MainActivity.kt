@@ -106,6 +106,7 @@ import hu.angolmagyar.fordito.AppState
 import hu.angolmagyar.fordito.DiagnosticsActivity
 import hu.angolmagyar.fordito.ui.PlatinumIntelligenceActivity
 import hu.angolmagyar.fordito.FileSubtitleActivity
+import hu.angolmagyar.fordito.NavTransitions
 import hu.angolmagyar.fordito.ModelDownloadService
 import hu.angolmagyar.fordito.ModelManager
 import hu.angolmagyar.fordito.OnlinePrefs
@@ -120,6 +121,10 @@ import hu.angolmagyar.fordito.TranslationStyle
 import hu.angolmagyar.fordito.SettingsActivity
 import hu.angolmagyar.fordito.SetupWizardActivity
 import hu.angolmagyar.fordito.SrtJob
+import hu.angolmagyar.fordito.ui.processing.CompletionBurst
+import hu.angolmagyar.fordito.ui.processing.DiamondProcessTheater
+import hu.angolmagyar.fordito.ui.processing.SrtJobAdapter
+import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import hu.angolmagyar.fordito.TranscriptActivity
 import hu.angolmagyar.fordito.TranslateService
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
@@ -217,7 +222,11 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
                         startActivity(Intent(this, FileSubtitleActivity::class.java)
                             .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true))
                     },
-                    onOpenJob = { startActivity(Intent(this, FileSubtitleActivity::class.java)) },
+                    onOpenJob = {
+                        val intent = Intent(this, FileSubtitleActivity::class.java)
+                            .putExtra(FileSubtitleActivity.EXTRA_FROM_PORTAL, true)
+                        NavTransitions.open(this, intent)
+                    },
                     onLive = { startActivity(Intent(this, LiveActivity::class.java)) },
                     onMic = {
                         startActivity(Intent(this, LiveActivity::class.java)
@@ -293,11 +302,19 @@ fun HomeScreen(
     var jobRunning by remember { mutableStateOf(false) }
     var jobPct by remember { mutableStateOf(0) }
     var jobMsg by remember { mutableStateOf("") }
+    var jobJustFinished by remember { mutableStateOf(false) }
+    var prevJobRunning by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
-            jobRunning = SrtJob.running || SrtJob.batchRunning
+            val running = SrtJob.running || SrtJob.batchRunning
             jobPct = SrtJob.overall.coerceIn(0, 100)
             jobMsg = SrtJob.message
+            if (prevJobRunning && !running && SrtJob.error.isNullOrBlank()) {
+                jobJustFinished = true
+            }
+            if (running) jobJustFinished = false
+            prevJobRunning = running
+            jobRunning = running
             delay(500)
         }
     }
@@ -376,6 +393,18 @@ fun HomeScreen(
                 exit = fadeOut(tween(250))
             ) {
                 JobCard(pct = jobPct, message = jobMsg, onOpen = onOpenJob)
+            }
+
+            AnimatedVisibility(
+                visible = jobJustFinished && !jobRunning,
+                enter = fadeIn(tween(350)) + slideInVertically(tween(450)) { it / 5 },
+                exit = fadeOut(tween(400))
+            ) {
+                JobFinishedCard(
+                    message = jobMsg.ifBlank { "A feldolgozás sikeresen befejeződött." },
+                    onOpen = onOpenJob,
+                    onDismiss = { jobJustFinished = false }
+                )
             }
 
             Staggered(3, shown) {
@@ -721,11 +750,12 @@ private fun DiamondExperiencePanel(active: Boolean) {
             ((context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
     }
     val transition = rememberInfiniteTransition(label = "diamondExperience")
+    val orbitMs = if (active) 9000 else 18000
     val rotation = if (reducedMotion) 0f else {
         val value by transition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
-            animationSpec = infiniteRepeatable(tween(18000, easing = LinearEasing), RepeatMode.Restart),
+            animationSpec = infiniteRepeatable(tween(orbitMs, easing = LinearEasing), RepeatMode.Restart),
             label = "diamondOrbit"
         )
         value
@@ -805,18 +835,21 @@ private fun DiamondExperiencePanel(active: Boolean) {
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    if (active) "A motor dolgozik" else "Prémium fordítási központ",
+                    if (active) "Folyamat-színház aktív" else "Prémium fordítási központ",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    "Zafírkék felület · intelligens feldolgozás · letisztult vezérlés",
+                    if (active)
+                        "Élő jel és lépésvizualizáció · aktuális művelet kiemelve · Diamond animációk"
+                    else
+                        "Zafír medál · Process / Live Theater · prémium visszajelzés",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 StatusPill(
-                    label = if (active) "AKTÍV FOLYAMAT" else "DIAMOND BLUE",
+                    label = if (active) "SZÍNHÁZ FUT" else "DIAMOND BLUE",
                     accent = if (active) MaterialTheme.colorScheme.secondary else Color(0xFF70CFFF)
                 )
             }
@@ -987,6 +1020,7 @@ private fun Header(running: Boolean, error: Boolean) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             StatusPill(label = "✦ GYÉMÁNT")
+            StatusPill(label = "v3.13")
         }
         Text(
             text = "INTELLIGENS ÁTIRAT  ·  AI FORDÍTÁS  ·  OFFLINE KÉSZENLÉT",
@@ -1093,7 +1127,53 @@ private fun TileCard(
 }
 
 @Composable
+private fun JobFinishedCard(message: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val reduced = remember { PremiumMotion.reduced(context) }
+    var showBurst by remember { mutableStateOf(!reduced) }
+    LaunchedEffect(Unit) {
+        delay(6500)
+        onDismiss()
+    }
+    Box(Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1116).copy(alpha = 0.98f))
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("DIAMOND · END CARD", color = Color(0xFF5FD3A0), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
+                Text("Feldolgozás befejezve", color = Color(0xFFF0EFEA), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(message, color = Color(0xFF9EA4AF), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text("Cinema ceremony · eredmény megnyitása egy koppintással", color = Color(0xFF6B7280), style = MaterialTheme.typography.labelSmall)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Eredmény megnyitása", color = Color(0xFFBFD7EA), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = onDismiss) {
+                        Text("Elrejt", color = Color(0xFF9CA6B5))
+                    }
+                }
+            }
+        }
+        if (showBurst) {
+            CompletionBurst(
+                modifier = Modifier.size(160.dp).align(Alignment.TopEnd).padding(8.dp),
+                colors = listOf(Color(0xFFE6D5A8), Color(0xFFBFD7EA), Color(0xFF5FD3A0))
+            ) { showBurst = false }
+        }
+    }
+}
+
+@Composable
 private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val reduced = remember { PremiumMotion.reduced(context) }
+    var ui by remember { mutableStateOf(SrtJobAdapter.snapshot()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            ui = SrtJobAdapter.snapshot()
+            delay(350)
+        }
+    }
     val progress by animateFloatAsState(pct / 100f, tween(850, easing = FastOutSlowInEasing), label = "jobPct")
     val transition = rememberInfiniteTransition(label = "cinematicPipeline")
     val pulse by transition.animateFloat(
@@ -1112,54 +1192,55 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1116).copy(alpha = 0.98f))
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text("FOLYAMATBAN", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text("Intelligens feldolgozás", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("DIAMOND · FOLYAMATBAN", color = Color(0xFFE6D5A8), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text("Intelligens feldolgozás", color = Color(0xFFF0EFEA), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(58.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))) {
-                    Text("$pct%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(58.dp).clip(CircleShape).background(Color(0xFFBFD7EA).copy(alpha = 0.15f))) {
+                    Text("$pct%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFFBFD7EA))
                 }
             }
-            // Cinematic stage rail: the active node breathes; completed nodes remain visibly confirmed.
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                stages.forEachIndexed { index, stage ->
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Box(Modifier.size(if (index == activeStage) 24.dp else 18.dp)
-                            .clip(CircleShape)
-                            .background(when {
-                                index < activeStage -> Color(0xFF22C7A0)
-                                index == activeStage -> MaterialTheme.colorScheme.primary.copy(alpha = pulse)
-                                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
-                            }), contentAlignment = Alignment.Center) {
-                            if (index < activeStage) Text("✓", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                            else if (index == activeStage) Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+            // Valós lépés-színház a SrtJob állapotából
+            if (ui.stages.isNotEmpty()) {
+                DiamondProcessTheater(state = ui, reduced = reduced)
+            } else {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                    stages.forEachIndexed { index, stage ->
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(Modifier.size(if (index == activeStage) 24.dp else 18.dp)
+                                .clip(CircleShape)
+                                .background(when {
+                                    index < activeStage -> Color(0xFF22C7A0)
+                                    index == activeStage -> Color(0xFF60A5FA).copy(alpha = pulse)
+                                    else -> Color(0xFF4A505B).copy(alpha = 0.55f)
+                                }), contentAlignment = Alignment.Center) {
+                                if (index < activeStage) Text("✓", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                else if (index == activeStage) Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+                            }
+                            Text(stage, style = MaterialTheme.typography.labelSmall, color = if (index <= activeStage) Color(0xFFF0EFEA) else Color(0xFF9CA6B5), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                         }
-                        Text(stage, style = MaterialTheme.typography.labelSmall, color = if (index <= activeStage) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                     }
                 }
-            }
-            Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)) {
-                Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(10.dp).clip(CircleShape)
-                    .background(Brush.horizontalGradient(listOf(Color(0xFF2563EB), Color(0xFF22D3EE), Color(0xFF60A5FA)))))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Teljes folyamat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Color(0xFF222733))) {
+                    Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(10.dp).clip(CircleShape)
+                        .background(Brush.horizontalGradient(listOf(Color(0xFFE6D5A8), Color(0xFFBFD7EA), Color(0xFF60A5FA)))))
+                }
             }
             if (message.isNotBlank()) {
-                Text(message, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(message, color = Color(0xFF9EA4AF), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Részletes folyamat és napló", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "Részletek", tint = MaterialTheme.colorScheme.primary)
+                Text("Task portal · részletes folyamat", color = Color(0xFFBFD7EA), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Rounded.PlayArrow, contentDescription = "Részletek", tint = Color(0xFFBFD7EA))
             }
         }
     }
 }
+
 
 @Composable
 private fun LiveCard(

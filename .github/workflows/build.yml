@@ -26,12 +26,18 @@ jobs:
           yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses >/dev/null || true
           "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --install "ndk;27.2.12479018" "cmake;3.22.1"
           test -f "$SDK/ndk/27.2.12479018/source.properties"
+      - name: Static release security guardrails
+        run: python tools/verify_release_security.py
       - name: Core unit tests
         run: ./gradlew :core:test --stacktrace
       - name: App unit tests (includes Compose screenshot smoke test)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Build Wear OS debug APK
+        run: ./gradlew :wear:assembleDebug --stacktrace
+      - name: Compile unsigned release APK (no debug-key fallback)
+        run: ./gradlew :app:assembleRelease --stacktrace
       - name: Publish APK, test reports and screenshot outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -40,6 +46,8 @@ jobs:
           if-no-files-found: warn
           path: |
             app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+            wear/build/outputs/apk/debug/*.apk
             app/build/reports/tests/**
             app/build/test-results/testDebugUnitTest/**
             app/build/outputs/roborazzi/**

@@ -33,6 +33,13 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity android:name=".ui.BackupCenterActivity" android:exported="false" android:label="Infinity Backup Center" />
+        <activity android:name=".ui.LearningAnalyticsActivity" android:exported="false" android:label="Learning Analytics Diamond" />
+        <activity android:name=".ui.ReviewCoachActivity" android:exported="false" android:label="Intelligens ismétlő" />
+        <activity android:name=".ui.NextWaveToolsActivity" android:exported="false" android:label="Next Wave Tools" />
+        <activity android:name=".ui.PlatinumGlobalDashboardActivity" android:exported="false" android:label="Platinum Global Dashboard" />
+        <activity android:name=".ui.UltimateEcosystemActivity" android:exported="false" android:label="Platinum Infinity Diamond 4.1" />
+
         <activity
             android:name=".ui.PlatinumIntelligenceActivity"
             android:exported="false"

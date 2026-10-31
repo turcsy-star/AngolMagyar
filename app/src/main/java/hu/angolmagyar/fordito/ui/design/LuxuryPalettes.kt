@@ -16,6 +16,7 @@ data class LuxuryPalette(
 
 object LuxuryPalettes {
     val all = listOf(
+        LuxuryPalette("forest", "Forest Graphite", Color(0xFF07130F), Color(0xFF12231B), Color(0xFF62A982), Color(0xFF2F7657), Color(0xFFB7E0C7), Color(0xFFF0F8F2)),
         LuxuryPalette("platinum", "Platinum Silver", Color(0xFF080B10), Color(0xFF171D26), Color(0xFFC8D0DA), Color(0xFF8EA6C0), Color(0xFFE6EDF5), Color(0xFFF3F6FA)),
         LuxuryPalette("obsidian", "Obsidian Black", Color(0xFF030405), Color(0xFF111315), Color(0xFFB6BEC8), Color(0xFF737F8C), Color(0xFFD7DEE7), Color(0xFFF5F6F8)),
         LuxuryPalette("gold", "Royal Gold", Color(0xFF100D08), Color(0xFF21190F), Color(0xFFD6B36A), Color(0xFF9F7A36), Color(0xFFF0D79A), Color(0xFFFFF7E7)),

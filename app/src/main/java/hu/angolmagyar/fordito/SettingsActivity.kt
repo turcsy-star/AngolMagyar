@@ -273,6 +273,7 @@ class SettingsActivity : AppCompatActivity() {
         dirCard.addView(Ui.small(this, "Globális Infinity Luxury téma — a kiválasztott paletta a Compose Material 3 felület színeit is vezérli."))
         val luxuryThemes = android.widget.RadioGroup(this).apply { orientation = android.widget.RadioGroup.VERTICAL }
         val paletteRows = listOf(
+            Triple("forest", "Forest Graphite", intArrayOf(0xFF07130F.toInt(), 0xFF62A982.toInt(), 0xFF2F7657.toInt())),
             Triple("platinum", "Platinum Silver", intArrayOf(0xFF080B10.toInt(), 0xFFC8D0DA.toInt(), 0xFF8EA6C0.toInt())),
             Triple("obsidian", "Obsidian Black", intArrayOf(0xFF030405.toInt(), 0xFFB6BEC8.toInt(), 0xFF737F8C.toInt())),
             Triple("gold", "Royal Gold", intArrayOf(0xFF100D08.toInt(), 0xFFD6B36A.toInt(), 0xFF9F7A36.toInt())),
@@ -301,6 +302,28 @@ class SettingsActivity : AppCompatActivity() {
         dirCard.addView(Ui.small(this, "A színcsíkok a háttér, a fő kiemelőszín és a másodlagos fény színét mutatják. A módosítás a fő Compose-felületen a Beállításokból visszatérve frissül; a klasszikus View-képernyők külön témázása későbbi migráció."))
         dirCard.addView(switchRow("Csökkentett animáció", prefs.reduceMotion) {
             prefs.reduceMotion = it
+        })
+        dirCard.addView(Ui.small(this, "Mozgásprofil (ha a csökkentett animáció ki van kapcsolva):"))
+        val motionRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun motionChip(label: String, key: String) {
+            val selected = prefs.motionProfile == key
+            motionRow.addView(Ui.smallButton(this, if (selected) "✓ $label" else label) {
+                prefs.motionProfile = key
+                prefs.reduceMotion = (key == "none")
+                recreate()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = dp(4)
+                }
+            })
+        }
+        motionChip("Teljes", "full")
+        motionChip("Diszkrét", "subtle")
+        motionChip("Minimal", "reduced")
+        motionChip("Ki", "none")
+        dirCard.addView(motionRow)
+        dirCard.addView(switchRow("Diamond Cinema Mode (max. vizuál, csak Teljes profil)", prefs.diamondCinemaMode) {
+            prefs.diamondCinemaMode = it
         })
         dirCard.addView(switchRow("Beszélgetés: automatikus irányváltás", prefs.autoLangSwitch) {
             prefs.autoLangSwitch = it

@@ -81,25 +81,33 @@ object OnlineSettingsDialog {
         val result = TextView(ctx).apply { textSize = 13f; gravity = Gravity.START }
         col.addView(result)
 
-        fun saveAll() {
+        fun saveAll(): Boolean {
             OnlinePrefs.setProvider(ctx, when (provSpin.selectedItemPosition) {
                 1 -> OnlineTranslator.Provider.OPENAI
                 2 -> OnlineTranslator.Provider.DEEPL
                 else -> OnlineTranslator.Provider.ANTHROPIC
             })
-            OnlinePrefs.setApiKey(ctx, key.text.toString())
+            val keySaved = OnlinePrefs.setApiKey(ctx, key.text.toString())
             OnlinePrefs.setModel(ctx, model.text.toString())
             OnlinePrefs.setBaseUrl(ctx, base.text.toString())
             OnlinePrefs.setHint(ctx, hint.text.toString())
             OnlinePrefs.setConsent(ctx, consent.isChecked)
             // ha használható a beállítás, az online fordítás magától bekapcsol (offline tartalékkal)
             if (OnlinePrefs.usable(ctx) && OnlinePrefs.mode(ctx) == OnlinePrefs.OFF) OnlinePrefs.setMode(ctx, OnlinePrefs.AUTO)
+            return keySaved
         }
 
         col.addView(Ui.smallButton(ctx, "Kapcsolat kipróbálása") {
-            saveAll()
+            if (!saveAll()) {
+                result.text = "A kulcs biztonságos mentése nem sikerült. Ellenőrizd az Android Keystore állapotát; a kulcs nem lett titkosítatlanul eltárolva."
+                return@smallButton
+            }
             val cfg = OnlinePrefs.config(ctx, "angol", "magyar")
             if (cfg == null) {
+                if (!EndpointPolicy.isAllowed(OnlinePrefs.baseUrl(ctx))) {
+                    result.text = "Nem biztonságos végpont: távoli szerverhez HTTPS szükséges. HTTP csak localhost vagy privát helyi IPv4 címen engedélyezett."
+                    return@smallButton
+                }
                 val miss = ArrayList<String>()
                 if (OnlinePrefs.apiKey(ctx).isBlank() && !(OnlinePrefs.provider(ctx) == OnlineTranslator.Provider.OPENAI && OnlinePrefs.baseUrl(ctx).isNotBlank()))
                     miss.add("API-kulcs (a Claude-előfizetés nem API-kulcs: az console.anthropic.com oldalon kell létrehozni)")
@@ -120,8 +128,12 @@ object OnlineSettingsDialog {
             .setTitle("Online fordítás")
             .setView(sv)
             .setPositiveButton("Mentés") { _, _ ->
-                saveAll()
-                if (!OnlinePrefs.usable(ctx)) Toast.makeText(ctx, "Az online fordítás még nincs teljesen beállítva.", Toast.LENGTH_LONG).show()
+                val saved = saveAll()
+                if (!saved) {
+                    Toast.makeText(ctx, "A kulcs biztonságos mentése nem sikerült; nem tároltuk titkosítatlanul.", Toast.LENGTH_LONG).show()
+                } else if (!OnlinePrefs.usable(ctx)) {
+                    Toast.makeText(ctx, "Az online fordítás még nincs teljesen beállítva.", Toast.LENGTH_LONG).show()
+                }
                 onDone()
             }
             .setNegativeButton("Mégse", null)

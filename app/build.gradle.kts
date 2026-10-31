@@ -17,8 +17,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 5400
-        versionName = "2.54.0"
+        versionCode = 40406
+        versionName = "4.2.6"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
@@ -33,31 +33,44 @@ android {
         }
     }
 
-    // Állandó debug kulcs – ugyanaz a signature minden buildnél (app/debug.keystore)
-    signingConfigs {
-        create("debugPermanent") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
-        }
-    }
-
-    // Saját release kulcs: a projekt gyökerében lévő keystore.properties (storeFile, storePassword, keyAlias, keyPassword)
-    // vagy KEYSTORE_FILE / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD környezeti változók. Ha egyik sincs,
-    // a release a debug kulccsal íródik alá (csak saját tesztelésre).
+    // A meglévő debug aláírás megmarad, így a v4.2.0-ról telepített tesztpéldány frissíthető.
+    // Release buildnél kizárólag külön release-keystore használható; debug kulcsra soha nem esünk vissza.
     val ksProps = Properties().apply {
         val f = rootProject.file("keystore.properties")
         if (f.exists()) f.inputStream().use { load(it) }
     }
     fun ksValue(prop: String, env: String): String? = ksProps.getProperty(prop) ?: System.getenv(env)
     val relStore = ksValue("storeFile", "KEYSTORE_FILE")
-    if (relStore != null && file(relStore).exists()) {
+    val relStorePassword = ksValue("storePassword", "KEYSTORE_PASSWORD")
+    val relKeyAlias = ksValue("keyAlias", "KEY_ALIAS")
+    val relKeyPassword = ksValue("keyPassword", "KEY_PASSWORD")
+    val releaseValues = listOf(relStore, relStorePassword, relKeyAlias, relKeyPassword)
+    val releaseConfigRequested = releaseValues.any { !it.isNullOrBlank() }
+    val releaseConfigComplete = releaseValues.all { !it.isNullOrBlank() }
+
+    if (releaseConfigRequested && !releaseConfigComplete) {
+        throw GradleException("A release aláírás hiányos. Add meg mind a négy keystore beállítást, vagy hagyd mindet üresen az unsigned release buildhez.")
+    }
+    if (releaseConfigComplete) {
+        val releaseStoreFile = file(requireNotNull(relStore))
+        if (!releaseStoreFile.isFile) {
+            throw GradleException("A release keystore nem található: ${releaseStoreFile.absolutePath}")
+        }
         signingConfigs.create("release") {
-            storeFile = file(relStore)
-            storePassword = ksValue("storePassword", "KEYSTORE_PASSWORD")
-            keyAlias = ksValue("keyAlias", "KEY_ALIAS")
-            keyPassword = ksValue("keyPassword", "KEY_PASSWORD")
+            storeFile = releaseStoreFile
+            storePassword = requireNotNull(relStorePassword)
+            keyAlias = requireNotNull(relKeyAlias)
+            keyPassword = requireNotNull(relKeyPassword)
+        }
+    }
+
+    signingConfigs {
+        create("debugPermanent") {
+            // Nyilvános, kizárólag debug célú Android tesztkulcs; release aláírásra soha nem használható.
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
@@ -66,11 +79,12 @@ android {
             signingConfig = signingConfigs.getByName("debugPermanent")
         }
         release {
-            // R8 (kisebb APK): ./gradlew :app:assembleRelease -Pminify  – előbb telefonon próbáld ki a Vosk/JNA/ONNX/Whisper útvonalakat!
+            // R8 (kisebb APK): ./gradlew :app:assembleRelease -Pminify
+            // Saját kulcs hiányában az APK szándékosan unsigned marad; debug kulccsal nem írjuk alá.
             isMinifyEnabled = project.hasProperty("minify")
             isShrinkResources = project.hasProperty("minify")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debugPermanent")
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 
@@ -123,6 +137,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 

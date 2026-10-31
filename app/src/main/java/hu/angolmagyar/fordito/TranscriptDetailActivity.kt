@@ -848,10 +848,16 @@ class TranscriptDetailActivity : AppCompatActivity() {
             return
         }
         val title = displayTitle()
-        val summary = MeetingSummary.generate(cues.toList(), title, SpeakerNames.fromPrefs(prefs))
+        val pack = MeetingWorkflow.buildPackage(cues.toList(), title, SpeakerNames.fromPrefs(prefs))
+        val summary = pack.summary
         val msg = StringBuilder()
         msg.append(getString(R.string.td_sum_duration, summary.durationLabel)).append('\n')
         msg.append(getString(R.string.td_sum_entries, summary.cueCount)).append("\n")
+        msg.append("Minőség: ${pack.quality.score0to100}/100")
+        if (pack.quality.criticalCount > 0 || pack.quality.highCount > 0) {
+            msg.append(" (kritikus: ${pack.quality.criticalCount}, magas: ${pack.quality.highCount})")
+        }
+        msg.append('\n')
         if (summary.decisions.isNotEmpty()) {
             msg.append("\n").append(getString(R.string.td_sum_decisions)).append('\n')
             summary.decisions.take(6).forEach { msg.append("✔ ").append(it).append('\n') }
@@ -863,6 +869,10 @@ class TranscriptDetailActivity : AppCompatActivity() {
         if (summary.keyLines.isNotEmpty()) {
             msg.append("\n").append(getString(R.string.td_sum_key)).append('\n')
             summary.keyLines.take(5).forEach { msg.append("• ").append(it).append('\n') }
+        }
+        if (pack.quality.topExplanations.isNotEmpty()) {
+            msg.append("\nEllenőrzési jelzések:\n")
+            pack.quality.topExplanations.take(4).forEach { msg.append("• ").append(it).append('\n') }
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.td_summary)

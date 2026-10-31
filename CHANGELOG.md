@@ -1,3 +1,138 @@
+## v4.2.0 – Accuracy & consistency
+
+- Word-timing tighten, terminology consistency pass, review ranking, dialogue dash, model advisor, anonymized reports, golden WER harness, manifest integrity test; core compile fixes.
+
+## v4.1.1 – Stabilization
+
+- Speech result validated (RESULT_OK), bounded document read, apostrophe-safe WER, key normalisation, new tests.
+
+## v4.1.0 – Memory & Speech Integration Wave
+
+- Ultimate Memory now writes to the shared Room dictionary and spaced-repetition schedule.
+- Speech practice shows reference/transcript word-error feedback with clear limitations.
+
+# v3.13.0 – Depth / Parallax stack
+
+- Háromrétegű cinematic mélység a Process Theaterben.
+- versionCode 31300 / versionName 3.13.0.
+
+
+
+# v3.12.0 – Task Portal
+
+- JobCard → FileSubtitle cinematic átmenet + folyamat fókusz.
+- versionCode 31200 / versionName 3.12.0.
+
+
+
+# v3.11.0 – Chronograph cinematic
+
+- Kettős ív (összes + lépés) a Process Theater hősében.
+- versionCode 31100 / versionName 3.11.0.
+
+
+
+# v3.10.0 – Diamond Cinema Ultimate
+
+- Teljes prémium cinematic csomag: Cinema Mode, lower-third, silence drama, haptics, end card.
+- versionCode 31000 / versionName 3.10.0.
+- Részletek: DIAMOND_CINEMA_ULTIMATE_V3.10_HU.md
+
+
+
+# v3.06.0 – Mozgásprofil + élő teljes képernyő
+
+- Beállítható mozgásprofil (full/subtle/reduced/none).
+- Teljes képernyős élő mód: Diamond Live Theater sáv.
+- versionCode 30600 / versionName 3.06.0.
+
+
+
+# v3.05.0 – Diamond Experience finomítás
+
+- Aktív orbit + státuszszövegek a kezdőlapon.
+- versionCode 30500 / versionName 3.05.0.
+
+
+
+# v3.04.0 – Kezdőlap befejezés-animáció
+
+- JobFinishedCard + CompletionBurst sikeres feldolgozás után.
+- versionCode 30400 / versionName 3.04.0.
+
+
+
+# v3.03.0 – Kezdőlap aktív feladat színház + WaveView Diamond
+
+- JobCard: valós lépésvizualizáció DiamondProcessTheaterrel.
+- WaveView: platinum/diamond színezés a chunk feldolgozáshoz.
+- versionCode 30300 / versionName 3.03.0.
+
+
+
+# v3.02.0 – Diamond Live Theater
+
+- Élő fordítás: fázisvizualizáció, spektrum, élő szöveg.
+- versionCode 30200 / versionName 3.02.0.
+
+
+
+# v3.01.0 – Diamond Process Theater
+
+- Prémium, animált folyamatvizualizáció: aktuális művelet, lépés sín, élő jel.
+- Platinum feldolgozó panelbe kötve.
+- versionCode 30100 / versionName 3.01.0.
+
+
+
+# v3.00.0 – Teljes Diamond integráció
+
+- DiamondIntegration: kiadási checklist, kapu, regresszió.
+- Hub + Next Wave Diamond kapu UI.
+- versionCode 30000 / versionName 3.00.0.
+- Nyitott: teljes View migráció, eszközös QA, CI Gradle.
+
+
+
+# v2.67.0 – Performance & Regression Suite
+
+- Beépített core regresszió + latency/heap mérés.
+- Unit tesztek és Next Wave futtató UI.
+- versionCode 6700 / versionName 2.67.0.
+
+
+
+# v2.66.0 – Platinum Global Dashboard
+
+- Egységes állapotközpont: modulok, összkép, gyorsműveletek.
+- SystemStatusSnapshot + PlatinumGlobalDashboardActivity.
+- Intelligence Suite hubba bekötve.
+- versionCode 6600 / versionName 2.66.0.
+
+
+
+# v2.65.0 – Hybrid Translation Engine + Motion/Global UI előrelépés
+
+- HybridTranslationEngine: offline/online módok, fallback, adatvédelmi kapcsolók.
+- PremiumMotion: mozgásprofilok és skálázott időtartamok.
+- InfinityGlobalUi: központi paletták és migrációs checklist.
+- UI státuszok és Next Wave kártyák frissítve.
+- versionCode 6500 / versionName 2.65.0.
+- Részletek: CHANGELOG_V2.65.0_HU.md
+
+
+
+# v2.64.0 – Smart Context Translation + Translation Quality (hátralévő hullám)
+
+- Új `SmartContextTranslation`: kontextus, kétértelműség és hangnem szerinti alternatívák (offline, szabályalapú).
+- Új `TranslationQuality`: összefogó nyelvtani és terminológiai figyelmeztetések (szám, név, tagadás, hossz, angol maradvány, ékezet, struktúra).
+- A „Következő fejlesztési hullám” képernyő két „Fejlesztendő” eleme a core modulban lezárva.
+- Infinity Global UI és Platinum Motion Engine továbbra is részben kész (v3.00-ra ütemezve).
+- Verzióajánlás: 2.64.0 / versionCode 6400.
+- Részletek: CHANGELOG_V2.64.0_HU.md, BUILD_STATUS_2.64.0_HU.md, NEXT_WAVE_V2.63_3.00_HU.md
+
+
+
 # V2.48.0 – akadálymentes folyamatjelző és tesztelhetőség
 
 - A platina folyamatjelző Compose-szemantikája most valódi `ProgressBar` szerepet és 0–100 közötti tartományt ad a képernyőolvasóknak.
@@ -271,3 +406,12 @@ Lásd az előző csomagok README-it (a v2.22.2 nem fordult le, ezért nem javaso
 - A letöltési folyamat százalékértéke minden UI-felületen egységesen 0–100 közé korlátozott.
 - Az ismeretlen haladás továbbra is százalék nélküli animált jelzést használ.
 - Új egységtesztek a haladássáv százalékos határértékeihez.
+
+## v2.62.0 – Automatic Diamond Backup
+- Napi és heti WorkManager mentés, Android Keystore-alapú AES-256-GCM titkosítással.
+- Ütemezésvezérlés és állapotjelzés a Backup Centerben; 14 fájlos automatikus rotáció.
+
+## v2.63.0 – Learning Analytics Diamond
+- Napi/heti tanulási aktivitás, 7 napos trend és 30 napos összesítések.
+- Napi célkövetés, pontossági arány és helyi, adatminimalizált számlálók.
+- Szókincstár és intelligens ismétlő eseményeinek integrációja.

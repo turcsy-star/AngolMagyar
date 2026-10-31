@@ -15,7 +15,7 @@ class PremiumTokensTest {
 
     @Test fun spacingAndMotionTokensArePositive() {
         val spacing = PremiumSpacing()
-        val motion = PremiumMotionDurations()
+        val motion = PremiumMotion()
         assertTrue(spacing.xSmall.value > 0f)
         assertTrue(spacing.small >= spacing.xSmall)
         assertTrue(spacing.large >= spacing.medium)

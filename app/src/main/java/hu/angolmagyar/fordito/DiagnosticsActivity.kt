@@ -156,6 +156,28 @@ class DiagnosticsActivity : AppCompatActivity() {
             dev.summary + if (Engines.onUnmeteredNetwork(this)) " · Wi-Fi" else if (Engines.online(this)) " · mobilnet" else " · nincs net",
             null, null
         ))
+
+        // Modellajánló: a készülék memóriája, tárhelye, magszáma és hőállapota alapján (tájékoztató becslés)
+        try {
+            val mem = android.app.ActivityManager.MemoryInfo()
+            (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mem)
+            val advice = ModelAdvisor.advise(
+                ModelAdvisor.Device(
+                    ramMb = (mem.totalMem / (1024 * 1024)).toInt(),
+                    cores = Runtime.getRuntime().availableProcessors(),
+                    freeStorageMb = filesDir.usableSpace / (1024 * 1024),
+                    thermalStatus = Perf.thermalStatus,
+                    installedIds = ModelManager.WHISPER.filter { ModelManager.isInstalled(this, it) }.map { it.id }.toSet()
+                )
+            )
+            val detail = advice.pick.label + ": " + advice.reason +
+                " Becsült feldolgozási idő ≈ " + "%.1f".format(java.util.Locale.ROOT, advice.estimatedRtf) +
+                "× hanghossz (tájékoztató becslés, nem mért érték)." +
+                if (advice.needsDownload) " Letöltés szükséges." else ""
+            list.add(Row("Ajánlott Whisper-modell", null, detail,
+                if (advice.needsDownload) "Modellek" else null,
+                if (advice.needsDownload) openModels else null))
+        } catch (e: Exception) { DiagLog.swallow("DiagnosticsActivity", e) }
         return list
     }
 
@@ -196,6 +218,29 @@ class DiagnosticsActivity : AppCompatActivity() {
                 card.addView(Ui.button(this, r.action, true) { r.run.invoke() })
             }
             column.addView(card)
+        }
+        // P10 accessibility snapshot (informational only)
+        run {
+            val a11yCard = Ui.card(this)
+            a11yCard.addView(TextView(this).apply {
+                text = "♿  Akadálymentesség"
+                textSize = 16f
+                setTextColor(Ui.color(this@DiagnosticsActivity, R.color.textPrimary))
+            })
+            val lines = hu.angolmagyar.fordito.ui.design.AccessibilityKit.checklist(this).joinToString("\n")
+            a11yCard.addView(Ui.small(this, lines))
+            column.addView(a11yCard)
+        }
+        run {
+            val featCard = Ui.card(this)
+            featCard.addView(TextView(this).apply {
+                text = "🧩  Funkció readiness (6.0)"
+                textSize = 16f
+                setTextColor(Ui.color(this@DiagnosticsActivity, R.color.textPrimary))
+            })
+            val lines = FeatureReadiness.current().summaryLines().joinToString("\n")
+            featCard.addView(Ui.small(this, lines))
+            column.addView(featCard)
         }
         column.addView(Ui.button(this, "Adatvédelem és mentés", false) {
             startActivity(Intent(this, PrivacyActivity::class.java))

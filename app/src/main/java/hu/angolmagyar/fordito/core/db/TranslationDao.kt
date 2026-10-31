@@ -24,6 +24,9 @@ interface TranslationDao {
     @Query("SELECT COUNT(*) FROM translation_memory")
     suspend fun count(): Int
 
+    @Query("SELECT * FROM translation_memory ORDER BY updatedAt DESC")
+    suspend fun all(): List<TranslationEntity>
+
     @Query("DELETE FROM translation_memory WHERE id IN (SELECT id FROM translation_memory ORDER BY updatedAt ASC LIMIT :n)")
     suspend fun deleteOldest(n: Int)
 
