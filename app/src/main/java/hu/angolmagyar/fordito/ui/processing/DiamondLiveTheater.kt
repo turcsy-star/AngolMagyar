@@ -442,7 +442,7 @@ class DiamondLiveView @JvmOverloads constructor(ctx: Context, attrs: AttributeSe
             ComposeView(ctx).apply {
                 // Resolve the motion preference in composition; do not capture a constructor-local value.
                 setContent {
-                    DiamondLiveTheater(reducedMotion.value = PremiumMotion.reducedMotion.value(LocalContext.current))
+                    DiamondLiveTheater(reduced = PremiumMotion.reduced(LocalContext.current))
                 }
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
