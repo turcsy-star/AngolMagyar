@@ -79,7 +79,7 @@ fun DiamondProcessTheater(
         it.status == StageStatus.RUNNING || it.status == StageStatus.WARNING
     } ?: stages.lastOrNull { it.status == StageStatus.COMPLETED || it.status == StageStatus.FAILED }
 
-    val pulse = if (reduced || !state.running) 0f else {
+    val pulse = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_pulse")
         inf.animateFloat(
             0.35f, 1f,
@@ -87,7 +87,7 @@ fun DiamondProcessTheater(
             label = "p"
         ).value
     }
-    val sweep = if (reduced || !state.running) 0f else {
+    val sweep = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_sweep")
         inf.animateFloat(
             0f, 360f,
@@ -95,7 +95,7 @@ fun DiamondProcessTheater(
             label = "s"
         ).value
     }
-    val flow = if (reduced || !state.running) 0f else {
+    val flow = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_flow")
         inf.animateFloat(
             0f, 1f,
@@ -107,7 +107,7 @@ fun DiamondProcessTheater(
     val shape = RoundedCornerShape(20.dp)
     DiamondDepthStack(
         active = state.running,
-        reduced = reduced,
+        reduced = reducedMotion.value,
         cinema = cinema,
         modifier = modifier
             .fillMaxWidth()
@@ -181,7 +181,7 @@ fun DiamondProcessTheater(
                 running = state.running && active?.status == StageStatus.RUNNING,
                 pulse = pulse,
                 sweep = sweep,
-                reduced = reduced,
+                reduced = reducedMotion.value,
                 overallPercent = state.overallPercent,
                 elapsedMs = state.elapsedMs,
                 remainingMs = state.remainingMs
@@ -190,21 +190,21 @@ fun DiamondProcessTheater(
 
         // —— Lépés sín ——
         if (stages.isNotEmpty()) {
-            StepEnergyRail(stages = stages, flow = flow, reduced = reduced)
+            StepEnergyRail(stages = stages, flow = flow, reduced = reducedMotion.value)
         }
 
         // —— Lépéslista vizualizáció ——
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             stages.forEach { stage ->
-                StageRowRich(stage = stage, isActive = stage.index == active?.index, reduced = reduced)
+                StageRowRich(stage = stage, isActive = stage.index == active?.index, reduced = reducedMotion.value)
             }
         }
 
         // —— Élő tartalom ——
         AnimatedVisibility(
             visible = state.running && (state.heard.isNotBlank() || state.translated.isNotBlank()),
-            enter = fadeIn(tween(if (reduced) 0 else 250)),
-            exit = fadeOut(tween(if (reduced) 0 else 200))
+            enter = fadeIn(tween(if (reducedMotion.value) 0 else 250)),
+            exit = fadeOut(tween(if (reducedMotion.value) 0 else 200))
         ) {
             Column(
                 Modifier
