@@ -315,18 +315,22 @@ private enum class LivePhase { IDLE, LISTENING, RECOGNIZING, TRANSLATING, PAUSED
 @Composable
 private fun rememberLivePhase(level: Float): LivePhase {
     var phase by remember { mutableStateOf(LivePhase.IDLE) }
+    // The polling coroutine survives recompositions; read the latest smoothed
+    // level instead of the value captured when LaunchedEffect(Unit) first ran.
+    val latestLevel = rememberUpdatedState(level)
     LaunchedEffect(Unit) {
         while (true) {
+            val currentLevel = latestLevel.value
             phase = when {
                 AppState.paused -> LivePhase.PAUSED
                 !AppState.running -> LivePhase.IDLE
-                level > 0.08f -> LivePhase.LISTENING
+                currentLevel > 0.08f -> LivePhase.LISTENING
                 AppState.lastCaptionEn.isNotBlank() && AppState.lastCaptionHu.isBlank() -> LivePhase.RECOGNIZING
                 AppState.lastCaptionHu.isNotBlank() -> LivePhase.TRANSLATING
                 else -> LivePhase.LISTENING
             }
-            // refine: if service running and quiet, still listening
-            if (AppState.running && !AppState.paused && level <= 0.08f &&
+            // Quiet input is still a listening state unless a caption is being processed.
+            if (AppState.running && !AppState.paused && currentLevel <= 0.08f &&
                 phase != LivePhase.TRANSLATING && phase != LivePhase.RECOGNIZING
             ) {
                 phase = LivePhase.LISTENING
