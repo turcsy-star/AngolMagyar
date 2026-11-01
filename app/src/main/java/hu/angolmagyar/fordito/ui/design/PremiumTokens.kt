@@ -19,3 +19,18 @@ object PremiumPalette {
     val deepNavy = Color(0xFF070B16)
     val ice = Color(0xFFEEF5FF)
 }
+
+
+
+/** Consistent animation durations shared by premium UI components and tests. */
+data class PremiumMotion(
+    val shortMillis: Int = 120,
+    val standardMillis: Int = 220,
+    val longMillis: Int = 360
+) {
+    init {
+        require(shortMillis > 0) { "shortMillis must be positive" }
+        require(standardMillis >= shortMillis) { "standardMillis must not be shorter than shortMillis" }
+        require(longMillis >= standardMillis) { "longMillis must not be shorter than standardMillis" }
+    }
+}
