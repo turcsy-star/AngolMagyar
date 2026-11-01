@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +29,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -51,7 +49,6 @@ private const val BARS = 48
  */
 @Composable
 fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
-    val reducedMotion = rememberUpdatedState(reduced)
     val reducedMotion = rememberUpdatedState(reduced)
     val bars = remember { FloatArray(BARS) }
     var frame by remember { mutableIntStateOf(0) }
