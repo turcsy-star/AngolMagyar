@@ -26,6 +26,11 @@ checks = {
         level_source.count("rememberUpdatedState(reduced)") == 1
         and "delay(if (reducedMotion.value)" in level_source
         and "delay(if (reduced)" not in level_source,
+    "Diamond live phase polling reads the latest audio level":
+        "val latestLevel = rememberUpdatedState(level)" in source
+        and "val currentLevel = latestLevel.value" in source
+        and "level > 0.08f" not in source
+        and "level <= 0.08f" not in source,
 }
 
 failed = [label for label, passed in checks.items() if not passed]
