@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +73,9 @@ private const val BARS = 56
  */
 @Composable
 fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
+    // Kotlin 2.0.21 Compose IR may lose the parameter mapping when this value is
+    // captured directly by generated animation/effect lambdas. Keep a stable State.
+    val reducedMotion = rememberUpdatedState(reduced)
     val ctx = LocalContext.current
     val cinema = remember(ctx) { PremiumMotion.cinemaEnabled(ctx) }
     val bars = remember { FloatArray(BARS) }
@@ -91,7 +95,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             val pct = (lvl * 100).toInt()
             if (pct > peak) peak = pct else peak = (peak * 0.92f).toInt()
             frame++
-            delay(if (reduced) 80L else 42L)
+            delay(if (reducedMotion.value) 80L else 42L)
         }
     }
 
@@ -173,8 +177,8 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 AnimatedContent(
                     targetState = phase,
                     transitionSpec = {
-                        (fadeIn(tween(if (reduced) 0 else 220)) + slideInVertically { it / 5 })
-                            .togetherWith(fadeOut(tween(if (reduced) 0 else 160)))
+                        (fadeIn(tween(if (reducedMotion.value) 0 else 220)) + slideInVertically { it / 5 })
+                            .togetherWith(fadeOut(tween(if (reducedMotion.value) 0 else 160)))
                     },
                     label = "phaseTitle"
                 ) { p ->
@@ -392,6 +396,7 @@ private fun PhaseOrb(
     pulse: Float,
     reduced: Boolean
 ) {
+    val reducedMotion = rememberUpdatedState(reduced)
     val animLevel by animateFloatAsState(level, tween(if (reduced) 0 else 120), label = "lv")
     Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(68.dp)) {
@@ -403,14 +408,14 @@ private fun PhaseOrb(
                 brush = Brush.sweepGradient(
                     listOf(phaseColor(phase), PlatinumColors.Champagne, phaseColor(phase))
                 ),
-                startAngle = -90f + if (reduced) 0f else spin * 0.15f,
+                startAngle = -90f + if (reducedMotion.value) 0f else spin * 0.15f,
                 sweepAngle = sweep,
                 useCenter = false,
                 style = Stroke(stroke, cap = StrokeCap.Round),
                 size = Size(r * 2, r * 2),
                 topLeft = Offset(center.x - r, center.y - r)
             )
-            if (!reduced && (phase == LivePhase.LISTENING || phase == LivePhase.RECOGNIZING)) {
+            if (!reducedMotion.value && (phase == LivePhase.LISTENING || phase == LivePhase.RECOGNIZING)) {
                 val gr = r + 4.dp.toPx() * pulse
                 drawCircle(phaseColor(phase).copy(alpha = 0.2f * pulse), gr)
                 val ang = Math.toRadians(spin.toDouble())
