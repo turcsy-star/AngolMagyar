@@ -5,7 +5,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "app/src/main/java/hu/angolmagyar/fordito/ui/processing/DiamondLiveTheater.kt"
+LEVEL_SOURCE = ROOT / "app/src/main/java/hu/angolmagyar/fordito/ui/processing/PlatinumLevelMeter.kt"
 source = SOURCE.read_text(encoding="utf-8")
+level_source = LEVEL_SOURCE.read_text(encoding="utf-8")
 
 checks = {
     "Compose content resolves reduced motion from LocalContext inside composition":
@@ -20,6 +22,10 @@ checks = {
         source.count("rememberUpdatedState(reduced)") >= 2
         and "delay(if (reducedMotion.value)" in source
         and "startAngle = -90f + if (reducedMotion.value)" in source,
+    "Platinum level meter effect does not capture reduced directly":
+        level_source.count("rememberUpdatedState(reduced)") == 1
+        and "delay(if (reducedMotion.value)" in level_source
+        and "delay(if (reduced)" not in level_source,
 }
 
 failed = [label for label, passed in checks.items() if not passed]
