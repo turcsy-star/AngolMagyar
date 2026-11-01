@@ -62,9 +62,9 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
     if (stages.isEmpty()) return
     val n = stages.size
     val reducedMotion = rememberUpdatedState(reduced)
-    val ms = if (reduced) 0 else 320
+    val ms = if (reducedMotion.value) 0 else 320
 
-    val phase = if (reduced) 0f else {
+    val phase = if (reducedMotion.value) 0f else {
         rememberInfiniteTransition(label = "pt").animateFloat(
             0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "ph"
         ).value
@@ -72,7 +72,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
     val colors = stages.map { animateColorAsState(jewelColor(it.status), tween(ms), label = "jc").value }
     val checks = stages.map {
         animateFloatAsState(
-            if (it.status == StageStatus.COMPLETED) 1f else 0f, tween(if (reduced) 0 else 450), label = "ck"
+            if (it.status == StageStatus.COMPLETED) 1f else 0f, tween(if (reducedMotion.value) 0 else 450), label = "ck"
         ).value
     }
     val fills = stages.map {
@@ -81,7 +81,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                 StageStatus.COMPLETED, StageStatus.WARNING -> 1f
                 StageStatus.RUNNING -> it.progress ?: 0f
                 else -> 0f
-            }, tween(if (reduced) 0 else 600), label = "pf"
+            }, tween(if (reducedMotion.value) 0 else 600), label = "pf"
         ).value
     }
 
