@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,7 @@ internal fun safeProgressPercent(pct: Int): Int = pct.coerceIn(0, 100)
 
 @Composable
 fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: Modifier = Modifier) {
+    val reducedMotion = rememberUpdatedState(reduced)
     val known = pct >= 0
     val safePct = safeProgressPercent(pct)
     val frac by animateFloatAsState(safePct / 100f, tween(if (reduced) 0 else 500), label = "pf")
@@ -84,7 +86,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
                     Brush.verticalGradient(listOf(PlatinumColors.PlatinumHigh, PlatinumColors.Platinum, PlatinumColors.Steel), pad, pad + h),
                     Offset(pad, pad), Size(w, h), CornerRadius(h / 2f)
                 )
-                if (!reduced && frac < 1f) { // csillanás a kitöltésen
+                if (!reducedMotion.value && frac < 1f) { // csillanás a kitöltésen
                     val cx = pad + w * sweep; val bw = 26.dp.toPx()
                     drawRoundRect(
                         Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.8f), Color.Transparent), cx - bw, cx + bw),
