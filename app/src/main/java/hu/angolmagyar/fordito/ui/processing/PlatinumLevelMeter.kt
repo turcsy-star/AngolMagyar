@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -47,6 +49,7 @@ private const val BARS = 48
  */
 @Composable
 fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
+    val reducedMotion = rememberUpdatedState(reduced)
     val bars = remember { FloatArray(BARS) }
     var frame by remember { mutableIntStateOf(0) }
     var peak by remember { mutableIntStateOf(0) } // 0..100, lassan lecsengő csúcsjelző
@@ -62,7 +65,7 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
             val p = (v * 100).toInt()
             peak = if (p >= peak) p else (peak - 1).coerceAtLeast(0)
             frame++
-            delay(if (reduced) 90L else 40L)
+            delay(if (reducedMotion.value) 90L else 40L)
         }
     }
 
@@ -119,8 +122,11 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
 /** View-burkoló a View-alapú Élő fordítás képernyőhöz. */
 class PlatinumLevelView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     init {
-        val reduced = PremiumMotion.reduced(ctx)
-        addView(ComposeView(ctx).apply { setContent { PlatinumLevelMeter(reduced) } },
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(
+            ComposeView(ctx).apply {
+                setContent { PlatinumLevelMeter(PremiumMotion.reduced(LocalContext.current)) }
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        )
     }
 }
