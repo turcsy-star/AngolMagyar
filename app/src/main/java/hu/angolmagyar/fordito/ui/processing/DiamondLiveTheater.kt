@@ -438,9 +438,13 @@ private fun PhaseOrb(
 /** View-burkoló az Élő fordítás képernyőhöz. */
 class DiamondLiveView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     init {
-        val reduced = PremiumMotion.reduced(ctx)
         addView(
-            ComposeView(ctx).apply { setContent { DiamondLiveTheater(reduced) } },
+            ComposeView(ctx).apply {
+                // Resolve the motion preference in composition; do not capture a constructor-local value.
+                setContent {
+                    DiamondLiveTheater(reduced = PremiumMotion.reduced(LocalContext.current))
+                }
+            },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
     }
