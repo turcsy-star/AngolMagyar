@@ -52,8 +52,8 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
     val reducedMotion = rememberUpdatedState(reduced)
     val known = pct >= 0
     val safePct = safeProgressPercent(pct)
-    val frac by animateFloatAsState(safePct / 100f, tween(if (reduced) 0 else 500), label = "pf")
-    val sweep = if (reduced) 0.5f else rememberInfiniteTransition(label = "pb").animateFloat(
+    val frac by animateFloatAsState(safePct / 100f, tween(if (reducedMotion.value) 0 else 500), label = "pf")
+    val sweep = if (reducedMotion.value) 0.5f else rememberInfiniteTransition(label = "pb").animateFloat(
         0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "sw"
     ).value
 
