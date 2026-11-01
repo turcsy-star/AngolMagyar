@@ -109,10 +109,10 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
     val silence = phase == LivePhase.LISTENING && smoothLevel < 0.06f
     val spectrumScale by animateFloatAsState(
         targetValue = if (silence && cinema) 0.55f else 1f,
-        animationSpec = tween(if (reduced) 0 else 500),
+        animationSpec = tween(if (reducedMotion.value) 0 else 500),
         label = "silenceScale"
     )
-    val pulse = if (reduced) 0.6f else {
+    val pulse = if (reducedMotion.value) 0.6f else {
         val inf = rememberInfiniteTransition(label = "dl_pulse")
         inf.animateFloat(
             0.4f, 1f,
@@ -120,7 +120,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             label = "p"
         ).value
     }
-    val ringSpin = if (reduced) 0f else {
+    val ringSpin = if (reducedMotion.value) 0f else {
         val inf = rememberInfiniteTransition(label = "dl_ring")
         inf.animateFloat(
             0f, 360f,
@@ -172,7 +172,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            PhaseOrb(phase = phase, level = smoothLevel, spin = ringSpin, pulse = pulse, reduced = reduced)
+            PhaseOrb(phase = phase, level = smoothLevel, spin = ringSpin, pulse = pulse, reducedMotion.value = reducedMotion.value)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AnimatedContent(
                     targetState = phase,
@@ -304,7 +304,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             phaseLabel = phaseTitle(phase),
             primary = AppState.lastCaptionEn,
             secondary = AppState.lastCaptionHu.let { if (it.isNotBlank()) "→ $it" else "" },
-            reduced = reduced,
+            reducedMotion.value = reducedMotion.value,
             cinema = cinema
         )
     }
