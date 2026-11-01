@@ -5,7 +5,10 @@ import hu.angolmagyar.fordito.core.db.ReviewScheduleEntity
 import hu.angolmagyar.fordito.core.db.TranslationEntity
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class BackupArchiveTest {
     @Test fun roundTripPreservesAllLearningRecords() {
         val source = LearningBackup(
