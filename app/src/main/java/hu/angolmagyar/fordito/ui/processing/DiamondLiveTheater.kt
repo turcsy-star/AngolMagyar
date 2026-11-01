@@ -172,7 +172,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            PhaseOrb(phase = phase, level = smoothLevel, spin = ringSpin, pulse = pulse, reducedMotion.value = reducedMotion.value)
+            PhaseOrb(phase = phase, level = smoothLevel, spin = ringSpin, pulse = pulse, reduced = reducedMotion.value)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AnimatedContent(
                     targetState = phase,
@@ -304,7 +304,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             phaseLabel = phaseTitle(phase),
             primary = AppState.lastCaptionEn,
             secondary = AppState.lastCaptionHu.let { if (it.isNotBlank()) "→ $it" else "" },
-            reducedMotion.value = reducedMotion.value,
+            reduced = reducedMotion.value,
             cinema = cinema
         )
     }
@@ -397,7 +397,7 @@ private fun PhaseOrb(
     reduced: Boolean
 ) {
     val reducedMotion = rememberUpdatedState(reduced)
-    val animLevel by animateFloatAsState(level, tween(if (reduced) 0 else 120), label = "lv")
+    val animLevel by animateFloatAsState(level, tween(if (reducedMotion.value) 0 else 120), label = "lv")
     Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(68.dp)) {
             val stroke = 3.5.dp.toPx()
@@ -442,7 +442,7 @@ class DiamondLiveView @JvmOverloads constructor(ctx: Context, attrs: AttributeSe
             ComposeView(ctx).apply {
                 // Resolve the motion preference in composition; do not capture a constructor-local value.
                 setContent {
-                    DiamondLiveTheater(reduced = PremiumMotion.reduced(LocalContext.current))
+                    DiamondLiveTheater(reducedMotion.value = PremiumMotion.reducedMotion.value(LocalContext.current))
                 }
             },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
