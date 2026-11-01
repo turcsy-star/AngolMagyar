@@ -35,6 +35,9 @@ jobs:
       - name: Static release security guardrails
         run: python tools/verify_release_security.py
 
+      - name: Compose compiler regression guard
+        run: python tools/verify_compose_compiler_regression.py
+
       - name: Core unit tests
         shell: bash
         run: |
