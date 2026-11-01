@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -60,6 +61,7 @@ internal fun subLabel(s: StageUi): String = when (s.status) {
 fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier = Modifier) {
     if (stages.isEmpty()) return
     val n = stages.size
+    val reducedMotion = rememberUpdatedState(reduced)
     val ms = if (reduced) 0 else 320
 
     val phase = if (reduced) 0f else {
@@ -102,7 +104,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                         Brush.horizontalGradient(listOf(PlatinumColors.Steel, PlatinumColors.PlatinumHigh, PlatinumColors.Platinum), x0, xe.coerceAtLeast(x0 + 1f)),
                         Offset(x0, cy), Offset(xe, cy), 3.dp.toPx(), StrokeCap.Round
                     )
-                    if (stages[i].status == StageStatus.RUNNING && !reduced) {
+                    if (stages[i].status == StageStatus.RUNNING && !reducedMotion.value) {
                         // csillanás: fényes sáv fut végig a kitöltött szakaszon
                         val sx = x0 + (xe - x0) * phase
                         val w = 18.dp.toPx()
@@ -118,7 +120,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                     drawLine(PlatinumColors.SteelDark.copy(alpha = 0.8f), Offset(tx, cy - 6.dp.toPx()), Offset(tx, cy - 3.dp.toPx()), 1.dp.toPx())
                 }
             }
-            for (i in 0 until n) jewel(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reduced)
+            for (i in 0 until n) jewel(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reducedMotion.value)
         }
         Row(Modifier.fillMaxWidth()) {
             stages.forEach { s ->
