@@ -48,6 +48,8 @@ Alternatívaként használd a `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`,
 
 ## Dokumentáció
 
+- `docs/BUILD_FIX_4.2.6_COMPOSE_IR_HU.md` – Compose IR fordítási hiba javítása, regressziós CI-kapu és a még külső integrációt igénylő funkciók státusza.
+
 - `PREMIUM_INTELLIGENCE_5.0_SPEC_HU.md` – teljes célarchitektúra és a korábbi javaslatok specifikációja.
 - `FEATURE_MATRIX_5.0_HU.md` – meglévő, részleges és hiányzó funkciók; nincs késznek jelölve, ami nincs integrálva.
 - `IMPLEMENTATION_AND_TEST_PLAN_5.0_HU.md` – fájlszintű megvalósítási és tesztelési sorrend.
