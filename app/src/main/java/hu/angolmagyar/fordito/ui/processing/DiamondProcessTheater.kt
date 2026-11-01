@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +70,7 @@ fun DiamondProcessTheater(
     modifier: Modifier = Modifier
 ) {
     val ctx = LocalContext.current
+    val reducedMotion = rememberUpdatedState(reduced)
     val cinema = remember { PremiumMotion.cinemaEnabled(ctx) }
     val stages = state.stages
     if (stages.isEmpty() && !state.running && !state.finished) return
@@ -165,8 +167,8 @@ fun DiamondProcessTheater(
         AnimatedContent(
             targetState = active?.title to active?.detail,
             transitionSpec = {
-                (fadeIn(tween(if (reduced) 0 else 280)) + slideInVertically(tween(if (reduced) 0 else 320)) { it / 6 })
-                    .togetherWith(fadeOut(tween(if (reduced) 0 else 180)))
+                (fadeIn(tween(if (reducedMotion.value) 0 else 280)) + slideInVertically(tween(if (reducedMotion.value) 0 else 320)) { it / 6 })
+                    .togetherWith(fadeOut(tween(if (reducedMotion.value) 0 else 180)))
             },
             label = "hero"
         ) { (title, detail) ->
