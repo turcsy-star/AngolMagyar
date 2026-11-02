@@ -39,53 +39,7 @@ jobs:
         run: python tools/verify_compose_compiler_regression.py
 
       - name: Core unit tests
-        shell: bash
-        run: |
-          set -o pipefail
-          ./gradlew :core:test --stacktrace 2>&1 | tee core-test.log
-
-      - name: Collect Core test diagnostics
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p diagnostics/core
-
-          {
-            echo "AngolMagyar Core test diagnostics"
-            echo "Commit: $(git rev-parse HEAD)"
-            echo "Date UTC: $(date -u)"
-            echo
-            echo "=== TEST RESULT FILES ==="
-            if [ -d core/build/test-results ]; then
-              find core/build/test-results -type f -print
-            else
-              echo "Core test-results directory not found."
-            fi
-            echo
-            echo "=== TEST REPORT FILES ==="
-            if [ -d core/build/reports/tests ]; then
-              find core/build/reports/tests -type f -print
-            else
-              echo "Core HTML reports directory not found."
-            fi
-            echo
-            echo "=== FAILURE DETAILS ==="
-            if [ -d core/build/test-results ]; then
-              grep -R -n -E '<failure|<error' core/build/test-results || true
-            fi
-          } | tee diagnostics/core/summary.txt
-
-          if [ -d core/build/test-results ]; then
-            cp -a core/build/test-results diagnostics/core/
-          fi
-
-          if [ -d core/build/reports/tests ]; then
-            cp -a core/build/reports/tests diagnostics/core/
-          fi
-
-          if [ -f core-test.log ]; then
-            cp core-test.log diagnostics/core/
-          fi
+        run: ./gradlew :core:test --stacktrace
 
       - name: App unit tests (includes Compose screenshot smoke test)
         run: ./gradlew :app:testDebugUnitTest --stacktrace
@@ -96,25 +50,23 @@ jobs:
       - name: Build Wear OS debug APK
         run: ./gradlew :wear:assembleDebug --stacktrace
 
-      - name: Compile unsigned release APK (no debug-key fallback)
+      - name: Compile unsigned release APK
         run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: Publish APK and complete diagnostics
-        if: always()
+      - name: Prepare single-app APK download
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk dist/AngolMagyar-4.2.10.apk
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 1
+
+      - name: Publish APK only
         uses: actions/upload-artifact@v4
         with:
-          name: angolmagyar-build-diagnostics-${{ github.run_number }}
-          if-no-files-found: warn
-          retention-days: 14
-          compression-level: 6
-          path: |
-            diagnostics/**
-            core-test.log
-            core/build/reports/tests/**
-            core/build/test-results/**
-            app/build/reports/tests/**
-            app/build/test-results/**
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/roborazzi/**
-            wear/build/outputs/apk/debug/*.apk
+          name: AngolMagyar-4.2.10-APK
+          path: dist/AngolMagyar-4.2.10.apk
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
