@@ -90,7 +90,7 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         OutlinedButton(onClick = onBack) { Text("← Vissza") }
-        Text("PLATINUM • OFFLINE INTELLIGENCE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text("DIAMOND • OFFLINE INTELLIGENCE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Minőség és tanulási központ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Helyi szótár, fordítási memória és ismétlési állapot – internetkapcsolat nélkül.", color = MaterialTheme.colorScheme.onSurfaceVariant)
 

@@ -34,4 +34,15 @@ class InformalTest {
         assertEquals("A tudás hatalom.", f("A tudás hatalom."))
         assertEquals("Ő tud úszni.", f("Ő tud úszni."))
     }
+
+    @Test fun moreImperativesFromRealSubtitles() {
+        assertEquals("Hozd levest.", f("Hozza levest."))
+        assertEquals("Gyerünk, siess.", f("Gyerünk, siessen."))
+        assertEquals("Ne feledd, hogy a bálna.", f("Ne feledje, hogy a bálna."))
+        assertEquals("Csak jöjj ide.", f("Csak jöjjön ide."))
+    }
+
+    @Test fun reportedSpeechIsUntouched() {
+        assertEquals("Azt kérte, hogy siessen.", f("Azt kérte, hogy siessen."))
+    }
 }

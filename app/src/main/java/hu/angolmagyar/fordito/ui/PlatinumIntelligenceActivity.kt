@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +26,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -65,7 +69,8 @@ class PlatinumIntelligenceActivity : ComponentActivity() {
                     onAnalytics = { open(LearningAnalyticsActivity::class.java) },
                     onDashboard = { open(PlatinumGlobalDashboardActivity::class.java) },
                     onUltimate = { open(UltimateEcosystemActivity::class.java) },
-                    onOfflineIntelligence = { open(OfflineIntelligenceCenterActivity::class.java) }
+                    onOfflineIntelligence = { open(OfflineIntelligenceCenterActivity::class.java) },
+                    onDocCamera = { open(DocumentCameraActivity::class.java) }
                 )
             }
         }
@@ -91,7 +96,8 @@ private fun IntelligenceHub(
     onAnalytics: () -> Unit,
     onDashboard: () -> Unit,
     onUltimate: () -> Unit,
-    onOfflineIntelligence: () -> Unit
+    onOfflineIntelligence: () -> Unit,
+    onDocCamera: () -> Unit
 ) {
     val context = LocalContext.current
     val prefs = Prefs(context)
@@ -101,10 +107,10 @@ private fun IntelligenceHub(
             .navigationBarsPadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        OutlinedButton(onClick = onBack) { Text("← Vissza a főképernyőre") }
+        OutlinedButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("← Vissza a főképernyőre") }
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("PLATINUM • INFINITY", color = palette.accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("DIAMOND • INTELLIGENCE SUITE", color = palette.accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Text("Intelligence Suite", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("Egy központból érheted el a meglévő fordítóeszközöket, a diagnosztikát és a fejlesztési tervet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -129,20 +135,20 @@ private fun IntelligenceHub(
             HubAction("⚙ Diagnosztika", "Engedélyek, modellek és készülékállapot ellenőrzése", "Elérhető", onDiagnostics)
         }
         HubSection("KÖVETKEZŐ FEJLESZTÉSI HULLÁM", "Az alábbi ötletek nem mind kész funkciók; az állapotot külön jelezzük.") {
-            HubAction("💎 Infinity Global UI", "Központi paletta, design tokenek és migrációs checklist", "Részben kész · v3.00", onNextWave, roadmap = true)
-            HubAction("✨ Platinum Motion Engine", "Mozgásprofilok, skálázás és automatikus animációcsökkentés", "Részben kész · v3.00", onNextWave, roadmap = true)
+            HubAction("💎 Infinity Global UI", "Központi paletták, design tokenek, kontraszt-audit és migrációs checklist", "Részben kész · View→Compose migráció folyamatban", onNextWave, roadmap = true)
+            HubAction("✨ Motion Engine", "Mozgásprofilok, skálázás, automatikus animációcsökkentés; a gombok animáció nélkül működnek", "Kész · v3.00", onNextWave, roadmap = true)
             HubAction("🧠 Smart Context + Translation Memory", "Kontextus, memória-javaslat, minőségflag-ek (P2/P3)", "Kész · P2-P3", onNextWave, roadmap = true)
             HubAction("📊 Translation Quality Intelligence", "Szám/tagadás/név jelzések + prémium kártya (P3)", "Kész · P3", onNextWave, roadmap = true)
             HubAction("🔀 Hybrid Translation Engine", "Offline/online motorválasztás, fallback, adatvédelmi kapcsolók", "Kész (core) · v2.65.0", onNextWave, roadmap = true)
-            HubAction("🔁 Dual Translation", "Két fordítási változat összehasonlítása", "Fejlesztendő", onSettings, roadmap = true)
-            HubAction("📖 Dictionary Pro", "Bővített szótári jelentések, szófajok és példák", "Bővítendő", onPhrasebook, roadmap = true)
-            HubAction("🗣 Pronunciation Coach", "Kiejtésgyakorlás és megbízható beszédértékelés", "Fejlesztendő", onLive, roadmap = true)
-            HubAction("📄 Document / Camera (P8)", "Szerződéses API kész; CameraX/OCR csak eszközteszt után READY", "Specifikáció · nem READY", onSubtitles, roadmap = true)
+            HubAction("🔁 Dual Translation", "Két változat szószintű összevetése, számellenőrzés, hangnem, mentés", "Kész (offline) · 4.2.9", onNextWave, roadmap = true)
+            HubAction("📖 Dictionary Pro", "100+ szócikk szófajokkal, hamis barátokkal, példákkal; kétirányú keresés", "Kész (offline alapkészlet) · 4.2.9", onNextWave, roadmap = true)
+            HubAction("🗣 Pronunciation Coach", "Lassú és szakaszos felolvasás, szavankénti ✓/✗ visszajelzés, tippek, trend", "Kész (szövegalapú) · 4.2.9", onNextWave, roadmap = true)
+            HubAction("📄 Document / Camera (P8)", "Fotó vagy kép → eszközön futó OCR → szerkeszthető szöveg → fordítás", "Kész (kód) · kísérleti, eszközteszt hátra", onDocCamera, roadmap = true)
             HubAction("🔤 Subtitle + Meeting Workflow", "SRT, összefoglaló, minőségjelzés, tanulási jelöltek (P5-P7)", "Kész · P5-P7", onSubtitles, roadmap = true)
             HubAction("⚡ Performance & Regression Suite", "Latency, heap, beépített core regressziós készlet", "Kész (core) · v2.67.0", onNextWave, roadmap = true)
             HubAction("💎 Diamond Integration Gate", "Kiadási checklist, regresszió, modul-térkép (v3.00)", "Kész (core) · v3.00.0", onNextWave, roadmap = true)
             HubAction("🧪 Quality Testing", "Build-, eszközös és arany-referencia WER mérés", "Részben kész · Benchmark megvan", onDiagnostics, roadmap = true)
-            HubAction("♿ Accessibility Suite (P10)", "Kontraszt-arány, touch target, reduceMotion, checklist", "Részben kész · P10", onSettings, roadmap = true)
+            HubAction("♿ Accessibility Suite (P10)", "Kontraszt-audit minden palettán, touch target, mozgásprofil, állapot-checklist", "Kész (kód + kontraszt) · TalkBack kézi teszt hátra", onNextWave, roadmap = true)
         }
         Text("Megjegyzés: a központ nem állítja késznek azokat a funkciókat, amelyekhez még fejlesztés, külső motor vagy eszközteszt szükséges.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
@@ -152,22 +158,23 @@ private fun IntelligenceHub(
 @Composable
 private fun HubSection(title: String, subtitle: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() })
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         content()
     }
 }
 
 @Composable
-private fun HubAction(title: String, detail: String, status: String, onClick: () -> Unit, roadmap: Boolean = false) {
+private fun HubAction(title: String, detail: String, status: String, onClick: () -> Unit, roadmap: Boolean = false, enabled: Boolean = true) {
     PremiumCard {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.semantics { heading() })
             Text(detail, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(status, style = MaterialTheme.typography.labelMedium, color = if (roadmap) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
-                OutlinedButton(onClick = onClick, shape = RoundedCornerShape(12.dp)) {
-                    Text(if (roadmap) "Kapcsolódó eszköz" else "Megnyitás")
+                OutlinedButton(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(12.dp), modifier = Modifier.heightIn(min = 48.dp).semantics { contentDescription = "$title – ${if (enabled) "megnyitás" else "hamarosan"}" }) {
+                    Text(if (enabled) "Megnyitás" else "Hamarosan")
                 }
             }
         }

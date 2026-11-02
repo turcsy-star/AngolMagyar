@@ -98,7 +98,7 @@ class Prefs(ctx: Context) {
 
     /** Globális prémium megjelenés: platinum, obsidian, gold, arctic vagy sapphire. */
     var luxuryThemeId: String
-        get() = p.getString("luxuryThemeId", "forest") ?: "forest"
+        get() = p.getString("luxuryThemeId", "sapphire") ?: "sapphire"
         set(v) { p.edit().putString("luxuryThemeId", v).apply() }
 
     /** Csökkentett animációs mód (a rendszer animációskapcsolóját is figyeljük). */

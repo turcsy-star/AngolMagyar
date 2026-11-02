@@ -36,7 +36,7 @@ import kotlin.math.sin
 
 internal fun jewelColor(s: StageStatus): Color = when (s) {
     StageStatus.PENDING -> PlatinumColors.GraphiteHigh
-    StageStatus.RUNNING -> PlatinumColors.Champagne
+    StageStatus.RUNNING -> PlatinumColors.DiamondWhite
     StageStatus.COMPLETED -> PlatinumColors.Emerald
     StageStatus.WARNING -> PlatinumColors.Amber
     StageStatus.FAILED -> PlatinumColors.Ruby
@@ -137,7 +137,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                     if (sub.isNotEmpty()) Text(
                         sub, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 1,
                         color = when (s.status) {
-                            StageStatus.RUNNING -> PlatinumColors.Champagne
+                            StageStatus.RUNNING -> PlatinumColors.DiamondWhite
                             StageStatus.FAILED -> PlatinumColors.Ruby
                             StageStatus.WARNING -> PlatinumColors.Amber
                             else -> PlatinumColors.TextDim

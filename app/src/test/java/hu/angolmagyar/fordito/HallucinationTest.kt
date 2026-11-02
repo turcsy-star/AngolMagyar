@@ -86,6 +86,36 @@ class HallucinationTest {
         val c = { s: Int -> SrtExporter.Cue(s * 1000L, s * 1000L + 2000, "Oh, that feels so much better.", "") }
         assertEquals(2, Hallucination.clean(listOf(c(1), c(5), c(9), c(13))).repeats)
     }
+    @Test fun repeatedShortLineRunKeepsOnlyTheFirst() {
+        val cues = listOf(
+            cue(10, "Rendben."), cue(694, "Bye."), cue(790, "Bye."), cue(793, "Bye."), cue(803, "Bye."), cue(1200, "Vége.")
+        )
+        val r = Hallucination.clean(cues)
+        assertEquals(3, r.dropped)
+        assertEquals(listOf("Rendben.", "Bye.", "Vége."), r.cues.map { it.target })
+    }
+
+    @Test fun twoIdenticalShortLinesAreKept() {
+        val r = Hallucination.clean(listOf(cue(10, "Igen."), cue(14, "Igen."), cue(20, "Rendben.")))
+        assertEquals(0, r.dropped)
+        assertEquals(3, r.cues.size)
+    }
+
+    @Test fun fewWordsStretchedOverMinutesAreRemoved() {
+        val cues = listOf(
+            cue(10, "Ó, mi történik?"),
+            SrtExporter.Cue(1_238_000L, 1_800_000L, "", "Ó, piros."),
+            cue(1_800, "Rendben, menjünk.")
+        )
+        val r = Hallucination.clean(cues)
+        assertEquals(1, r.dropped)
+        assertEquals(listOf("Ó, mi történik?", "Rendben, menjünk."), r.cues.map { it.target })
+    }
+
+    @Test fun shortLineOverOneMinuteIsKept() {
+        val cues = listOf(cue(10, "Olyan nagy."), SrtExporter.Cue(500_000L, 571_000L, "", "Olyan nagy."), cue(580, "Igen."))
+        assertEquals(0, Hallucination.clean(cues).dropped)
+    }
 }
 
 class HallucinationLowConfTest {
@@ -99,4 +129,5 @@ class HallucinationLowConfTest {
         assertTrue(r.removed.isEmpty())
         assertEquals(3, r.cues.size)
     }
+
 }

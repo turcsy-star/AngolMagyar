@@ -229,7 +229,7 @@ class BackupCenterActivity : ComponentActivity() {
     private fun BackupCenterScreen(status: String, busy: Boolean, daily: Boolean, weekly: Boolean, autoInfo: String, onBack: () -> Unit, onExport: () -> Unit, onImport: () -> Unit, onSchedule: (Boolean, Boolean) -> Unit) {
         Column(Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             OutlinedButton(onClick = onBack, enabled = !busy) { Text("← Vissza") }
-            Text("PLATINUM • INFINITY • DIAMOND", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("DIAMOND • BACKUP CENTER", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Text("Infinity Secure Backup", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             PremiumCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

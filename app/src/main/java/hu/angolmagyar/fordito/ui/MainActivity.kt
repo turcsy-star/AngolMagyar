@@ -495,14 +495,14 @@ private fun PlatinumUltraConsole(
     val graphite = Color(0xFF171B23)
     val platinum = Color(0xFFF0EFEA)
     val steel = Color(0xFF9CA6B5)
-    val champagne = Color(0xFFE6D5A8)
+    val iceWhite = Color(0xFFD6E9FF)
     val mint = Color(0xFF72D6AD)
     val status = when {
         active -> "ÉLŐ FORDÍTÁS AKTÍV"
         jobRunning -> "FELDOLGOZÁS FOLYAMATBAN"
         else -> "RENDSZER KÉSZENLÉTBEN"
     }
-    val statusColor = if (active || jobRunning) mint else champagne
+    val statusColor = if (active || jobRunning) mint else iceWhite
     // A szolgáltatásból érkező értékek megjelenítés előtt korlátozva vannak;
     // hibás vagy átmeneti állapotban sem csúszhat 0–100% tartományon kívül a UI.
     val safeLevel = level.coerceIn(0f, 1f)
@@ -548,8 +548,8 @@ private fun PlatinumUltraConsole(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        "PLATINUM  /  ULTRA CONSOLE",
-                        color = champagne,
+                        "DIAMOND  /  ULTRA CONSOLE",
+                        color = iceWhite,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -618,7 +618,7 @@ private fun PlatinumUltraConsole(
                     .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("PLATINUM SPECTRUM  ·  40 CSATORNA", color = steel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    Text("DIAMOND SPECTRUM  ·  40 CSATORNA", color = steel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     Text(if (active) "BEMENET AKTÍV" else if (jobRunning) "FELADAT AKTÍV" else "NYUGALMI ÁLLAPOT", color = statusColor, style = MaterialTheme.typography.labelSmall)
                 }
                 Spacer(Modifier.height(8.dp))
@@ -635,7 +635,7 @@ private fun PlatinumUltraConsole(
                         val barHeight = (size.height * normalized).coerceAtLeast(2.dp.toPx())
                         val x = i * (barWidth + gap)
                         drawRoundRect(
-                            color = if (active) Color(0xFF9CCDF5).copy(alpha = 0.45f + normalized * 0.55f) else champagne.copy(alpha = 0.3f + normalized * 0.6f),
+                            color = if (active) Color(0xFF9CCDF5).copy(alpha = 0.45f + normalized * 0.55f) else iceWhite.copy(alpha = 0.3f + normalized * 0.6f),
                             topLeft = Offset(x, (size.height - barHeight) / 2f),
                             size = Size(barWidth, barHeight),
                             cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
@@ -657,7 +657,7 @@ private fun PlatinumUltraConsole(
                     label = "MUNKAMENET",
                     value = if (active && elapsed.isNotBlank()) elapsed else if (jobRunning) "$safeJobPct%" else "—",
                     detail = if (active) "Eltelt idő" else if (jobRunning) "Feladat előrehaladása" else "Nincs futó feladat",
-                    accent = champagne
+                    accent = iceWhite
                 )
             }
 
@@ -679,7 +679,7 @@ private fun PlatinumUltraConsole(
                     LinearProgressIndicator(
                         progress = { safeJobPct / 100f },
                         modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(6.dp)),
-                        color = champagne,
+                        color = iceWhite,
                         trackColor = Color.White.copy(alpha = 0.12f)
                     )
                 } else {
@@ -693,7 +693,7 @@ private fun PlatinumUltraConsole(
             }
 
             Text(
-                "PLATINUM INFINITY V16  •  KORLÁTOZOTT MÉRÉSI ÉRTÉKEK  •  40 CSATORNÁS SPEKTRUM",
+                "DIAMOND  •  KORLÁTOZOTT MÉRÉSI ÉRTÉKEK  •  40 CSATORNÁS SPEKTRUM",
                 color = steel.copy(alpha = 0.82f),
                 style = MaterialTheme.typography.labelSmall
             )
@@ -952,22 +952,10 @@ private fun Staggered(index: Int, shown: Boolean, content: @Composable () -> Uni
     ) { content() }
 }
 
-/** Nyomásra enyhén összehúzódó, visszarugózó elem. */
+/** A gombanimációt megszüntettük: nyomásra nincs méretváltozás (a hullámeffekt és a haptika marad). */
 @Composable
-private fun Modifier.pressScale(source: MutableInteractionSource): Modifier {
-    val pressed by source.collectIsPressedAsState()
-    val ctx = LocalContext.current
-    val reduceMotion = remember(ctx) {
-        Prefs(ctx).reduceMotion ||
-            ((ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
-    }
-    val s by animateFloatAsState(
-        targetValue = if (pressed && !reduceMotion) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "press"
-    )
-    return this.graphicsLayer { scaleX = s; scaleY = s }
-}
+@Suppress("UNUSED_PARAMETER")
+private fun Modifier.pressScale(source: MutableInteractionSource): Modifier = this
 
 @Composable
 private fun AuroraBackground(active: Boolean) {
@@ -1059,13 +1047,6 @@ private fun Header(running: Boolean, error: Boolean) {
 @Composable
 private fun HeroCard(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
-    val ctx = LocalContext.current
-    val lowMotion = remember { Prefs(ctx).reduceMotion || ((ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true) }
-    val shine = if (!lowMotion) {
-        val t = rememberInfiniteTransition(label = "shine")
-        val value by t.animateFloat(initialValue = -0.4f, targetValue = 1.4f, animationSpec = infiniteRepeatable(tween(4200, easing = LinearEasing), RepeatMode.Restart), label = "shine")
-        value
-    } else 0.5f
     val shape = RoundedCornerShape(28.dp)
     Box(
         Modifier
@@ -1077,16 +1058,6 @@ private fun HeroCard(title: String, subtitle: String, icon: ImageVector, onClick
             )
             .clickable(interactionSource = source, indication = LocalIndication.current, onClick = onClick)
     ) {
-        Canvas(Modifier.matchParentSize()) {
-            val x = size.width * shine
-            drawRect(
-                Brush.linearGradient(
-                    listOf(Color.Transparent, Color.White.copy(alpha = 0.16f), Color.Transparent),
-                    start = Offset(x - size.width * 0.25f, 0f),
-                    end = Offset(x + size.width * 0.25f, size.height)
-                )
-            )
-        }
         Row(
             Modifier.padding(22.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1158,7 +1129,7 @@ private fun JobFinishedCard(message: String, onOpen: () -> Unit, onDismiss: () -
         if (showBurst) {
             CompletionBurst(
                 modifier = Modifier.size(160.dp).align(Alignment.TopEnd).padding(8.dp),
-                colors = listOf(Color(0xFFE6D5A8), Color(0xFFBFD7EA), Color(0xFF5FD3A0))
+                colors = listOf(Color(0xFFD6E9FF), Color(0xFFBFD7EA), Color(0xFF5FD3A0))
             ) { showBurst = false }
         }
     }
@@ -1198,7 +1169,7 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text("DIAMOND · FOLYAMATBAN", color = Color(0xFFE6D5A8), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text("DIAMOND · FOLYAMATBAN", color = Color(0xFFD6E9FF), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                     Text("Intelligens feldolgozás", color = Color(0xFFF0EFEA), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(58.dp).clip(CircleShape).background(Color(0xFFBFD7EA).copy(alpha = 0.15f))) {
@@ -1228,7 +1199,7 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
                 }
                 Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Color(0xFF222733))) {
                     Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(10.dp).clip(CircleShape)
-                        .background(Brush.horizontalGradient(listOf(Color(0xFFE6D5A8), Color(0xFFBFD7EA), Color(0xFF60A5FA)))))
+                        .background(Brush.horizontalGradient(listOf(Color(0xFFD6E9FF), Color(0xFFBFD7EA), Color(0xFF60A5FA)))))
                 }
             }
             if (message.isNotBlank()) {

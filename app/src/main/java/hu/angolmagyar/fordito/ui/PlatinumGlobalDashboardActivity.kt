@@ -140,7 +140,7 @@ private fun GlobalDashboardScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         OutlinedButton(onClick = onBack) { Text("← Vissza") }
-        Text("PLATINUM • GLOBAL DASHBOARD", color = MaterialTheme.colorScheme.primary,
+        Text("DIAMOND • GLOBAL DASHBOARD", color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Egységes állapotközpont", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("v$versionName ($versionCode) · Összkép: ${levelLabel(snapshot.overall)}")

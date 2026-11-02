@@ -116,7 +116,7 @@ fun DiamondProcessTheater(
                 1.dp,
                 Brush.linearGradient(
                     listOf(
-                        PlatinumColors.Champagne.copy(alpha = 0.35f),
+                        PlatinumColors.DiamondWhite.copy(alpha = 0.35f),
                         PlatinumColors.IceBlue.copy(alpha = 0.15f),
                         PlatinumColors.SteelDark.copy(alpha = 0.4f)
                     )
@@ -137,7 +137,7 @@ fun DiamondProcessTheater(
         ) {
             Text(
                 "DIAMOND · FOLYAMAT",
-                color = PlatinumColors.Champagne,
+                color = PlatinumColors.DiamondWhite,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 fontWeight = FontWeight.Medium
@@ -295,7 +295,7 @@ private fun HeroOperationCard(
                 if (overall > 0f) {
                     drawArc(
                         brush = Brush.sweepGradient(
-                            listOf(PlatinumColors.Champagne, PlatinumColors.IceBlue, PlatinumColors.Champagne)
+                            listOf(PlatinumColors.DiamondWhite, PlatinumColors.IceBlue, PlatinumColors.DiamondWhite)
                         ),
                         startAngle = -90f,
                         sweepAngle = 360f * overall,
@@ -322,7 +322,7 @@ private fun HeroOperationCard(
                         drawCircle(PlatinumColors.IceBlue.copy(alpha = 0.22f * pulse), glowR, style = Stroke(2.dp.toPx()))
                         val ang = Math.toRadians(0.0)
                         drawCircle(
-                            PlatinumColors.Champagne.copy(alpha = 0.9f * pulse),
+                            PlatinumColors.DiamondWhite.copy(alpha = 0.9f * pulse),
                             3.dp.toPx(),
                             Offset(center.x + glowR * cos(ang).toFloat(), center.y + glowR * sin(ang).toFloat())
                         )
@@ -394,7 +394,7 @@ private fun HeroOperationCard(
                     if (w > 0) {
                         drawRoundRect(
                             Brush.horizontalGradient(
-                                listOf(PlatinumColors.Champagne, PlatinumColors.IceBlue)
+                                listOf(PlatinumColors.DiamondWhite, PlatinumColors.IceBlue)
                             ),
                             size = Size(w, size.height),
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
@@ -443,7 +443,7 @@ private fun StepEnergyRail(
                 val xe = x0 + (x1 - x0) * fill
                 drawLine(
                     Brush.horizontalGradient(
-                        listOf(PlatinumColors.Champagne.copy(alpha = 0.85f), PlatinumColors.IceBlue.copy(alpha = 0.75f))
+                        listOf(PlatinumColors.DiamondWhite.copy(alpha = 0.85f), PlatinumColors.IceBlue.copy(alpha = 0.75f))
                     ),
                     Offset(x0, cy), Offset(xe, cy),
                     3.dp.toPx(), StrokeCap.Round

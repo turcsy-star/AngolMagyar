@@ -98,7 +98,7 @@ private fun UltimateEcosystemScreen(onBack: () -> Unit) {
         OutlinedButton(onClick = onBack) { Text("← Vissza") }
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("PLATINUM INFINITY DIAMOND", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                Text("DIAMOND • ULTIMATE ECOSYSTEM", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Text("Ultimate Intelligence Ecosystem 4.1", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                 Text("10 integrált fejlesztési terület • helyi, adatvédelmi szempontú eszközök • átlátható képességjelölés")
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

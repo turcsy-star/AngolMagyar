@@ -2,7 +2,7 @@ package hu.angolmagyar.fordito.ui.design
 
 import androidx.compose.ui.graphics.Color
 
-/** Platinum Luxury színrendszer (v5): fekete ónix alap, platina fémfények, pezsgőarany kiemelés. */
+/** Platinum Luxury színrendszer (v5): fekete ónix alap, platina fémfények, jégfehér-kék (Diamond Blue) kiemelés. */
 object PlatinumColors {
     val Onyx = Color(0xFF07080C)
     val Graphite = Color(0xFF171A21)
@@ -11,7 +11,7 @@ object PlatinumColors {
     val PlatinumHigh = Color(0xFFFBFBF9)
     val Steel = Color(0xFF9AA1AD)
     val SteelDark = Color(0xFF4A505B)
-    val Champagne = Color(0xFFE6D5A8)
+    val DiamondWhite = Color(0xFFD6E9FF)
     val IceBlue = Color(0xFFBFD7EA)
     val Emerald = Color(0xFF5FD3A0)
     val Amber = Color(0xFFE6B85C)

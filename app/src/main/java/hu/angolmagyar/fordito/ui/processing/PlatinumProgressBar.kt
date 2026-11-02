@@ -70,7 +70,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(Modifier.fillMaxWidth()) {
-            Text("LETÖLTÉS", color = PlatinumColors.Champagne, fontSize = 10.sp, letterSpacing = 1.8.sp, modifier = Modifier.weight(1f))
+            Text("LETÖLTÉS", color = PlatinumColors.DiamondWhite, fontSize = 10.sp, letterSpacing = 1.8.sp, modifier = Modifier.weight(1f))
             Text(if (known) "$safePct%" else "…", color = PlatinumColors.Text, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
         }
         Canvas(Modifier.fillMaxWidth().height(16.dp)) {
@@ -97,7 +97,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
                 val bw = inner * 0.22f
                 val x = pad + (inner - bw) * sweep
                 drawRoundRect(
-                    Brush.horizontalGradient(listOf(Color.Transparent, PlatinumColors.Champagne.copy(alpha = 0.85f), Color.Transparent), x, x + bw),
+                    Brush.horizontalGradient(listOf(Color.Transparent, PlatinumColors.DiamondWhite.copy(alpha = 0.85f), Color.Transparent), x, x + bw),
                     Offset(x, pad), Size(bw, h), CornerRadius(h / 2f)
                 )
             }

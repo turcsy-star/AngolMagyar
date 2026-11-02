@@ -143,7 +143,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 1.dp,
                 Brush.linearGradient(
                     listOf(
-                        PlatinumColors.Champagne.copy(alpha = 0.4f),
+                        PlatinumColors.DiamondWhite.copy(alpha = 0.4f),
                         PlatinumColors.IceBlue.copy(alpha = 0.2f),
                         PlatinumColors.SteelDark.copy(alpha = 0.45f)
                     )
@@ -160,7 +160,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
         ) {
             Text(
                 "DIAMOND · ÉLŐ JEL",
-                color = PlatinumColors.Champagne,
+                color = PlatinumColors.DiamondWhite,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 fontWeight = FontWeight.Medium
@@ -237,7 +237,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 val age = i / (BARS - 1f)
                 val active = phase == LivePhase.LISTENING || phase == LivePhase.RECOGNIZING
                 val top = when {
-                    v > 0.7f -> PlatinumColors.Champagne
+                    v > 0.7f -> PlatinumColors.DiamondWhite
                     active -> PlatinumColors.IceBlue
                     else -> PlatinumColors.PlatinumHigh
                 }
@@ -353,7 +353,7 @@ private fun phaseColor(p: LivePhase) = when (p) {
     LivePhase.IDLE -> PlatinumColors.Steel
     LivePhase.LISTENING -> PlatinumColors.Emerald
     LivePhase.RECOGNIZING -> PlatinumColors.IceBlue
-    LivePhase.TRANSLATING -> PlatinumColors.Champagne
+    LivePhase.TRANSLATING -> PlatinumColors.DiamondWhite
     LivePhase.PAUSED -> PlatinumColors.Amber
 }
 
@@ -410,7 +410,7 @@ private fun PhaseOrb(
             val sweep = (0.12f + animLevel * 0.88f) * 360f
             drawArc(
                 brush = Brush.sweepGradient(
-                    listOf(phaseColor(phase), PlatinumColors.Champagne, phaseColor(phase))
+                    listOf(phaseColor(phase), PlatinumColors.DiamondWhite, phaseColor(phase))
                 ),
                 startAngle = -90f + if (reducedMotion.value) 0f else spin * 0.15f,
                 sweepAngle = sweep,

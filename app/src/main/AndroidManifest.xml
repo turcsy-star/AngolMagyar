@@ -33,6 +33,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <activity android:name=".ui.DocumentCameraActivity" android:exported="false" android:label="Dokumentum / Kamera" />
         <activity android:name=".ui.OfflineIntelligenceCenterActivity" android:exported="false" android:label="Offline Intelligence Center" />
         <activity android:name=".ui.BackupCenterActivity" android:exported="false" android:label="Infinity Backup Center" />
         <activity android:name=".ui.LearningAnalyticsActivity" android:exported="false" android:label="Learning Analytics Diamond" />

@@ -127,7 +127,7 @@ class WaveView @JvmOverloads constructor(
             val gap = max(1f, w / n * 0.18f)
             val bw = max(1.5f, w / n - gap)
             val doneC = if (platinum) 0xFF5FD3A0.toInt() else Ui.color(context, R.color.ok)
-            val activeRed = if (platinum) 0xFFE6D5A8.toInt() else 0xFFFF4D4D.toInt()
+            val activeRed = if (platinum) 0xFFD6E9FF.toInt() else 0xFFFF4D4D.toInt()
             val activeWhite = if (platinum) 0xFFBFD7EA.toInt() else 0xFFFFFFFF.toInt()
             val idleC = if (platinum) 0x664A505B else 0x66888AA0
             val progress = overallProgress()

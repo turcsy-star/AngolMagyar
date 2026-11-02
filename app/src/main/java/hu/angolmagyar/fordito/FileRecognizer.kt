@@ -474,7 +474,7 @@ class FileRecognizer(
     /** A fordított szöveg utómunkája: szótár-javítások, központozás, (magyarnál) tegezés. */
     private fun postTarget(res: String, toHu: Boolean): String =
         if (toHu) {
-            val hu = TextPolish.polishHungarian(Fixes.apply(res, huRules))
+            val hu = TextPolish.polishHungarian(Fixes.apply(BuiltinFixes.target(res), huRules))
             if (SubPrefs.informalHu(ctx)) TextPolish.informalHungarian(hu) else hu
         } else TextPolish.polishEnglish(Fixes.apply(res, enRules))
 
@@ -602,7 +602,15 @@ class FileRecognizer(
                 val pcm = ParallelChunker.readPcmRange(pcmFile, a, b)
                 if (pcm.size < 8000) { out.add(null); continue }
                 prevTail = ""
-                val raws = try { rawWhisper(pcm, spec, lang, sp.first, null, null, beam) } catch (_: Exception) { null }
+                val t0 = System.currentTimeMillis()
+                val raws = try {
+                    rawWhisper(pcm, spec, lang, sp.first, null, null, beam)
+                } catch (e: Throwable) {
+                    DiagLog.log("MÁSODIK MENET szakasz ${k + 1}/${spans.size} HIBA: ${e.javaClass.simpleName}: ${e.message}")
+                    null
+                }
+                DiagLog.log("MÁSODIK MENET szakasz ${k + 1}/${spans.size}: ${(sp.second - sp.first) / 1000} mp hang, " +
+                    "${System.currentTimeMillis() - t0} ms, ${raws?.size ?: -1} blokk")
                 out.add(raws?.map { r ->
                     val src = if (lang == "en") TextPolish.polishEnglish(
                         NameFix.apply(Fixes.apply(r.text, enRules), castNames)

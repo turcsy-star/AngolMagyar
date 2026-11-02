@@ -34,11 +34,11 @@ fun PlatinumSparkline(samples: List<Pair<Long, Int>>, modifier: Modifier = Modif
             val fill = Path().apply {
                 addPath(line); lineTo(size.width, size.height); lineTo(0f, size.height); close()
             }
-            drawPath(fill, Brush.verticalGradient(listOf(PlatinumColors.Champagne.copy(alpha = 0.30f), Color.Transparent)))
-            drawPath(line, Brush.horizontalGradient(listOf(PlatinumColors.Steel, PlatinumColors.PlatinumHigh, PlatinumColors.Champagne)),
+            drawPath(fill, Brush.verticalGradient(listOf(PlatinumColors.DiamondWhite.copy(alpha = 0.30f), Color.Transparent)))
+            drawPath(line, Brush.horizontalGradient(listOf(PlatinumColors.Steel, PlatinumColors.PlatinumHigh, PlatinumColors.DiamondWhite)),
                 style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
             val e = pt(samples.last())
-            drawCircle(PlatinumColors.Champagne.copy(alpha = 0.35f), 6.dp.toPx(), e)
+            drawCircle(PlatinumColors.DiamondWhite.copy(alpha = 0.35f), 6.dp.toPx(), e)
             drawCircle(PlatinumColors.PlatinumHigh, 2.5.dp.toPx(), e)
         }
     }

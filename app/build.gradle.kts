@@ -17,8 +17,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 40406
-        versionName = "4.2.6"
+        versionCode = 40409
+        versionName = "4.2.9"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
@@ -150,6 +150,8 @@ dependencies {
 
     // Valódi nyelvfelismerés (on-device Language ID)
     implementation("com.google.mlkit:language-id:17.0.6")
+    // P8: eszközön futó szövegfelismerés (OCR), latin betűs szövegekhez
+    implementation("com.google.mlkit:text-recognition:16.0.1")
 
     // ONNX Runtime – speaker embedding diarization
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.19.2")

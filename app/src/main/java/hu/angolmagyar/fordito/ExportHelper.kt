@@ -48,10 +48,11 @@ object ExportHelper {
         sb.append("=".repeat(title.length)).append("\n\n")
         for (c in cues) {
             val t = SrtExporter.formatTime(c.startMs).substring(0, 8)
-            val spk = c.speaker.ifBlank { "—" }
             val line = c.target.ifBlank { c.source }
             if (line.isBlank()) continue
-            sb.append("[").append(t).append("] ").append(spk).append(": ").append(line).append("\n")
+            sb.append("[").append(t).append("] ")
+            if (c.speaker.isNotBlank()) sb.append(c.speaker).append(": ")
+            sb.append(line).append("\n")
         }
         return sb.toString()
     }

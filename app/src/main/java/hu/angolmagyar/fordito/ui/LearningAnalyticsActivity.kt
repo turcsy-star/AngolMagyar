@@ -42,7 +42,7 @@ class LearningAnalyticsActivity : ComponentActivity() {
     val progress = (today.activity.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f)
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).navigationBarsPadding().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         OutlinedButton(onClick = onBack) { Text("← Vissza") }
-        Text("PLATINUM • DIAMOND ANALYTICS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text("DIAMOND • LEARNING ANALYTICS", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Tanulási áttekintés", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Helyben tárolt aktivitási adatok. A rendszer nem ment el begépelt szavakat vagy mondatokat.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

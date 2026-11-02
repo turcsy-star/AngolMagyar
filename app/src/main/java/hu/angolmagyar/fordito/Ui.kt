@@ -253,10 +253,7 @@ object Ui {
             setTextColor(color(ctx, if (filled) R.color.onPrimary else R.color.primary))
             setOnClickListener {
                 Haptics.click(ctx)
-                animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).withEndAction {
-                    animate().scaleX(1f).scaleY(1f).setDuration(120).start()
-                    onClick()
-                }.start()
+                onClick()
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -295,10 +292,7 @@ object Ui {
             elevation = if (highlighted) dp(ctx, 4).toFloat() else 0f
             setOnClickListener {
                 Haptics.click(ctx)
-                animate().scaleX(0.98f).scaleY(0.98f).setDuration(80).withEndAction {
-                    animate().scaleX(1f).scaleY(1f).setDuration(140).start()
-                    onClick()
-                }.start()
+                onClick()
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -351,10 +345,7 @@ object Ui {
             if (!enabled) alpha = 0.45f
             setOnClickListener {
                 Haptics.click(ctx)
-                animate().scaleX(0.97f).scaleY(0.97f).setDuration(80).withEndAction {
-                    animate().scaleX(1f).scaleY(1f).setDuration(120).start()
-                    onClick()
-                }.start()
+                onClick()
             }
             addView(ImageView(ctx).apply {
                 setImageResource(iconRes)

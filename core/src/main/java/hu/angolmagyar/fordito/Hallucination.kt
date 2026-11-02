@@ -6,6 +6,8 @@ package hu.angolmagyar.fordito
  *
  * Két szabály (mindkettő óvatos, és a végén a hívó kiírja, hány blokkot dobott el):
  *  A) ismétlődő hosszabb mondat: a harmadik, egymást követő azonos szöveg gyanús és eltávolítható;
+ *  A3) rövid, azonos sorok hosszú csenddel ("Bye." ×4): csak az első marad;
+ *  A4) pár szavas blokk, amely 2 percnél tovább áll a képernyőn (csendbe írt hallucináció);
  *  A2) sűrű roham: legalább 4 egymást követő, lehetetlenül gyors blokk (összeomlott időbélyeg, ismételgetett szöveg);
  *  B) magányos rövid sor és C) alacsony logprob csak jelzés, automatikusan nem törlünk valódi beszédet.
  * A magányos vagy bizonytalan szegmens lehet halk, de helyes megszólalás is.
@@ -72,14 +74,18 @@ object Hallucination {
         lowConfLp: Float = QualityRules.REVIEW_LP,
         lowConfMaxWords: Int = 8,
         burstMaxCps: Double = 35.0,
-        burstMinRun: Int = 4
+        burstMinRun: Int = 4,
+        repeatRunMin: Int = 3,
+        repeatRunGapMs: Long = 30_000L,
+        silentSpanMs: Long = 120_000L,
+        silentSpanMaxWords: Int = 4
     ): Result {
         if (cues.size < 2) return Result(cues, 0, 0)
         val sorted = cues.sortedBy { it.startMs }
 
         // A) ismétlődő hosszabb mondat
         val seen = HashMap<String, Pair<Int, Long>>() // ismétlésszám + utolsó előfordulás vége
-        val afterA = ArrayList<SrtExporter.Cue>(sorted.size)
+        val afterRepeat = ArrayList<SrtExporter.Cue>(sorted.size)
         val removed = ArrayList<SrtExporter.Cue>()
         var repeats = 0
         var lowConf = 0
@@ -94,23 +100,53 @@ object Hallucination {
             }
             // A logprob önmagában nem bizonyítja, hogy a szöveg hibás. Megőrizzük, a szerkesztő jelzi.
             if (c.lp.isFinite() && c.lp < lowConfLp && words(c) <= lowConfMaxWords) lowConf++
-            afterA.add(c)
+            afterRepeat.add(c)
         }
 
+        // A3) rövid, egymást követő azonos sorok hosszú csenddel ("Bye." ×4): a Whisper hurokba esett, csak az első marad.
+        // (A hosszabb mondatokat az A) szabály kezeli.)
+        val runCleaned = ArrayList<SrtExporter.Cue>(afterRepeat.size)
+        var ri = 0
+        while (ri < afterRepeat.size) {
+            val k0 = key(afterRepeat[ri])
+            var rj = ri + 1
+            if (k0.isNotEmpty() && words(afterRepeat[ri]) < minRepeatWords) {
+                while (rj < afterRepeat.size && key(afterRepeat[rj]) == k0) rj++
+            }
+            // csak ha a sorozatban legalább egy hosszú csend is van (a sűrű, valódi "Rendben. Rendben." megmarad)
+            val loopInSilence = rj - ri >= repeatRunMin &&
+                (ri + 1 until rj).any { afterRepeat[it].startMs - afterRepeat[it - 1].startMs >= repeatRunGapMs }
+            if (loopInSilence) {
+                runCleaned.add(afterRepeat[ri])
+                for (k in ri + 1 until rj) removed.add(afterRepeat[k])
+                repeats += rj - ri - 1
+            } else {
+                for (k in ri until rj) runCleaned.add(afterRepeat[k])
+            }
+            ri = rj
+        }
+
+        // A4) percekig a képernyőn álló, pár szavas blokk: a csendbe írt hallucináció jele (a valódi rövid mondat nem tart 2 percig)
+        val shortLong = ArrayList<SrtExporter.Cue>(runCleaned.size)
+        for (c in runCleaned) {
+            if (words(c) <= silentSpanMaxWords && c.endMs - c.startMs >= silentSpanMs) {
+                removed.add(c); repeats++
+            } else shortLong.add(c)
+        }
         // A2) sűrű roham: a Whisper néha a darab végén összeomló időbélyeggel ismételgeti a szöveget, így 1–2 mp-be
         // több tucat karakternyi blokk kerül. Ez nem emberi beszéd (35 karakter/mp fölött), és a szöveg a környező
         // blokkokban már szerepel. Egyetlen vagy két gyors blokkot (pl. rövid közbeszólás) nem érintünk.
-        val kept = ArrayList<SrtExporter.Cue>(afterA.size)
+        val kept = ArrayList<SrtExporter.Cue>(shortLong.size)
         var bi = 0
-        while (bi < afterA.size) {
+        while (bi < shortLong.size) {
             var bj = bi
-            while (bj < afterA.size && tooFast(afterA, bj, burstMaxCps)) bj++
+            while (bj < shortLong.size && tooFast(shortLong, bj, burstMaxCps)) bj++
             if (bj - bi >= burstMinRun) {
-                for (k in bi until bj) removed.add(afterA[k])
+                for (k in bi until bj) removed.add(shortLong[k])
                 repeats += bj - bi
                 bi = bj
             } else {
-                kept.add(afterA[bi])
+                kept.add(shortLong[bi])
                 bi++
             }
         }
