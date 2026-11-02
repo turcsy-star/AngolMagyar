@@ -1,18 +1,12 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-/** Kedvenc mondatok: a feliraton hosszú nyomással menthető (angol + fordítás). */
 object Favorites {
-
     data class Item(val stamp: String, val source: String, val target: String)
-
     private fun file(ctx: Context) = File(ctx.filesDir, "favorites.tsv")
-
     @Synchronized
     fun add(ctx: Context, source: String, target: String) {
         val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
@@ -23,7 +17,6 @@ object Favorites {
         } catch (_: Exception) {
         }
     }
-
     @Synchronized
     fun list(ctx: Context): List<Item> {
         val f = file(ctx)
@@ -37,7 +30,6 @@ object Favorites {
             emptyList()
         }
     }
-
     @Synchronized
     fun remove(ctx: Context, item: Item) {
         val f = file(ctx)
@@ -49,7 +41,6 @@ object Favorites {
         } catch (_: Exception) {
         }
     }
-
     fun asText(items: List<Item>): String =
         items.joinToString("\n\n") { "${it.stamp}\n${it.source}\n${it.target}" }
 }

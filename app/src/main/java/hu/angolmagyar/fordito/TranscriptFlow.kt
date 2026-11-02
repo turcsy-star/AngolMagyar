@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.Typeface
@@ -10,28 +9,18 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.widget.TextView
-
-/**
- * Élő átirat-folyam a hullámforma alatt: a legutóbb felismert sorok beszélőszínnel; a legfrissebb sor
- * betűnként "gépelődik", majd áttűnéssel megjelenik alatta a fordítás. A bizonytalan sorok sárgásan derengenek.
- */
 class TranscriptFlow(private val tv: TextView) {
-
     private var shownCount = -1
     private var lastKey = ""
     private var anim: ValueAnimator? = null
-
     private val palette = intArrayOf(
         0xFF2F80ED.toInt(), 0xFFE67E22.toInt(), 0xFF27AE60.toInt(),
         0xFFD63384.toInt(), 0xFF8E44AD.toInt(), 0xFF16A085.toInt()
     )
-
     private fun colorFor(speaker: String): Int {
         val n = speaker.filter { it.isDigit() }.toIntOrNull() ?: return 0xFF888888.toInt()
         return palette[(n - 1).coerceAtLeast(0) % palette.size]
     }
-
-    /** @return true, ha van mit mutatni. */
     fun update(cues: List<SrtExporter.Cue>, textColor: Int, accent: Int): Boolean {
         if (cues.isEmpty()) return false
         val last = cues.last()
@@ -86,12 +75,10 @@ class TranscriptFlow(private val tv: TextView) {
         } else render(1f)
         return true
     }
-
     private fun trimmedLen(s: CharSequence): Int {
         var e = s.length
         while (e > 0 && s[e - 1] == '\n') e--
         return e
     }
-
     fun stop() { anim?.cancel() }
 }

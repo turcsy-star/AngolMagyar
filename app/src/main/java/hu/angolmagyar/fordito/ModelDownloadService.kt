@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,13 +14,7 @@ import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
-
-/**
- * Modell-letöltés előtérben (foreground service), hogy képernyőzár / Activity kilépés
- * ne szakítsa meg a kapcsolatot. Folytatható (HTTP Range), szüneteltethető.
- */
 class ModelDownloadService : Service() {
-
     companion object {
         const val CHANNEL = "model_download"
         const val NOTIF_ID = 42
@@ -30,7 +23,6 @@ class ModelDownloadService : Service() {
         const val ACTION_RESUME = "hu.angolmagyar.fordito.DL_RESUME"
         const val ACTION_CANCEL = "hu.angolmagyar.fordito.DL_CANCEL"
         const val EXTRA_IDS = "ids"
-
         @Volatile var running = false
             private set
         @Volatile var paused = false
@@ -43,18 +35,14 @@ class ModelDownloadService : Service() {
             private set
         @Volatile var failedMsg: String? = null
             private set
-
         private val listeners = CopyOnWriteArrayList<(Int, String, Boolean, Boolean) -> Unit>()
-
         fun addListener(l: (pct: Int, msg: String, paused: Boolean, finished: Boolean) -> Unit) {
             listeners.add(l)
             if (running || done) l(pct, message, paused, done)
         }
-
         fun removeListener(l: (Int, String, Boolean, Boolean) -> Unit) {
             listeners.remove(l)
         }
-
         fun start(ctx: Context, ids: List<String>) {
             val i = Intent(ctx, ModelDownloadService::class.java)
                 .setAction(ACTION_START)
@@ -62,19 +50,15 @@ class ModelDownloadService : Service() {
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i)
             else ctx.startService(i)
         }
-
         fun pause(ctx: Context) {
             ctx.startService(Intent(ctx, ModelDownloadService::class.java).setAction(ACTION_PAUSE))
         }
-
         fun resume(ctx: Context) {
             ctx.startService(Intent(ctx, ModelDownloadService::class.java).setAction(ACTION_RESUME))
         }
-
         fun cancel(ctx: Context) {
             ctx.startService(Intent(ctx, ModelDownloadService::class.java).setAction(ACTION_CANCEL))
         }
-
         private fun notifyListeners() {
             val p = pct
             val m = message
@@ -85,7 +69,6 @@ class ModelDownloadService : Service() {
             }
         }
     }
-
     private val cancelFlag = AtomicBoolean(false)
     private var ctl = ModelManager.DlControl()
     private var wakeLock: PowerManager.WakeLock? = null
@@ -95,9 +78,7 @@ class ModelDownloadService : Service() {
     private var completedBytes = 0L
     private var totalEstBytes = 0L
     private val MB = 1024L * 1024L
-
     override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onCreate() {
         super.onCreate()
         ensureChannel()
@@ -106,7 +87,6 @@ class ModelDownloadService : Service() {
             setReferenceCounted(false)
         }
     }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
@@ -130,7 +110,7 @@ class ModelDownloadService : Service() {
             ACTION_RESUME -> {
                 if (running && paused && queue.isNotEmpty()) {
                     paused = false
-                    beginQueue(queue) // folytatja a fennmaradó sort
+                    beginQueue(queue)
                 }
             }
             ACTION_CANCEL -> {
@@ -147,7 +127,6 @@ class ModelDownloadService : Service() {
         }
         return START_STICKY
     }
-
     private fun beginQueue(ids: List<String>) {
         queue = ids
         if (queueTotal == 0) queueTotal = ids.size
@@ -162,7 +141,7 @@ class ModelDownloadService : Service() {
         failedMsg = null
         worker = Thread {
             try {
-                wakeLock?.acquire(6 * 60 * 60 * 1000L) // max 6 óra
+                wakeLock?.acquire(6 * 60 * 60 * 1000L)
             } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
             val failed = ArrayList<String>()
             val prefs = Prefs(this)
@@ -238,8 +217,6 @@ class ModelDownloadService : Service() {
             }
             Companion.notifyListeners()
             stopFg()
-            // A "ragadt" folyamatjelző helyett végleges, elhúzható értesítés (különben örökre
-            // "Modellek letöltése (2/3) 547/547 MB" maradna a sávban, mintha nem készült volna el).
             val fm = failedMsg
             when {
                 cancelFlag.get() -> finalNotif("Letöltés megszakítva", "A félbehagyott rész megmarad, folytatható.")
@@ -248,10 +225,8 @@ class ModelDownloadService : Service() {
             }
         }.also { it.start() }
     }
-
     private fun finalNotif(title: String, text: String) {
         try {
-            // várunk, hogy az Android ne dobja el a végső értesítést a gyors frissítések miatt
             try { Thread.sleep(1500) } catch (_: InterruptedException) {}
             getSystemService(NotificationManager::class.java).cancel(NOTIF_ID)
             try { Thread.sleep(300) } catch (_: InterruptedException) {}
@@ -273,7 +248,6 @@ class ModelDownloadService : Service() {
             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n)
         } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
     }
-
     private fun post(p: Int, msg: String, isPaused: Boolean) {
         if (p >= 0) pct = p
         message = msg
@@ -281,24 +255,20 @@ class ModelDownloadService : Service() {
         Companion.notifyListeners()
         updateNotif(msg)
     }
-
     private fun estBytes(id: String): Long = when (id) {
         "mlkit" -> 60 * MB
         ModelManager.LARGE.id -> 130 * MB
         ModelManager.SMALL.id -> 40 * MB
         else -> ModelManager.byId(id).let { if (it.approxMb > 0) it.approxMb * MB else 50 * MB }
     }
-
     private fun shortName(id: String): String =
         if (id == "mlkit") "Fordítómodell"
         else try { ModelManager.byId(id).label.substringBefore("(").trim() } catch (_: Exception) { id }
-
     private fun fmtEta(sec: Long): String = when {
         sec < 60 -> "kb. $sec mp"
         sec < 3600 -> "kb. ${(sec + 59) / 60} perc"
         else -> "kb. ${sec / 3600} ó ${(sec % 3600 + 59) / 60} p"
     }
-
     private fun friendly(e: Exception): String {
         val m = e.message ?: return "ismeretlen hiba"
         return when {
@@ -309,8 +279,6 @@ class ModelDownloadService : Service() {
             else -> m
         }
     }
-
-    /** Igaz, ha a magyar fordítómodell ténylegesen letöltött állapotban van (az angol beépített). */
     private fun huModelPresent(): Boolean {
         return try {
             val mgr = com.google.mlkit.common.model.RemoteModelManager.getInstance()
@@ -328,11 +296,6 @@ class ModelDownloadService : Service() {
             false
         }
     }
-
-    /**
-     * A magyar fordítómodell letöltése. Korábban az időtúllépés is "sikernek" számított, ezért a rendszer
-     * késznek jelezte a letöltést, miközben a modell nem volt meg. Most a végén ellenőrizzük, hogy tényleg letöltődött-e.
-     */
     private fun downloadMlKit(label: String) {
         if (huModelPresent()) return
         MlKitModels.ensure(
@@ -345,7 +308,6 @@ class ModelDownloadService : Service() {
             20 * 60L
         )
     }
-
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = getSystemService(NotificationManager::class.java)
@@ -356,7 +318,6 @@ class ModelDownloadService : Service() {
             }
         )
     }
-
     private fun startAsForeground(text: String) {
         val notif = buildNotif(text)
         if (Build.VERSION.SDK_INT >= 34) {
@@ -365,10 +326,7 @@ class ModelDownloadService : Service() {
             startForeground(NOTIF_ID, notif)
         }
     }
-
     @Volatile private var lastNotifMs = 0L
-
-    /** Az Android eldobja a túl gyakori értesítésfrissítéseket (akár a végsőt is), ezért legfeljebb ~1/mp. */
     private fun updateNotif(text: String, force: Boolean = false) {
         val now = SystemClock.elapsedRealtime()
         if (!force && now - lastNotifMs < 1000) return
@@ -376,7 +334,6 @@ class ModelDownloadService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIF_ID, buildNotif(text))
     }
-
     private fun buildNotif(text: String): Notification {
         val open = PendingIntent.getActivity(
             this, 0,
@@ -408,7 +365,6 @@ class ModelDownloadService : Service() {
             .addAction(0, "Megszakítás", cancelPi)
             .build()
     }
-
     private fun stopFg() {
         try {
             if (Build.VERSION.SDK_INT >= 24) stopForeground(STOP_FOREGROUND_DETACH)
@@ -416,10 +372,7 @@ class ModelDownloadService : Service() {
         } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
         stopSelf()
     }
-
     override fun onDestroy() {
-        // Ne állítsuk le a letöltést Activity onDestroy miatt – a service önálló.
-        // Csak ha a rendszer öli meg a service-t, a Range folytatás a partial fájlból megy.
         try { wakeLock?.release() } catch (e: Exception) { DiagLog.swallow("ModelDownloadService", e) }
         super.onDestroy()
     }

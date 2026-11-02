@@ -1,9 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Szereplők nevei az angol átiratból: a mondat közben nagybetűvel írt, többször előforduló szavak
- * (megszólítások vesszővel is számítanak). A fordítónak háttérként adjuk, hogy a neveket ne fordítsa le.
- */
 object NameExtractor {
     private val STOP = setOf(
         "i", "i'm", "i'll", "i've", "i'd", "oh", "okay", "ok", "yeah", "yes", "no", "well", "hey", "hi", "hello", "god",
@@ -16,8 +11,6 @@ object NameExtractor {
         "thursday", "friday", "saturday", "sunday", "english", "yep", "nope", "ah", "aha", "ooh", "ow"
     )
     private val SENT_END = ".?!…\"”"
-
-    /** Egy szöveg mondat közbeni (vagy megszólításként álló) nagybetűs szavai. */
     fun capitalizedTokens(t: String): List<String> {
         val out = ArrayList<String>()
         val toks = t.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
@@ -33,7 +26,6 @@ object NameExtractor {
         }
         return out
     }
-
     fun extract(texts: List<String>, minCount: Int = 2, max: Int = 12): List<String> {
         val counts = LinkedHashMap<String, Int>()
         for (t in texts) for (w in capitalizedTokens(t)) counts[w] = (counts[w] ?: 0) + 1

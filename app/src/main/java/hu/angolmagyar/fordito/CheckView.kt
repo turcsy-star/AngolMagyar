@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
@@ -12,15 +11,9 @@ import android.view.animation.OvershootInterpolator
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
-
-/**
- * "Kész" jelzés: a kör kipattan (overshoot), a pipa belerajzolódik, apró pöttyök szállnak szét.
- * A [play] indítja az animációt; előtte a nézet üres.
- */
 class CheckView @JvmOverloads constructor(
     ctx: Context, attrs: AttributeSet? = null
 ) : View(ctx, attrs) {
-
     private val sizePx = Ui.dp(ctx, 76)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -37,13 +30,10 @@ class CheckView @JvmOverloads constructor(
     private var t = 0f
     private var played = false
     private var anim: ValueAnimator? = null
-
     init {
         fill.color = Ui.color(ctx, R.color.ok)
         dot.color = Ui.color(ctx, R.color.accentGlow)
     }
-
-    /** Elindítja az animációt (többszöri hívás újraindítja). */
     fun play() {
         anim?.cancel()
         played = true
@@ -54,29 +44,22 @@ class CheckView @JvmOverloads constructor(
         }
         performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
     }
-
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(sizePx, sizePx)
     }
-
     override fun onDetachedFromWindow() {
         anim?.cancel()
         super.onDetachedFromWindow()
     }
-
     override fun onDraw(canvas: Canvas) {
         if (!played) return
         val w = width.toFloat()
         val cx = w / 2f
         val cy = height / 2f
         val r = w * 0.36f
-
-        // 1) kör: 0..0.45 között kipattan
         val circleT = (t / 0.45f).coerceIn(0f, 1f)
         val scale = over.getInterpolation(circleT)
         canvas.drawCircle(cx, cy, r * scale, fill)
-
-        // 2) pipa: 0.35..0.85 között rajzolódik
         val u = ((t - 0.35f) / 0.5f).coerceIn(0f, 1f)
         if (u > 0f) {
             path.reset()
@@ -89,8 +72,6 @@ class CheckView @JvmOverloads constructor(
             tick.strokeWidth = w * 0.075f
             canvas.drawPath(seg, tick)
         }
-
-        // 3) szétszálló pöttyök: 0.30..1.0
         val b = ((t - 0.30f) / 0.70f).coerceIn(0f, 1f)
         if (b > 0f && b < 1f) {
             val n = 10

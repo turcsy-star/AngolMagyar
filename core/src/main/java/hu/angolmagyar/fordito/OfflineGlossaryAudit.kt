@@ -1,9 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Deterministic, offline terminology checker. It only reports findings; it never
- * rewrites user text. Callers own persistence and approval of glossary entries.
- */
 object OfflineGlossaryAudit {
     data class Entry(
         val sourceTerm: String,
@@ -12,7 +7,6 @@ object OfflineGlossaryAudit {
         val priority: Int = 0,
         val caseSensitive: Boolean = false
     )
-
     enum class Kind { MISSING_TRANSLATION, ALTERNATE_TRANSLATION, CONFLICTING_ENTRY }
     data class Finding(
         val kind: Kind,
@@ -21,7 +15,6 @@ object OfflineGlossaryAudit {
         val observedTargets: List<String>,
         val message: String
     )
-
     fun audit(source: String, target: String, entries: List<Entry>): List<Finding> {
         if (source.isBlank() || target.isBlank() || entries.isEmpty()) return emptyList()
         val safeEntries = entries.filter {
@@ -52,8 +45,6 @@ object OfflineGlossaryAudit {
         }
         return findings
     }
-
-    /** Returns true only for a whole phrase, not for a substring inside another word. */
     fun containsTerm(text: String, term: String, caseSensitive: Boolean = false): Boolean {
         if (text.isEmpty() || term.isBlank()) return false
         val flags = if (caseSensitive) emptySet() else setOf(RegexOption.IGNORE_CASE)
@@ -61,10 +52,8 @@ object OfflineGlossaryAudit {
         val pattern = Regex("(?<![\\p{L}\\p{N}_])$escaped(?![\\p{L}\\p{N}_])", flags)
         return pattern.containsMatchIn(text)
     }
-
     private fun key(term: String, caseSensitive: Boolean): String =
         if (caseSensitive) term.trim() else term.trim().lowercase()
-
     private const val MAX_TERM_LENGTH = 160
     private const val MAX_DOMAIN_LENGTH = 64
 }

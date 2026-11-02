@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -18,22 +17,13 @@ import androidx.core.view.WindowInsetsCompat
 import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
-
-/**
- * Előkészítés / önellenőrzés: mi hiányzik az induláshoz, és mindegyik mellett a megoldás gombja.
- * Első indításkor magától megnyílik.
- */
 class DiagnosticsActivity : AppCompatActivity() {
-
     private lateinit var prefs: Prefs
     private lateinit var column: LinearLayout
     private var translatorOk: Boolean? = null
-
     private fun dp(v: Int) = Ui.dp(this, v)
-
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { build() }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
@@ -48,13 +38,11 @@ class DiagnosticsActivity : AppCompatActivity() {
         }
         build()
     }
-
     override fun onResume() {
         super.onResume()
         checkTranslator()
         build()
     }
-
     private fun checkTranslator() {
         try {
             val mgr = RemoteModelManager.getInstance()
@@ -72,20 +60,16 @@ class DiagnosticsActivity : AppCompatActivity() {
         } catch (_: Exception) {
         }
     }
-
     private class Row(val title: String, val ok: Boolean?, val detail: String, val action: String?, val run: (() -> Unit)?)
-
     private fun rows(): List<Row> {
         val list = ArrayList<Row>()
         val openModels = { startActivity(Intent(this, ModelsActivity::class.java)) }
-
         val missing = Engines.missingForLive(this, prefs)
         list.add(Row(
             "Felismerő modellek", missing == null,
             missing ?: "Az aktuális beállításhoz minden felismerő megvan.",
             "Modellek", openModels
         ))
-
         val huSys = SystemAsrSupport.onDeviceAvailable(this)
         val huVosk = ModelManager.isInstalled(this, ModelManager.HU_LARGE)
         list.add(Row(
@@ -99,7 +83,6 @@ class DiagnosticsActivity : AppCompatActivity() {
             },
             "Modellek", openModels
         ))
-
         list.add(Row(
             "Fordítómodell (angol ↔ magyar)", translatorOk,
             when (translatorOk) {
@@ -109,7 +92,6 @@ class DiagnosticsActivity : AppCompatActivity() {
             },
             "Modellek", openModels
         ))
-
         val overlay = Settings.canDrawOverlays(this)
         list.add(Row(
             "Megjelenítés más appok fölött", overlay,
@@ -118,7 +100,6 @@ class DiagnosticsActivity : AppCompatActivity() {
         ) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         })
-
         val mic = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         list.add(Row(
@@ -126,7 +107,6 @@ class DiagnosticsActivity : AppCompatActivity() {
             if (mic) "Engedélyezve." else "A hangfelismeréshez kell.",
             "Engedélyezés"
         ) { permLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO)) })
-
         if (Build.VERSION.SDK_INT >= 33) {
             val notif = ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED
@@ -136,7 +116,6 @@ class DiagnosticsActivity : AppCompatActivity() {
                 "Engedélyezés"
             ) { permLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS)) })
         }
-
         val battery = try {
             (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
         } catch (_: Exception) {
@@ -149,15 +128,12 @@ class DiagnosticsActivity : AppCompatActivity() {
         ) {
             BatterySettings.open(this)
         })
-
         val dev = Engines.device(this)
         list.add(Row(
             "Készülék", null,
             dev.summary + if (Engines.onUnmeteredNetwork(this)) " · Wi-Fi" else if (Engines.online(this)) " · mobilnet" else " · nincs net",
             null, null
         ))
-
-        // Modellajánló: a készülék memóriája, tárhelye, magszáma és hőállapota alapján (tájékoztató becslés)
         try {
             val mem = android.app.ActivityManager.MemoryInfo()
             (getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mem)
@@ -180,7 +156,6 @@ class DiagnosticsActivity : AppCompatActivity() {
         } catch (e: Exception) { DiagLog.swallow("DiagnosticsActivity", e) }
         return list
     }
-
     private fun build() {
         column.removeAllViews()
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
@@ -219,7 +194,6 @@ class DiagnosticsActivity : AppCompatActivity() {
             }
             column.addView(card)
         }
-        // P10 accessibility snapshot (informational only)
         run {
             val a11yCard = Ui.card(this)
             a11yCard.addView(TextView(this).apply {

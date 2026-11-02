@@ -1,10 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Fordítás-minőség mérőszám a regressziós tesztekhez: chrF (karakter n-gram F-érték).
- * A szóközöket figyelmen kívül hagyja, a magyar ragozott alakokat jobban tűri, mint a szószintű egyezés.
- * Diagnosztikai mérőszám: a jelentés helyességét nem méri, csak a referenciához való hasonlóságot (0..1).
- */
 object TextMetrics {
     fun chrF(reference: String, hypothesis: String, maxN: Int = 6, beta: Double = 2.0): Double {
         val r = reference.filter { !it.isWhitespace() }

@@ -1,18 +1,14 @@
 package hu.angolmagyar.fordito.intelligence
-
 import android.content.Context
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-
-/** Device-local, privacy-friendly learning telemetry. Stores counters only, never words or sentences. */
 class LearningAnalyticsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("learning_analytics_v1", Context.MODE_PRIVATE)
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
     private fun day(time: Long = System.currentTimeMillis()) = synchronized(dayFormat) { dayFormat.format(Date(time)) }
     private fun key(metric: String, date: String = day()) = "$metric.$date"
-
     @Synchronized fun recordLookup() = increment("lookups")
     @Synchronized fun recordPractice(correct: Boolean) {
         increment("practice")
@@ -22,10 +18,8 @@ class LearningAnalyticsStore(context: Context) {
     @Synchronized private fun increment(metric: String) {
         prefs.edit().putInt(key(metric), (prefs.getInt(key(metric), 0) + 1).coerceAtMost(1_000_000)).apply()
     }
-
     fun setDailyGoal(value: Int) { prefs.edit().putInt("daily_goal", value.coerceIn(1, 500)).apply() }
     fun dailyGoal(): Int = prefs.getInt("daily_goal", 10)
-
     fun snapshot(days: Int = 7, now: Long = System.currentTimeMillis()): List<LearningDay> {
         val calendar = Calendar.getInstance().apply { timeInMillis = now; set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0) }
         return (days.coerceIn(1, 31) - 1 downTo 0).map { offset ->
@@ -35,7 +29,6 @@ class LearningAnalyticsStore(context: Context) {
                 prefs.getInt(key("correct", dateKey), 0), prefs.getInt(key("reviews", dateKey), 0))
         }
     }
-
     fun totals(): LearningTotals {
         val week = snapshot(7)
         val month = snapshot(30)
@@ -46,7 +39,6 @@ class LearningAnalyticsStore(context: Context) {
             activeDays = month.count { it.lookups + it.practices + it.reviews > 0 }, weeklyActivity = week.sumOf { it.lookups + it.practices + it.reviews })
     }
 }
-
 data class LearningDay(val date: String, val lookups: Int, val practices: Int, val correct: Int, val reviews: Int) {
     val activity: Int get() = lookups + practices + reviews
 }

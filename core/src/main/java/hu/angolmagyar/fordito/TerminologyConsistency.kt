@@ -1,28 +1,16 @@
 package hu.angolmagyar.fordito
-
 import java.util.Locale
-
-/**
- * Második menet: a fordított felirat egységesítése az egész videóra.
- *  1) Tulajdonnevek írásváltozatai (pl. "Katherin" / "Katherine") → a leggyakoribb alak;
- *  2) azonos forrásmondat eltérő fordításai → a leggyakoribb fordítás.
- * Óvatos: csak azokban a blokkokban javít, ahol a forrás tartalmazza a nevet / ugyanaz a mondat; a szöveget
- * nem találgatja, a változtatásokat listázza.
- */
 object TerminologyConsistency {
     data class Report(val cues: List<SrtExporter.Cue>, val nameFixes: List<String>, val sentenceFixes: Int) {
         val changed: Boolean get() = nameFixes.isNotEmpty() || sentenceFixes > 0
     }
-
     fun apply(cues: List<SrtExporter.Cue>): Report {
         if (cues.none { it.target.isNotBlank() }) return Report(cues, emptyList(), 0)
         val a = unifyNames(cues)
         val b = unifySentences(a.first)
         return Report(b.first, a.second, b.second)
     }
-
     private val TOKEN = Regex("[\\p{L}\\p{N}]+(?:[-'’][\\p{L}\\p{N}]+)*")
-
     fun levenshtein(a: String, b: String): Int {
         if (a == b) return 0
         val prev = IntArray(b.length + 1) { it }
@@ -36,7 +24,6 @@ object TerminologyConsistency {
         }
         return prev[b.length]
     }
-
     internal fun unifyNames(cues: List<SrtExporter.Cue>): Pair<List<SrtExporter.Cue>, List<String>> {
         val names = LinkedHashSet<String>()
         cues.forEach { c -> names.addAll(TranslationCheck.properNouns(c.source).filter { n -> n.length >= 4 }) }
@@ -47,7 +34,6 @@ object TerminologyConsistency {
             val idxs = out.indices.filter { Regex("(?<![\\p{L}])${Regex.escape(name)}").containsMatchIn(out[it].source) }
             if (idxs.size < 2) continue
             val maxDist = maxOf(1, name.length / 5)
-            // jelölt alapalakok: a tokenek első (név hossza ±1) karaktere, ha elég közel van a névhez
             data class Hit(val cue: Int, val range: IntRange, val base: String)
             val hits = ArrayList<Hit>()
             for (i in idxs) {
@@ -74,7 +60,6 @@ object TerminologyConsistency {
                 name in leaders -> name
                 else -> leaders.first()
             }
-            // csak akkor, ha a kanonikus alak egyértelműen vezet (nem döntetlen két idegen alak között)
             if (leaders.size > 1 && name !in leaders) continue
             var changed = 0
             for (cueIdx in hits.map { it.cue }.distinct()) {
@@ -88,9 +73,7 @@ object TerminologyConsistency {
         }
         return out to fixes
     }
-
     private fun key(s: String) = WordErrorRate.normalize(s).joinToString(" ")
-
     internal fun unifySentences(cues: List<SrtExporter.Cue>): Pair<List<SrtExporter.Cue>, Int> {
         val groups = cues.indices.filter { cues[it].target.isNotBlank() && key(cues[it].source).split(' ').size >= 2 }
             .groupBy { key(cues[it].source) }
@@ -103,7 +86,7 @@ object TerminologyConsistency {
             if (counts.size < 2) continue
             val top = counts.maxOf { it.value }
             val leaders = counts.filter { it.value == top }.keys
-            if (leaders.size > 1 || top < 2) continue // döntetlen vagy nincs ismétlődő változat: nem találgatunk
+            if (leaders.size > 1 || top < 2) continue
             val best = leaders.first()
             for (i in idxs) if (out[i].target.trim() != best) { out[i] = out[i].copy(target = best); fixes++ }
         }

@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.theme
-
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -11,11 +10,6 @@ import androidx.compose.ui.res.colorResource
 import hu.angolmagyar.fordito.R
 import hu.angolmagyar.fordito.Prefs
 import hu.angolmagyar.fordito.ui.design.LuxuryPalettes
-
-/**
- * A Compose témát ugyanazokból az erőforrás-színekből és ugyanabból a kiemelőszínből építi, mint a régi (View)
- * képernyők ([hu.angolmagyar.fordito.Ui]), így a kezdőlap és a többi képernyő egy stílusú.
- */
 @Composable
 fun AngolMagyarTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -35,7 +29,6 @@ fun AngolMagyarTheme(
     val stroke = colorResource(R.color.stroke)
     val err = colorResource(R.color.err)
     val scheme = if (prefs.platinumTheme && darkTheme) {
-        // Sötét prémium mód: a kiválasztott Infinity paletta vezérli a teljes Compose Material 3 témát.
         darkColorScheme(
             primary = luxury.accent,
             secondary = luxury.glow,
@@ -54,7 +47,6 @@ fun AngolMagyarTheme(
             error = Color(0xFFFF7777)
         )
     } else if (prefs.platinumTheme) {
-        // Világos prémium mód: semleges, magas kontrasztú felületek; a választott paletta adja a kiemelést.
         val lightPrimary = if (prefs.luxuryThemeId == "forest") Color(0xFF286448) else Color(0xFF34536B)
         lightColorScheme(
             primary = lightPrimary,

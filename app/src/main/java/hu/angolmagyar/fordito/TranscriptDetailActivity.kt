@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Bundle
@@ -33,32 +32,21 @@ import java.io.File
 import java.io.OutputStream
 import java.util.concurrent.Executors
 import kotlin.math.max
-
-/**
- * Egy átirat részletei: sorok időbélyeggel és beszélővel, keresés (kiemeléssel),
- * sor szerkesztése (a gyakori javításokat megtanulja), beszélő hozzárendelése/átnevezése,
- * hanglejátszás a sor időpontjától (ha van mentett hang), export (SRT, VTT, MD, TXT, DOCX, PDF),
- * összefoglaló döntésekkel és teendőkkel.
- */
 class TranscriptDetailActivity : AppCompatActivity() {
-
     companion object {
         const val EXTRA_FILE = "file"
         const val EXTRA_SEEK_MS = "seek_ms"
         const val EXTRA_QUERY = "query"
         const val EXTRA_TRASHED = "trashed"
     }
-
     private lateinit var prefs: Prefs
     private lateinit var file: File
     private val ui = Handler(Looper.getMainLooper())
     private val bg = Executors.newSingleThreadExecutor()
-
     private val cues = mutableListOf<SrtExporter.Cue>()
     private var rawMode = false
     private var rawText = ""
     private var audio: File? = null
-
     private lateinit var listView: ListView
     private lateinit var titleView: TextView
     private lateinit var infoView: TextView
@@ -66,14 +54,11 @@ class TranscriptDetailActivity : AppCompatActivity() {
     private var shown: List<Int> = emptyList()
     private var filterQuery = ""
     private var highlightQuery = ""
-
     private var player: MediaPlayer? = null
     private var playingIdx = -1
     private var playSeq = 0
     private val stopRun = Runnable { stopPlay() }
-
     private var pendingWriter: ((OutputStream) -> Unit)? = null
-
     private val createLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
             val writer = pendingWriter
@@ -88,12 +73,8 @@ class TranscriptDetailActivity : AppCompatActivity() {
                 }
             }
         }
-
     private fun dp(v: Int) = Ui.dp(this, v)
     private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
-
-    // ------------------------------------------------------------------ életciklus
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
@@ -108,7 +89,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             return
         }
         highlightQuery = intent.getStringExtra(EXTRA_QUERY) ?: ""
-
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         setContentView(root)
         val side = max(0, (resources.displayMetrics.widthPixels - dp(640)) / 2)
@@ -117,8 +97,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             v.setPadding(b.left + side, b.top, b.right + side, b.bottom)
             insets
         }
-
-        // ---- fejléc
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -139,10 +117,8 @@ class TranscriptDetailActivity : AppCompatActivity() {
         moreBtn.setOnClickListener { showMoreMenu(moreBtn) }
         header.addView(moreBtn, LinearLayout.LayoutParams(dp(46), dp(46)).apply { marginStart = dp(8) })
         root.addView(header)
-
         infoView = Ui.small(this, "").apply { setPadding(dp(20), 0, dp(20), dp(4)) }
         root.addView(infoView)
-
         searchBox = AppCompatEditText(this).apply {
             hint = getString(R.string.td_search_hint)
             setSingleLine(true)
@@ -158,13 +134,11 @@ class TranscriptDetailActivity : AppCompatActivity() {
                 }
             })
         }
-        // a címből érkező keresés csak kiemel, nem szűr
         filterQuery = ""
         root.addView(
             searchBox,
             LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(2), dp(16), dp(4)) }
         )
-
         listView = ListView(this).apply {
             divider = android.graphics.drawable.ColorDrawable(Ui.color(this@TranscriptDetailActivity, R.color.stroke))
             dividerHeight = 1
@@ -175,29 +149,22 @@ class TranscriptDetailActivity : AppCompatActivity() {
             setOnItemClickListener { _, _, pos, _ -> shown.getOrNull(pos)?.let { showCueActions(it) } }
         }
         root.addView(listView, LinearLayout.LayoutParams(-1, 0, 1f))
-
         load()
     }
-
     override fun onPause() {
         super.onPause()
         stopPlay()
     }
-
     override fun onDestroy() {
         stopPlay()
         ui.removeCallbacksAndMessages(null)
         bg.shutdown()
         super.onDestroy()
     }
-
-    // ------------------------------------------------------------------ betöltés / mentés
-
     private fun displayTitle(): String {
         val t = TranscriptRepo.readMeta(file).first
         return t.ifBlank { file.nameWithoutExtension.removePrefix("atirat_") }
     }
-
     private fun load() {
         val seek = intent.getLongExtra(EXTRA_SEEK_MS, -1L)
         bg.execute {
@@ -229,14 +196,12 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun updateInfo() {
         val last = cues.maxOfOrNull { it.startMs } ?: 0L
         val s = last / 1000
         val dur = String.format("%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
         val parts = mutableListOf(getString(R.string.tr_entries, cues.size), dur)
         if (!rawMode) {
-            // Gyors, teljes átiratra vonatkozó összesítés; a soronkénti audit továbbra is heurisztikus.
             val reviewCount = cues.count { cue ->
                 cue.source.isNotBlank() && cue.target.isNotBlank() &&
                     cue.source != "…" && cue.target != "…" &&
@@ -249,8 +214,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         if (rawMode) parts.add(getString(R.string.td_raw_mode))
         infoView.text = parts.joinToString("  ·  ")
     }
-
-    /** A cue-lista mentése a fájlba (háttérszálon). */
     private fun persist() {
         if (rawMode) return
         val snap = cues.toList()
@@ -262,7 +225,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun applyFilter() {
         val q = TranscriptRepo.foldKeep(filterQuery)
         shown = if (q.isEmpty()) {
@@ -275,9 +237,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
         (listView.adapter as BaseAdapter).notifyDataSetChanged()
     }
-
-    // ------------------------------------------------------------------ lista
-
     private fun highlight(text: String): CharSequence {
         val q = TranscriptRepo.foldKeep(highlightQuery)
         if (q.isEmpty() || text.isEmpty()) return text
@@ -293,12 +252,10 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
         return sp
     }
-
     private inner class CueAdapter : BaseAdapter() {
         override fun getCount() = shown.size
         override fun getItem(position: Int): Any = shown[position]
         override fun getItemId(position: Int) = shown[position].toLong()
-
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
             val idx = shown[position]
             val c = cues[idx]
@@ -309,7 +266,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
             row.removeAllViews()
             row.setBackgroundColor(if (idx == playingIdx) 0x226366F1 else 0)
-
             val top = LinearLayout(this@TranscriptDetailActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -341,7 +297,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
                 }, LinearLayout.LayoutParams(dp(40), dp(40)))
             }
             row.addView(top)
-
             val main = c.target.ifBlank { c.source }
             row.addView(TextView(this@TranscriptDetailActivity).apply {
                 text = highlight(if (main == "…") "" else main)
@@ -357,7 +312,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
                     setPadding(0, dp(2), 0, 0)
                 })
             }
-            // Nem módosítjuk a fordítást: csak azokat a sorokat jelöljük, amelyek emberi ellenőrzést érdemelhetnek.
             if (c.source.isNotBlank() && c.target.isNotBlank() && c.source != "…" && c.target != "…") {
                 val audit = TranslationQualityAudit.inspect(c.source, c.target)
                 if (audit.needsReview) {
@@ -373,9 +327,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             return row
         }
     }
-
-    // ------------------------------------------------------------------ sor műveletek
-
     private fun showCueActions(idx: Int) {
         val items = mutableListOf<Pair<String, () -> Unit>>()
         if (!rawMode) {
@@ -389,7 +340,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setItems(items.map { it.first }.toTypedArray()) { _, which -> items[which].second() }
             .show()
     }
-
     private fun copyCue(idx: Int) {
         val c = cues[idx]
         val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -398,7 +348,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         )
         toast(R.string.td_copied)
     }
-
     private fun editCue(idx: Int) {
         val old = cues[idx]
         val box = LinearLayout(this).apply {
@@ -433,7 +382,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_cancel, null)
             .show()
     }
-
     private fun askLearn(list: List<VocabLearner.Suggestion>, i: Int) {
         if (i >= list.size) return
         val s = list[i]
@@ -456,12 +404,8 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setCancelable(false)
             .show()
     }
-
-    // ------------------------------------------------------------------ beszélők
-
     private fun speakerNames(): List<String> =
         cues.map { it.speaker }.filter { it.isNotBlank() }.distinct()
-
     private fun pickSpeaker(idx: Int, fromHere: Boolean) {
         val names = speakerNames()
         val labels = names + listOf(getString(R.string.td_speaker_new), getString(R.string.td_speaker_none))
@@ -476,7 +420,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
             .show()
     }
-
     private fun assignSpeaker(idx: Int, name: String, fromHere: Boolean) {
         val clean = name.replace("{", "").replace("}", "").trim()
         var end = idx + 1
@@ -492,7 +435,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         persist()
         applyFilter()
     }
-
     private fun askName(title: String, initial: String, onOk: (String) -> Unit) {
         val input = AppCompatEditText(this).apply {
             setText(initial)
@@ -512,7 +454,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_cancel, null)
             .show()
     }
-
     private fun renameSpeakerEverywhere() {
         val names = speakerNames()
         if (names.isEmpty()) {
@@ -532,9 +473,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
             .show()
     }
-
-    // ------------------------------------------------------------------ hanglejátszás
-
     private fun togglePlay(idx: Int) {
         if (playingIdx == idx) {
             stopPlay()
@@ -577,7 +515,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             toast(R.string.td_audio_error)
         }
     }
-
     private fun stopPlay() {
         ui.removeCallbacks(stopRun)
         playSeq++
@@ -591,9 +528,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             if (::listView.isInitialized) (listView.adapter as BaseAdapter).notifyDataSetChanged()
         }
     }
-
-    // ------------------------------------------------------------------ cím / címke
-
     private fun renameDialog() {
         val (title, tag) = TranscriptRepo.readMeta(file)
         val box = LinearLayout(this).apply {
@@ -625,9 +559,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_cancel, null)
             .show()
     }
-
-    // ------------------------------------------------------------------ menük
-
     private fun showMoreMenu(anchor: View) {
         val pm = PopupMenu(this, anchor)
         var id = 0
@@ -650,7 +581,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
         pm.show()
     }
-
     private fun showExportMenu(anchor: View) {
         val pm = PopupMenu(this, anchor)
         var id = 0
@@ -673,15 +603,10 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
         pm.show()
     }
-
-    // ------------------------------------------------------------------ export
-
     private fun baseName(): String =
         displayTitle().replace(Regex("[^\\p{L}\\p{N}_-]+"), "_").trim('_').ifBlank { "atirat" }
-
     private fun hasTargets(snap: List<SrtExporter.Cue>) =
         snap.any { it.target.isNotBlank() && it.target != "…" }
-
     private fun saveAs(fileName: String, writer: (OutputStream) -> Unit) {
         if (cues.isEmpty()) {
             toast(R.string.td_empty_file)
@@ -690,8 +615,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         pendingWriter = writer
         createLauncher.launch(fileName)
     }
-
-    /** Export előtti minőségkapu: hibákat és figyelmeztetéseket mutat, automatikusan nem javít. */
     private fun confirmSubtitleExport(snap: List<SrtExporter.Cue>, mode: SrtExporter.Mode, onContinue: () -> Unit) {
         val report = SrtQualityCheck.inspect(snap, mode)
         if (report.issues.isEmpty()) {
@@ -731,13 +654,10 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
         dialog.show()
     }
-
-    /** A jelentés 1-alapú sorszámát a szűrt lista tényleges pozíciójára képezi le. */
     private fun jumpToCue(cueNumber: Int) {
         if (!::listView.isInitialized || cues.isEmpty()) return
         val cueIndex = (cueNumber - 1).coerceIn(0, cues.lastIndex)
         if (cueIndex !in shown) {
-            // A hibás sor akkor is elérhető legyen, ha az aktuális keresés elrejti.
             if (::searchBox.isInitialized && filterQuery.isNotEmpty()) searchBox.setText("")
             else applyFilter()
         }
@@ -749,11 +669,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             child?.requestFocus()
         }
     }
-
-    /**
-     * Export előtt: az ismétlődő hallucinációk (pl. "Bye." ×4) kiszűrése és olvasható időzítés
-     * (a napló csak kezdő időt tárol, ezért a blokk-hossz a szöveghosszhoz igazodik).
-     */
     private fun tidyForExport(snap: List<SrtExporter.Cue>): List<SrtExporter.Cue> {
         var w = snap
         try {
@@ -762,7 +677,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         } catch (e: Exception) { DiagLog.swallow("TranscriptDetailActivity", e) }
         return w
     }
-
     private fun exportSrt(mode: SrtExporter.Mode) {
         val snap = cues.toList()
         val m = if (hasTargets(snap)) mode else SrtExporter.Mode.SOURCE_ONLY
@@ -772,7 +686,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun exportVtt() {
         val snap = cues.toList()
         val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
@@ -782,7 +695,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun exportAss() {
         val snap = cues.toList()
         val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
@@ -792,13 +704,10 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
-    /** A minőségkapu minden szöveges és dokumentum-export előtt lefut. */
     private fun confirmDocumentExport(snap: List<SrtExporter.Cue>, onContinue: () -> Unit) {
         val mode = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
         confirmSubtitleExport(snap, mode, onContinue)
     }
-
     private fun exportMd() {
         val snap = cues.toList()
         val title = displayTitle()
@@ -808,7 +717,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun exportTxt() {
         val snap = cues.toList()
         val title = displayTitle()
@@ -818,7 +726,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun exportDocx() {
         val snap = cues.toList()
         val title = displayTitle()
@@ -830,7 +737,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun exportPdf() {
         val snap = cues.toList()
         val title = displayTitle()
@@ -842,7 +748,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun shareText() {
         val text = if (rawMode) rawText else SrtExporter.toTranscriptText(cues)
         val send = Intent(Intent.ACTION_SEND).apply {
@@ -852,9 +757,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
         startActivity(Intent.createChooser(send, getString(R.string.td_share)))
     }
-
-    // ------------------------------------------------------------------ összefoglaló
-
     private fun showSummary() {
         if (cues.isEmpty()) {
             toast(R.string.td_empty_file)
@@ -906,9 +808,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_close, null)
             .show()
     }
-
-    // ------------------------------------------------------------------ tisztítás, szerkesztés, törlés
-
     private fun cleanAll() {
         val cur = SrtExporter.toTranscriptText(cues)
         val cleaned = TextPolish.cleanTranscript(
@@ -921,7 +820,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
         applyFilter()
         toast(R.string.td_cleaned)
     }
-
     private fun editAll() {
         val current = if (rawMode) rawText else SrtExporter.toTranscriptText(cues)
         val input = AppCompatEditText(this).apply {
@@ -946,7 +844,6 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_cancel, null)
             .show()
     }
-
     private fun confirmDelete() {
         AlertDialog.Builder(this)
             .setMessage(R.string.td_delete_confirm)

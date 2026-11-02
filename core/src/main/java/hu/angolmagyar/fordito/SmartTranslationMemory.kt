@@ -1,19 +1,8 @@
 package hu.angolmagyar.fordito
-
 import java.text.Normalizer
-
-/**
- * Conservative, platform-independent translation-memory matching.
- *
- * Memory entries are suggestions, never automatic replacements. Only approved entries
- * for the exact language pair are eligible. Project-scoped entries outrank global ones.
- * If equally scoped approved entries disagree, the result is marked ambiguous.
- * Persistence, encryption and user confirmation belong to the Android/UI adapter.
- */
 object SmartTranslationMemory {
     enum class Status { PENDING, APPROVED, REJECTED, RETIRED }
     enum class Scope { GLOBAL, PROJECT }
-
     data class Entry(
         val source: String,
         val target: String,
@@ -26,7 +15,6 @@ object SmartTranslationMemory {
         val createdAtEpochMs: Long = 0L,
         val updatedAtEpochMs: Long = createdAtEpochMs
     )
-
     data class Match(
         val source: String,
         val candidates: List<Entry>,
@@ -35,18 +23,14 @@ object SmartTranslationMemory {
     ) {
         val preferred: Entry? get() = candidates.firstOrNull()
     }
-
     data class Validation(val valid: Boolean, val errors: List<String>)
-
     fun normalizeText(value: String): String = Normalizer
         .normalize(value.trim(), Normalizer.Form.NFC)
         .lowercase()
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
         .trim()
         .replace(Regex("\\s+"), " ")
-
     fun normalizeLanguage(value: String): String = value.trim().lowercase().replace('_', '-')
-
     fun validate(entry: Entry): Validation {
         val errors = buildList {
             if (entry.source.isBlank()) add("A forrásszöveg nem lehet üres.")
@@ -65,8 +49,6 @@ object SmartTranslationMemory {
         }
         return Validation(errors.isEmpty(), errors)
     }
-
-    /** Finds exact normalized segment matches; no fuzzy or partial matching is performed. */
     fun lookup(
         source: String,
         sourceLanguage: String,
@@ -86,7 +68,6 @@ object SmartTranslationMemory {
                 (entry.scope == Scope.GLOBAL || entry.projectId == projectId)
         }
         if (eligible.isEmpty()) return null
-
         val projectMatches = eligible.filter { it.scope == Scope.PROJECT && it.projectId == projectId }
         val selectedScope = if (projectMatches.isNotEmpty()) Scope.PROJECT else Scope.GLOBAL
         val selected = eligible.filter { it.scope == selectedScope }
@@ -98,18 +79,14 @@ object SmartTranslationMemory {
         )
         return Match(source, ordered, ambiguous = distinctTargets.size > 1)
     }
-
-    /** Adds one usage only after the caller confirms that the suggestion was used. */
     fun recordConfirmedUse(entry: Entry, nowEpochMs: Long): Entry = entry.copy(
         usageCount = (entry.usageCount + 1).coerceAtMost(Int.MAX_VALUE),
         updatedAtEpochMs = nowEpochMs
     )
-
     fun approve(entry: Entry, nowEpochMs: Long): Entry = entry.copy(
         status = Status.APPROVED,
         updatedAtEpochMs = nowEpochMs
     )
-
     fun retire(entry: Entry, nowEpochMs: Long): Entry = entry.copy(
         status = Status.RETIRED,
         updatedAtEpochMs = nowEpochMs

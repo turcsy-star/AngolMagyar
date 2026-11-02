@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,11 +31,6 @@ import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import java.text.DateFormat
 import java.util.Date
-
-/**
- * Local phrasebook with explicit save and SpacedRepetition-backed review (P4).
- * No network; nothing is uploaded.
- */
 class PhrasebookActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +43,6 @@ class PhrasebookActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 private fun PhrasebookScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -61,7 +54,6 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
     var dueQueue by remember { mutableStateOf(store.due()) }
     var reviewIndex by remember { mutableIntStateOf(0) }
     var revealed by remember { mutableStateOf(false) }
-
     val filtered = remember(entries, query) {
         val q = query.trim()
         if (q.isEmpty()) entries
@@ -69,12 +61,10 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             it.source.contains(q, true) || it.translation.contains(q, true)
         }
     }
-
     fun reload() {
         entries = store.all()
         dueQueue = store.due()
     }
-
     Column(
         Modifier
             .fillMaxSize()
@@ -86,7 +76,6 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             Text("Saját szótár", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             TextButton(onClick = onBack) { Text("Vissza") }
         }
-
         if (reviewMode) {
             val current = dueQueue.getOrNull(reviewIndex)
             Text(
@@ -150,7 +139,6 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             }
             return
         }
-
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -158,7 +146,6 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             label = { Text("Keresés") },
             singleLine = true
         )
-
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val dueCount = store.due().size
             Button(
@@ -179,13 +166,11 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
                 modifier = Modifier.weight(1f)
             ) { Text("Összes törlése") }
         }
-
         Text(
             "${filtered.size} kifejezés · ismétlés: SpacedRepetition (helyi)",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
         LazyColumn(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -231,7 +216,6 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             }
         }
     }
-
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },

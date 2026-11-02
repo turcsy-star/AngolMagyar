@@ -1,11 +1,5 @@
 package hu.angolmagyar.fordito
-
-/**
- * Kicsi, függőség nélküli JSON-olvasó/író (a hálózati válaszokhoz és a kérések összeállításához;
- * így JVM-en is tesztelhető). Értékek: Map<String, Any?>, List<Any?>, String, Double, Boolean, null.
- */
 object MiniJson {
-
     fun quote(s: String): String {
         val sb = StringBuilder(s.length + 2)
         sb.append('"')
@@ -24,8 +18,6 @@ object MiniJson {
         sb.append('"')
         return sb.toString()
     }
-
-    /** @throws IllegalArgumentException hibás JSON esetén */
     fun parse(text: String): Any? {
         val p = Parser(text)
         p.ws()
@@ -34,8 +26,6 @@ object MiniJson {
         if (p.pos != text.length) throw IllegalArgumentException("felesleges szöveg a JSON után (${p.pos}. karakter)")
         return v
     }
-
-    /** Az első kiegyensúlyozott [...] rész kivágása (a modell néha körbeírja szöveggel / kódblokkal). */
     fun extractArray(text: String): String? {
         val start = text.indexOf('[')
         if (start < 0) return null
@@ -54,12 +44,9 @@ object MiniJson {
         }
         return null
     }
-
     private class Parser(val s: String) {
         var pos = 0
-
         fun ws() { while (pos < s.length && s[pos].isWhitespace()) pos++ }
-
         fun value(): Any? {
             if (pos >= s.length) throw IllegalArgumentException("váratlan vég")
             return when (val c = s[pos]) {
@@ -72,21 +59,18 @@ object MiniJson {
                 else -> if (c == '-' || c.isDigit()) num() else throw IllegalArgumentException("váratlan karakter '$c' ($pos)")
             }
         }
-
         private fun lit(w: String, v: Any?): Any? {
             if (!s.startsWith(w, pos)) throw IllegalArgumentException("hibás érték ($pos)")
             pos += w.length
             return v
         }
-
         private fun num(): Double {
             val st = pos
             while (pos < s.length && (s[pos].isDigit() || s[pos] in "+-.eE")) pos++
             return s.substring(st, pos).toDoubleOrNull() ?: throw IllegalArgumentException("hibás szám ($st)")
         }
-
         private fun str(): String {
-            pos++ // nyitó "
+            pos++
             val sb = StringBuilder()
             while (pos < s.length) {
                 val c = s[pos++]
@@ -111,7 +95,6 @@ object MiniJson {
             }
             throw IllegalArgumentException("lezáratlan string")
         }
-
         private fun arr(): List<Any?> {
             pos++
             val out = ArrayList<Any?>()
@@ -127,7 +110,6 @@ object MiniJson {
                 }
             }
         }
-
         private fun obj(): Map<String, Any?> {
             pos++
             val out = LinkedHashMap<String, Any?>()

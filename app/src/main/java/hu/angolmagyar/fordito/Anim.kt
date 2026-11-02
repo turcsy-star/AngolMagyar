@@ -1,24 +1,12 @@
 package hu.angolmagyar.fordito
-
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
 import android.widget.TextView
 import kotlin.math.ceil
-
-/**
- * Kis animációs segédek a View-alapú képernyőkhöz (v2.22.3: a v2.22.0-ban elveszett, most újraírva).
- */
 object Anim {
     private val main = Handler(Looper.getMainLooper())
-
-    /** Staggered fade + csúszás a gyerek view-kra (lásd [Ui.animateIn]). */
     fun staggerIn(parent: ViewGroup, stepMs: Long = 60) = Ui.animateIn(parent, stepMs)
-
-    /**
-     * A szöveget "begépeli": a [from] karakterig már látható rész marad, a többi gyorsan, lépésenként jelenik meg.
-     * Új hívás megszakítja az előző, még futó gépelést ugyanazon a TextView-n.
-     */
     fun typeInto(tv: TextView, full: String, from: Int = 0, totalMs: Long = 500L) {
         (tv.getTag(R.id.tag_type_anim) as? Runnable)?.let { main.removeCallbacks(it) }
         val start = from.coerceIn(0, full.length)

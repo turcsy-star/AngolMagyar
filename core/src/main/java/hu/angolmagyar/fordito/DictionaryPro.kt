@@ -1,18 +1,10 @@
 package hu.angolmagyar.fordito
-
 import java.text.Normalizer
 import java.util.Locale
-
-/**
- * Offline szótár többjelentésű és „hamis barát” szavakkal, szófajokkal, példamondatokkal és kiejtési / használati tippekkel.
- * Kurált alapkészlet, nem teljes lexikai adatbázis; a felhasználó saját (CSV-ből betöltött) szótára ettől külön él.
- */
 object DictionaryPro {
-
     data class Sense(val pos: String, val meanings: List<String>) {
         fun line(): String = "$pos ${meanings.joinToString(", ")}"
     }
-
     data class Entry(
         val word: String,
         val senses: List<Sense>,
@@ -20,15 +12,10 @@ object DictionaryPro {
         val exampleHu: String,
         val tip: String
     ) {
-        /** A szócikk jelentései egy sorban (pl. „fn. cím; ige megszólít, kezel”). */
         fun meaningLine(): String = senses.joinToString("; ") { it.line() }
     }
-
     enum class MatchKind { EXACT, PREFIX, CONTAINS, MEANING }
-
     data class Hit(val entry: Entry, val kind: MatchKind)
-
-    // szó | szófaj: jelentés, jelentés; szófaj: jelentés | példa | magyar példa | tipp
     private val RAW = listOf(
         "actually|hsz.:valójában, tulajdonképpen|Actually, I agree.|Tulajdonképpen egyetértek.|Hamis barát: nem „aktuálisan” (az a currently).",
         "address|fn.:cím; ige:megszólít, kezel (problémát)|What is your address?|Mi a címed?|",
@@ -132,9 +119,7 @@ object DictionaryPro {
         "make sure|kif.:megbizonyosodik|Make sure it's off.|Győződj meg róla, hogy ki van kapcsolva.|",
         "used to|kif.:régen szokott|I used to smoke.|Régen dohányoztam.|A „be used to + -ing” más: hozzászokott."
     )
-
     val entries: List<Entry> by lazy { RAW.map { parse(it) } }
-
     private fun parse(line: String): Entry {
         val p = line.split("|")
         val senses = p[1].split(";").map { it.trim() }.filter { it.isNotEmpty() }.map { part ->
@@ -144,16 +129,9 @@ object DictionaryPro {
         }
         return Entry(p[0].trim(), senses, p.getOrElse(2) { "" }, p.getOrElse(3) { "" }, p.getOrElse(4) { "" })
     }
-
     private fun fold(s: String): String =
         Normalizer.normalize(s.lowercase(Locale.ROOT), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-
     fun lookup(word: String): Entry? = entries.firstOrNull { it.word.equals(word.trim(), ignoreCase = true) }
-
-    /**
-     * Keresés angol szóra (pontos → előtag → tartalmazza) és magyar jelentésre (ékezet nélkül is).
-     * A találatok a pontosság szerint rendezettek.
-     */
     fun search(query: String, limit: Int = 12): List<Hit> {
         val q = query.trim()
         if (q.isEmpty()) return emptyList()

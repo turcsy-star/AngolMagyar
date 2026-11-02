@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -27,9 +26,7 @@ import hu.angolmagyar.fordito.core.db.ReviewScheduleEntity
 import hu.angolmagyar.fordito.intelligence.PronunciationAssessment
 import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
-
 private const val MAX_DOCUMENT_CHARS = 200_000
-
 class UltimateEcosystemActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,7 +35,6 @@ class UltimateEcosystemActivity : ComponentActivity() {
         setContent { AngolMagyarTheme(isTrueBlack = prefs.oledBlack) { UltimateEcosystemScreen(onBack = { finish() }) } }
     }
 }
-
 @Composable
 private fun UltimateEcosystemScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -81,7 +77,7 @@ private fun UltimateEcosystemScreen(onBack: () -> Unit) {
     val speechLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         speechText = if (result.resultCode == Activity.RESULT_OK)
             result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull().orEmpty() else ""
-        status = if (speechText.isBlank()) "Nem érkezett beszédfelismerési eredmény." else "A rendszer beszédfelismerője szöveget adott vissza; a pontosságot ellenőrizd." 
+        status = if (speechText.isBlank()) "Nem érkezett beszédfelismerési eredmény." else "A rendszer beszédfelismerője szöveget adott vissza; a pontosságot ellenőrizd."
     }
     LaunchedEffect(Unit) {
         runCatching {
@@ -205,6 +201,5 @@ private fun UltimateEcosystemScreen(onBack: () -> Unit) {
         Text("Fontos: a külső AI, valós idejű fonémaelemzés, OCR, biometria és automatikus felhőszinkron csak külön integrációval és engedélyekkel valósítható meg; ez a kiadás nem állítja ezek meglétét.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
 @Composable private fun SectionTitle(title: String, subtitle: String) { Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Text(title, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold); Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
 @Composable private fun RowScope.Metric(label: String, value: String) { Column(Modifier.weight(1f)) { Text(value, fontWeight = FontWeight.Bold); Text(label, style = MaterialTheme.typography.labelSmall) } }

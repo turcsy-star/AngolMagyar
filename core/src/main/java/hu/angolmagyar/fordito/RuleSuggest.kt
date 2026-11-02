@@ -1,10 +1,6 @@
 package hu.angolmagyar.fordito
-
-/** A felhasználó kézi javításából szabály-javaslat ("régi=új"): a két szöveg eltérő középső szakasza. */
 object RuleSuggest {
     private fun words(t: String) = t.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-
-    /** @return (régi, új) szópár / szakasz, vagy null, ha nincs egyértelmű, rövid eltérés */
     fun diff(old: String, new: String, maxWords: Int = 4): Pair<String, String>? {
         val a = words(old)
         val b = words(new)
@@ -17,14 +13,11 @@ object RuleSuggest {
         val to = b.subList(p, b.size - s).joinToString(" ")
         if (from.isBlank() || to.isBlank()) return null
         if (words(from).size > maxWords || words(to).size > maxWords) return null
-        // központozás nélküli alak: a szabály szóhatáron illeszkedik
         val f = from.trim(',', '.', '!', '?', ';', ':', ' ')
         val t = to.trim(',', '.', '!', '?', ';', ':', ' ')
         if (f.isBlank() || t.isBlank() || f.equals(t, ignoreCase = false)) return null
         return f to t
     }
-
-    /** Hozzáadja a szabályt a meglévő listához (sorok: "régi=új"); true, ha új volt. */
     fun add(existing: String, from: String, to: String): Pair<String, Boolean> {
         val line = "$from=$to"
         val has = existing.lines().any { it.trim().equals(line, ignoreCase = true) }

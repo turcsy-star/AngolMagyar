@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,7 +30,6 @@ import hu.angolmagyar.fordito.Prefs
 import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import kotlinx.coroutines.launch
-
 class ReviewCoachActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,7 +38,6 @@ class ReviewCoachActivity : ComponentActivity() {
         setContent { AngolMagyarTheme(isTrueBlack = prefs.oledBlack) { ReviewCoachScreen(onBack = { finish() }) } }
     }
 }
-
 @Composable
 private fun ReviewCoachScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -52,7 +49,6 @@ private fun ReviewCoachScreen(onBack: () -> Unit) {
     var revealed by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("A tanulókártyák betöltése…") }
     var dueCount by remember { mutableIntStateOf(0) }
-
     fun reload() {
         scope.launch {
             runCatching {

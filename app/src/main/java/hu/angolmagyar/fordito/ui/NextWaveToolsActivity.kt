@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.os.Bundle
 import android.content.Intent
 import android.net.Uri
@@ -55,7 +54,6 @@ import hu.angolmagyar.fordito.ui.design.rememberAccessibilitySnapshot
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import hu.angolmagyar.fordito.intelligence.SynonymEngine
 import hu.angolmagyar.fordito.intelligence.PronunciationAssessment
-
 class NextWaveToolsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,7 +66,6 @@ class NextWaveToolsActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 private fun NextWaveTools(onBack: () -> Unit) {
     var source by remember { mutableStateOf("") }

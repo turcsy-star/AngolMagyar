@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
@@ -7,15 +6,6 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
-
-/**
- * Élő magyar (vagy más nyelvű) felismerés Whisper-rel.
- *
- * A hangot [feed] adja be 16 kHz mono PCM-ként. Egyszerű energia-VAD-del
- * beszédszakaszokat gyűjt, majd háttérszálon futtatja a Whisper-t.
- * Így elkerüljük a rendszer ASR (Google) „kliens hiba” problémáját,
- * amikor a Whisper modell telepítve van.
- */
 class LiveWhisperAsr(
     private val ctx: Context,
     private val lang: String,
@@ -25,27 +15,20 @@ class LiveWhisperAsr(
         fun onPartial(text: String)
         fun onFinal(text: String)
         fun onFatal(message: String)
-        /** A szakasz hangjával együtt (beszélő-azonosításhoz); alapértelmezésben csak a szöveget adja tovább. */
         fun onFinalAudio(text: String, audio: FloatArray) { onFinal(text) }
     }
-
     private val main = Handler(Looper.getMainLooper())
     private val running = AtomicBoolean(false)
     private val busy = AtomicBoolean(false)
-
     private var whisper: WhisperNative? = null
     private var worker: Thread? = null
     private val queue = LinkedBlockingQueue<ShortArray>(64)
-
-    // --- VAD / szegmens állapot ---
-    private val acc = ArrayList<Short>(16_000 * 12) // max ~12 s
+    private val acc = ArrayList<Short>(16_000 * 12)
     private var speechMs = 0
     private var silenceMs = 0
     private var inSpeech = false
     private var lastPartial = ""
     private var prevTail = ""
-
-    // Tunable
     private val frameMs = 30
     private val sampleRate = 16_000
     private val frameSamples = sampleRate * frameMs / 1000
@@ -53,7 +36,6 @@ class LiveWhisperAsr(
     private val endSilenceMs = 700
     private val maxSegMs = 12_000
     private val energyThresh = 380f
-
     fun start() {
         if (running.getAndSet(true)) return
         val spec = Engines.whisperSpec(ctx)
@@ -76,8 +58,6 @@ class LiveWhisperAsr(
             it.start()
         }
     }
-
-    /** 16 kHz mono PCM – bármelyik szálról hívható. */
     fun feed(data: ShortArray, len: Int) {
         if (!running.get() || len <= 0) return
         val copy = data.copyOfRange(0, len)
@@ -86,7 +66,6 @@ class LiveWhisperAsr(
             queue.offer(copy)
         }
     }
-
     fun stop() {
         running.set(false)
         queue.clear()
@@ -104,7 +83,6 @@ class LiveWhisperAsr(
             inSpeech = false
         }
     }
-
     private fun processLoop() {
         val frame = ShortArray(frameSamples)
         var framePos = 0
@@ -114,7 +92,6 @@ class LiveWhisperAsr(
             } catch (_: InterruptedException) {
                 break
             } ?: continue
-
             var i = 0
             while (i < chunk.size && running.get()) {
                 val take = minOf(frameSamples - framePos, chunk.size - i)
@@ -127,10 +104,8 @@ class LiveWhisperAsr(
                 }
             }
         }
-        // kilépéskor ha van nyitott beszéd, próbáljuk lezárni
         flushSegment(force = true)
     }
-
     private fun processFrame(frame: ShortArray) {
         var sum = 0.0
         for (s in frame) {
@@ -139,7 +114,6 @@ class LiveWhisperAsr(
         }
         val rms = sqrt(sum / frame.size).toFloat()
         val speech = rms >= energyThresh
-
         synchronized(acc) {
             if (speech) {
                 if (!inSpeech) {
@@ -151,19 +125,16 @@ class LiveWhisperAsr(
                 for (s in frame) acc.add(s)
             } else if (inSpeech) {
                 silenceMs += frameMs
-                for (s in frame) acc.add(s) // kis csend a végén segít
+                for (s in frame) acc.add(s)
                 if (silenceMs >= endSilenceMs && speechMs >= minSpeechMs) {
                     flushSegment(force = false)
                 }
             }
-
-            // túl hosszú szegmens → kényszerített vágás
             if (inSpeech && speechMs >= maxSegMs) {
                 flushSegment(force = true)
             }
         }
     }
-
     private fun flushSegment(force: Boolean) {
         val samples: ShortArray
         synchronized(acc) {
@@ -183,17 +154,13 @@ class LiveWhisperAsr(
             silenceMs = 0
             inSpeech = false
         }
-
-        // Az utolsó 3 szakaszt sorba állítjuk (több beszélő közt gyors váltásnál se vesszen el mondat).
         synchronized(pending) {
             pending.addLast(samples)
             while (pending.size > 3) pending.removeFirst()
         }
         drain()
     }
-
     private val pending = java.util.ArrayDeque<ShortArray>()
-
     private fun drain() {
         if (!busy.compareAndSet(false, true)) return
         val w = whisper
@@ -213,23 +180,21 @@ class LiveWhisperAsr(
             if (running.get() && synchronized(pending) { pending.isNotEmpty() }) drain()
         }, "whisper-seg").also { it.isDaemon = true; it.start() }
     }
-
     private fun transcribeOne(w: WhisperNative, samples: ShortArray) {
         try {
             val audio = FloatArray(samples.size)
             for (i in samples.indices) audio[i] = samples[i] / 32768f
-            // Automatikus nyelvfelismerésnél nincs prompt: egy adott nyelvű prompt a felismerést arra a nyelvre húzná.
             val auto = lang.equals("auto", ignoreCase = true)
             val prompt = if (auto) "" else WhisperPrompt.build(
                 lang = lang,
                 prevTail = prevTail,
                 domain = "general"
             )
-            val beam = AsrPrefs.beam(ctx).coerceIn(1, 3) // élőben ne legyen túl lassú
+            val beam = AsrPrefs.beam(ctx).coerceIn(1, 3)
             val code = w.transcribe(
                 audio, lang, Perf.whisperThreads(), beam, prompt, null, null
             )
-            if (code != 0) return // átmeneti hiba – ne öljük meg a munkamenetet
+            if (code != 0) return
             val segs = w.segments()
             val text = segs.joinToString(" ") { it.text }.trim()
             if (text.isNotBlank()) {
@@ -240,7 +205,6 @@ class LiveWhisperAsr(
                 }
             }
         } catch (t: Throwable) {
-            // ne legyen fatális az egyedi chunk hiba
         }
     }
 }

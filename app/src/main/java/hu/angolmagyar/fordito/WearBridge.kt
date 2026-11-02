@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -7,25 +6,12 @@ import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
-
-/**
- * Telefon ↔ Wear OS Data Layer híd.
- *
- * Útvonalak:
- *  - /am/cmd          üzenet: "start_mic" | "start_ptt" | "stop" | "toggle_pause" | "switch_dir"
- *  - /am/status       DataItem: running, paused, mode, lastHu, lastEn, warn
- *
- * Az óra modul (`:wear`) ugyanazt a protocolt használja.
- */
 object WearBridge : MessageClient.OnMessageReceivedListener {
-
     private const val TAG = "WearBridge"
     const val PATH_CMD = "/am/cmd"
     const val PATH_STATUS = "/am/status"
-
     @Volatile private var bound = false
     private var appCtx: Context? = null
-
     fun start(ctx: Context) {
         if (bound) return
         appCtx = ctx.applicationContext
@@ -37,7 +23,6 @@ object WearBridge : MessageClient.OnMessageReceivedListener {
             Log.w(TAG, "Wear nem elérhető: ${e.message}")
         }
     }
-
     fun stop(ctx: Context) {
         if (!bound) return
         try {
@@ -46,8 +31,6 @@ object WearBridge : MessageClient.OnMessageReceivedListener {
         }
         bound = false
     }
-
-    /** Állapot küldése az órára. */
     fun pushStatus(ctx: Context, lastHu: String = "", lastEn: String = "") {
         try {
             val req = PutDataMapRequest.create(PATH_STATUS).apply {
@@ -64,7 +47,6 @@ object WearBridge : MessageClient.OnMessageReceivedListener {
             Log.d(TAG, "pushStatus: ${e.message}")
         }
     }
-
     override fun onMessageReceived(event: MessageEvent) {
         if (event.path != PATH_CMD) return
         val cmd = String(event.data, Charsets.UTF_8)

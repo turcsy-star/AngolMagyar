@@ -1,21 +1,11 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
-
-/**
- * Projekt (pl. egy sorozat): saját szereplő-lista, téma, beszélő-stílus és szótár-javítások.
- * Projekt nélkül ("") a globális beállítások érvényesek.
- */
 object Projects {
     private fun p(ctx: Context) = Prefs(ctx).raw()
-
     fun list(ctx: Context): List<String> =
         (p(ctx).getString("projList", "") ?: "").lines().map { it.trim() }.filter { it.isNotEmpty() }
-
     fun current(ctx: Context): String = p(ctx).getString("projCur", "") ?: ""
-
     fun setCurrent(ctx: Context, name: String) { p(ctx).edit().putString("projCur", name.trim()).apply() }
-
     fun add(ctx: Context, name: String) {
         val n = name.trim().replace('\n', ' ')
         if (n.isEmpty()) return
@@ -23,24 +13,16 @@ object Projects {
         if (l.none { it.equals(n, true) }) p(ctx).edit().putString("projList", (l + n).joinToString("\n")).apply()
         setCurrent(ctx, n)
     }
-
     private fun key(ctx: Context, field: String) = "proj.${current(ctx)}.$field"
-
-    /** A jelenlegi projekt mezője; projekt nélkül a globális mező. */
     fun get(ctx: Context, field: String): String = p(ctx).getString(key(ctx, field), "") ?: ""
-
     fun set(ctx: Context, field: String, value: String) {
         p(ctx).edit().putString(key(ctx, field), value).apply()
     }
-
-    /** Szabályok: globális + a projekté. */
     fun huRules(ctx: Context): String {
         val g = Prefs(ctx).huFixes
         val pr = get(ctx, "huFixes")
         return if (pr.isBlank()) g else g + "\n" + pr
     }
-
-    /** Szabály hozzáadása a projekt (ha van) vagy a globális listához. */
     fun addHuRule(ctx: Context, from: String, to: String): Boolean {
         if (current(ctx).isNotEmpty()) {
             val r = RuleSuggest.add(get(ctx, "huFixes"), from, to)
@@ -51,10 +33,7 @@ object Projects {
         Prefs(ctx).huFixes = r.first
         return r.second
     }
-
     fun names(ctx: Context): List<String> = NameFix.parseNames(get(ctx, "cast"))
-
-    /** Háttér az online fordítónak: téma, szereplők, beszélők viszonya. */
     fun contextHint(ctx: Context): String = buildString {
         val topic = get(ctx, "topic").trim()
         val cast = get(ctx, "cast").trim()
@@ -64,16 +43,11 @@ object Projects {
         if (style.isNotEmpty()) append("Beszélők viszonya, stílus: ").append(style).append('\n')
     }.trim()
 }
-
-/** Fordítási memória tárolása (app privát fájl) + egyszerű gyorsítótár.
- * v2.29.0: egyetlen forrás (fájl); a Room-kettősírás megszűnt. */
 object TranslationMemoryStore {
     private var cache: TranslationMemory? = null
     private fun file(ctx: Context) = java.io.File(ctx.filesDir, "tm.tsv")
-
     fun enabled(ctx: Context): Boolean = Prefs(ctx).raw().getBoolean("tmEnabled", true)
     fun setEnabled(ctx: Context, v: Boolean) { Prefs(ctx).raw().edit().putBoolean("tmEnabled", v).apply() }
-
     @Synchronized
     fun get(ctx: Context): TranslationMemory {
         cache?.let { return it }
@@ -82,7 +56,6 @@ object TranslationMemoryStore {
         cache = tm
         return tm
     }
-
     @Synchronized
     fun record(ctx: Context, cues: List<SrtExporter.Cue>) {
         if (!enabled(ctx)) return
@@ -93,10 +66,7 @@ object TranslationMemoryStore {
             tmp.writeText(tm.toText(), Charsets.UTF_8)
             if (!tmp.renameTo(f)) { f.writeText(tm.toText(), Charsets.UTF_8); tmp.delete() }
         } catch (e: Exception) { DiagLog.log("TM mentés sikertelen: ${e.message}") }
-        // A fájl az egyetlen igazságforrás. A korábbi Room-kettősírás (szálanként runBlocking) megszűnt:
-        // olvasója nem volt, csak párhuzamos szálakat és lemezírást okozott.
     }
-
     @Synchronized
     fun clear(ctx: Context) {
         cache = TranslationMemory()

@@ -1,10 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Párbeszéd-megjelenítés gondolatjellel ("- Szia.\n- Szia!") a "Beszélő: szöveg" előtag helyett.
- * Egymás utáni, rövid szünettel követő blokkok, ha más-más beszélőtől vannak, egy blokkba olvadnak (ha belefér az
- * olvashatósági korlátba); különben a beszélőváltás a blokk elején kap gondolatjelet.
- */
 object DialogueDash {
     fun apply(
         cues: List<SrtExporter.Cue>,
@@ -37,7 +31,6 @@ object DialogueDash {
         }
         return out
     }
-
     private fun dash(t: String) = if (t.isBlank()) t else "- " + t.trim().removePrefix("-").trim()
     private fun join(a: String, b: String): String = when {
         a.isBlank() && b.isBlank() -> ""
@@ -45,7 +38,6 @@ object DialogueDash {
         b.isBlank() -> a
         else -> dash(a) + "\n" + dash(b)
     }
-
     private fun canMerge(a: SrtExporter.Cue, b: SrtExporter.Cue, gap: Long, maxMs: Long, maxChars: Int): Boolean {
         if (a.speaker.isBlank() || b.speaker.isBlank() || a.speaker == b.speaker) return false
         if (b.startMs - a.endMs !in 0..gap && b.startMs < a.endMs - gap) return false

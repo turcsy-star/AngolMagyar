@@ -1,19 +1,13 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
-
-/** Egy mappa (és almappái) videóinak / hangfájljainak keresése, amelyekhez még nincs .srt. */
 object FolderScan {
     private val EXT = setOf(
         "mp4", "mkv", "avi", "mov", "webm", "m4v", "3gp", "ts",
         "mp3", "wav", "m4a", "flac", "ogg", "opus", "aac", "wma"
     )
-
     data class Found(val uri: Uri, val name: String)
-
-    /** @return a feldolgozatlan (nincs mellette azonos nevű kezdetű .srt) fájlok, legfeljebb [max] db */
     fun scan(ctx: Context, tree: Uri, max: Int = 300): List<Found> {
         val out = ArrayList<Found>()
         try {
@@ -23,11 +17,10 @@ object FolderScan {
         }
         return out
     }
-
     private fun walk(ctx: Context, tree: Uri, parentId: String, out: MutableList<Found>, max: Int, depth: Int) {
         if (depth > 6 || out.size >= max) return
         val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
-        val files = ArrayList<Pair<String, String>>() // (docId, name)
+        val files = ArrayList<Pair<String, String>>()
         val dirs = ArrayList<String>()
         ctx.contentResolver.query(
             children,

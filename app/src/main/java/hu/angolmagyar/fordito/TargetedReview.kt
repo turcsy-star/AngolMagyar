@@ -1,31 +1,19 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.net.Uri
 import hu.angolmagyar.fordito.core.review.ReviewIntelligence
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
-
-/**
- * Célzott újrafelismerés: csak a minőségellenőrző által kritikusnak/magasnak jelölt sorok hangszakaszát
- * futtatja újra nagyobb nyalábbal (és ha van, a large-v3 modellel). Nem ír át semmit magától:
- * javaslatokat ad, amelyeket a felhasználó fogad el vagy vet el.
- */
 object TargetedReview {
-
-    /** Egy javaslat: a [first]..[last] sorok helyére [fresh] kerülne. */
     class Proposal(
         val first: Int, val last: Int,
         val old: List<SrtExporter.Cue>, val fresh: List<SrtExporter.Cue>,
-        /** Az új eredmény átlagos megbízhatósága jobb-e a réginél. */
         val better: Boolean
     ) {
         fun oldText() = old.joinToString(" ") { it.source }.trim()
         fun newText() = fresh.joinToString(" ") { it.source }.trim()
         val changed: Boolean get() = oldText() != newText()
     }
-
-    /** A kijelölt sorindexeket összefüggő szakaszokba fogja (egy szakasz legfeljebb 25 mp). */
     fun groups(indices: List<Int>, cues: List<SrtExporter.Cue>): List<IntRange> {
         val sorted = indices.filter { it in cues.indices }.distinct().sorted()
         if (sorted.isEmpty()) return emptyList()
@@ -38,8 +26,6 @@ object TargetedReview {
         out.add(gs..ge)
         return out
     }
-
-    /** A kiválasztandó sorok: a kritikus/magas jelzésű sorok, a keretek (sor, hang-másodperc) szerint. */
     fun pickLines(
         summary: ReviewIntelligence.ReviewSummary,
         maxLines: Int = 16, maxAudioSeconds: Int = 240
@@ -50,11 +36,6 @@ object TargetedReview {
         )
         return ReviewIntelligence.planTargetedReview(strong, maxLines, maxAudioSeconds)
     }
-
-    /**
-     * Hosszú művelet: háttérszálról hívandó. A teljes hangot ideiglenes PCM-fájlba dekódolja, majd a szakaszokat
-     * újrafelismeri. Hibánál kivételt dob, megszakításnál üres listát ad.
-     */
     fun run(
         ctx: Context, uri: Uri, cues: List<SrtExporter.Cue>, lines: List<Int>, srcLang: String,
         cancel: AtomicBoolean, status: (String) -> Unit
@@ -88,8 +69,6 @@ object TargetedReview {
             try { pcm.delete() } catch (e: Exception) { DiagLog.swallow("TargetedReview", e) }
         }
     }
-
-    /** A kiválasztott javaslatok alkalmazása (hátulról előre, hogy az indexek ne csússzanak el). */
     fun apply(cues: List<SrtExporter.Cue>, chosen: List<Proposal>): List<SrtExporter.Cue> {
         val out = ArrayList(cues)
         for (p in chosen.sortedByDescending { it.first }) {

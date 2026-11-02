@@ -1,8 +1,5 @@
 package hu.angolmagyar.fordito.ultimate
-
 import kotlin.math.roundToInt
-
-/** Deterministic, offline-first learning utilities. No remote AI capability is implied. */
 data class SkillSnapshot(
     val vocabulary: Int = 35,
     val grammar: Int = 35,
@@ -21,9 +18,7 @@ data class SkillSnapshot(
         in 50..64 -> "B2"; in 65..79 -> "C1"; else -> "C2"
     }
 }
-
 data class Scenario(val title: String, val prompt: String, val target: String, val hint: String)
-
 object UltimateLearningEngine {
     val scenarios = listOf(
         Scenario("Étterem", "You are at a restaurant. Ask for a table for two and the menu.", "Udvarias kérés és kérdő mondatok", "Could we have a table for two, please?"),
@@ -32,7 +27,6 @@ object UltimateLearningEngine {
         Scenario("Üzleti tárgyalás", "Suggest a new delivery date and explain the reason.", "Javaslattétel és indoklás", "I would suggest moving the delivery to…"),
         Scenario("Telefon", "Call a company and ask to speak to the accounts department.", "Telefonos fordulatok", "Could I speak to someone in accounts, please?")
     )
-
     fun wordCount(text: String): Int = Regex("\\b[\\p{L}\\p{N}’'-]+\\b").findAll(text).count()
     fun estimateReadingMinutes(text: String): Int = (wordCount(text) / 200.0).let { kotlin.math.ceil(it).toInt().coerceAtLeast(if (text.isBlank()) 0 else 1) }
     fun classifyLevel(score: Int): String = when (score.coerceIn(0, 100)) {

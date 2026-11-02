@@ -1,14 +1,10 @@
 package hu.angolmagyar.fordito.core.review
-
 import java.security.MessageDigest
 import java.text.Normalizer
 import hu.angolmagyar.fordito.TranslationCheck
-
-/** Deterministic, offline review helpers. These flag possible problems; they never rewrite transcript text. */
 object ReviewIntelligence {
     enum class Severity { INFO, LOW, MEDIUM, HIGH, CRITICAL }
     enum class Kind { LOW_CONFIDENCE, NUMBER, NEGATION, DATE_OR_TIME, NAME_CANDIDATE, SHORT_FRAGMENT, REPEATED_TEXT, EMPTY_TEXT, BAD_TIMING }
-
     data class Finding(
         val lineIndex: Int,
         val kind: Kind,
@@ -16,19 +12,15 @@ object ReviewIntelligence {
         val explanation: String,
         val evidence: String = ""
     )
-
     data class Line(
         val text: String,
         val confidencePercent: Int? = null,
         val startMs: Long? = null,
         val endMs: Long? = null,
-        /** Ha forrás és fordítás is megvan, a szám/tagadás/név jelzés csak eltérés esetén keletkezik. */
         val source: String? = null,
         val target: String? = null,
-        /** Szó-szintű Whisper-bizonytalanság jelzése (a szerkesztőből). */
         val weakWords: Boolean = false
     )
-
     data class ReviewSummary(
         val totalLines: Int,
         val flaggedLines: Int,
@@ -36,7 +28,6 @@ object ReviewIntelligence {
         val highFindings: Int,
         val findings: List<Finding>
     )
-
     private val numberPattern = Regex("(?<!\\w)(?:\\d{1,3}(?:[ .]\\d{3})+|\\d+)(?:[.,]\\d+)?%?(?!\\w)")
     private val dateTimePattern = Regex("(?i)(?<!\\w)(?:\\d{1,2}[./-]\\d{1,2}(?:[./-]\\d{2,4})?|\\d{1,2}:\\d{2}|\\d{4}[./-]\\d{1,2}[./-]\\d{1,2})(?!\\w)")
     private val negationPattern = Regex("(?i)(?<!\\p{L})(?:nem|se|sem|soha|nincs|nincsen|ne|semmi|not|never|no|none|without)(?!\\p{L})")
@@ -44,8 +35,6 @@ object ReviewIntelligence {
         "nem", "ne", "se", "sem", "nincs", "igen", "nem.", "de", "és", "vagy",
         "no", "not", "yes", "yeah", "yep", "nope", "ok", "okay", "sure", "thanks", "right"
     )
-
-    /** Analyze only. Nothing in this API mutates or autocorrects the supplied lines. */
     fun analyze(lines: List<Line>, lowConfidencePercent: Int = 55): ReviewSummary {
         val findings = mutableListOf<Finding>()
         val seen = HashMap<String, Int>()
@@ -63,7 +52,6 @@ object ReviewIntelligence {
             val paired = !line.source.isNullOrBlank() && !line.target.isNullOrBlank()
             if (line.weakWords) add(Kind.LOW_CONFIDENCE, Severity.MEDIUM, "Gyenge szókonfidencia; hallgasd vissza a jelölt szavakat.")
             if (paired) {
-                // Csak tényleges eltérésre szólunk: a forrásban meglévő szám/tagadás/név hiányzik vagy más a fordításban.
                 for (flag in TranslationCheck.check(line.source!!, line.target!!)) when (flag) {
                     "szám eltér" -> add(Kind.NUMBER, Severity.HIGH, "A forrás és a fordítás számai eltérnek.",
                         numberPattern.findAll(line.source!!).joinToString(", ") { it.value })
@@ -71,7 +59,6 @@ object ReviewIntelligence {
                     "név hiányzik" -> add(Kind.NAME_CANDIDATE, Severity.HIGH, "A forrás egyik neve hiányzik a fordításból.")
                 }
             } else {
-                // Egynyelvű sor: ha ismert és elég magas a bizonyosság, nem jelzünk; ha nem ismert, csak alacsony prioritással.
                 val confident = conf != null && conf >= lowConfidencePercent
                 val unknown = conf == null
                 fun sev(full: Severity) = if (unknown) Severity.values()[maxOf(0, full.ordinal - 2)] else full
@@ -105,8 +92,6 @@ object ReviewIntelligence {
             unique.sortedWith(compareByDescending<Finding> { it.severity.ordinal }.thenBy { it.lineIndex })
         )
     }
-
-    /** Prioritize only the lines selected for review; a zero budget means no work is scheduled. */
     fun planTargetedReview(summary: ReviewSummary, maxLines: Int, maxAudioSeconds: Int,
                            estimatedSecondsPerLine: Int = 8): List<Int> {
         if (maxLines <= 0 || maxAudioSeconds <= 0 || estimatedSecondsPerLine <= 0) return emptyList()
@@ -116,8 +101,6 @@ object ReviewIntelligence {
             .sortedWith(compareByDescending<Finding> { it.severity.ordinal }.thenBy { it.lineIndex })
             .map { it.lineIndex }.distinct().take(capacity).toList()
     }
-
-    /** Stable fingerprint can be used to avoid processing an unchanged audio/text pair twice. */
     fun fingerprint(vararg parts: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         parts.forEach { part ->
@@ -130,12 +113,9 @@ object ReviewIntelligence {
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
-
     private fun normalize(value: String): String = Normalizer.normalize(value.lowercase(), Normalizer.Form.NFC)
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 }
-
-/** Audit entry model for UI/storage integration. Keep before/after values for reversible edits. */
 data class ReviewAuditEntry(
     val timestampEpochMs: Long,
     val lineIndex: Int,
@@ -145,8 +125,6 @@ data class ReviewAuditEntry(
     val acceptedByUser: Boolean,
     val source: String = "manual"
 )
-
-/** A measured benchmark result; WER is intentionally kept separate from semantic critical-error counts. */
 data class RecognitionBenchmark(
     val version: String,
     val referenceId: String,

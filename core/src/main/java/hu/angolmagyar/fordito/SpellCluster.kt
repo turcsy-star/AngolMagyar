@@ -1,9 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Önjavító szótár: egy felvételen belül ugyanaz a név gyakran többféleképpen íródik le (Nina Skye / Nina Sky).
- * A ritka, a gyakori névhez nagyon hasonló alakot a gyakoribbra javítja. Csak nagybetűs szavakkal dolgozik.
- */
 object SpellCluster {
     private fun lev(a: String, b: String): Int {
         var prev = IntArray(b.length + 1) { it }
@@ -17,8 +12,6 @@ object SpellCluster {
         }
         return prev[b.length]
     }
-
-    /** @return ritka alak → gyakori alak */
     fun find(texts: List<String>): Map<String, String> {
         val counts = HashMap<String, Int>()
         for (t in texts) NameExtractor.capitalizedTokens(t).forEach { counts[it] = (counts[it] ?: 0) + 1 }
@@ -36,7 +29,6 @@ object SpellCluster {
         }
         return out
     }
-
     fun apply(text: String, map: Map<String, String>): String {
         var r = text
         for ((from, to) in map) {

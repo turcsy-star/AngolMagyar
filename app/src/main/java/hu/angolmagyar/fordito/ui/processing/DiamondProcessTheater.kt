@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -53,16 +52,6 @@ import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.cos
 import kotlin.math.sin
-
-/**
- * Diamond Process Theater – v3.01
- *
- * Részletgazdag, prémium folyamatvizualizáció:
- * - aktuális művelet „hős” panele élő pulzussal
- * - lépésenkénti sín animált energiával
- * - aktív lépés részletei (progress, komment, élő szöveg)
- * - csökkentett mozgás támogatása
- */
 @Composable
 fun DiamondProcessTheater(
     state: ProcessingUiState,
@@ -74,11 +63,9 @@ fun DiamondProcessTheater(
     val cinema = remember { PremiumMotion.cinemaEnabled(ctx) }
     val stages = state.stages
     if (stages.isEmpty() && !state.running && !state.finished) return
-
     val active = stages.firstOrNull {
         it.status == StageStatus.RUNNING || it.status == StageStatus.WARNING
     } ?: stages.lastOrNull { it.status == StageStatus.COMPLETED || it.status == StageStatus.FAILED }
-
     val pulse = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_pulse")
         inf.animateFloat(
@@ -103,7 +90,6 @@ fun DiamondProcessTheater(
             label = "f"
         ).value
     }
-
     val shape = RoundedCornerShape(20.dp)
     DiamondDepthStack(
         active = state.running,
@@ -162,8 +148,6 @@ fun DiamondProcessTheater(
                 letterSpacing = 1.sp
             )
         }
-
-        // —— Aktuális művelet hős panel ——
         AnimatedContent(
             targetState = active?.title to active?.detail,
             transitionSpec = {
@@ -187,20 +171,14 @@ fun DiamondProcessTheater(
                 remainingMs = state.remainingMs
             )
         }
-
-        // —— Lépés sín ——
         if (stages.isNotEmpty()) {
             StepEnergyRail(stages = stages, flow = flow, reduced = reducedMotion.value)
         }
-
-        // —— Lépéslista vizualizáció ——
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             stages.forEach { stage ->
                 StageRowRich(stage = stage, isActive = stage.index == active?.index, reduced = reducedMotion.value)
             }
         }
-
-        // —— Élő tartalom ——
         AnimatedVisibility(
             visible = state.running && (state.heard.isNotBlank() || state.translated.isNotBlank()),
             enter = fadeIn(tween(if (reducedMotion.value) 0 else 250)),
@@ -235,8 +213,6 @@ fun DiamondProcessTheater(
                 }
             }
         }
-
-        // —— Meta sor ——
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -250,7 +226,6 @@ fun DiamondProcessTheater(
         }
     }
 }
-
 @Composable
 private fun HeroOperationCard(
     title: String,
@@ -281,7 +256,6 @@ private fun HeroOperationCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Chronograph: külső = összes %, belső = lépés progress
         Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(72.dp)) {
                 val strokeOuter = 3.5.dp.toPx()
@@ -374,7 +348,6 @@ private fun HeroOperationCard(
                 )
             }
             if (running) {
-                // mikro progress sáv
                 val animP by animateFloatAsState(
                     progress ?: 0.08f,
                     tween(if (reduced) 0 else PremiumMotion.STATE_CHANGE),
@@ -405,7 +378,6 @@ private fun HeroOperationCard(
         }
     }
 }
-
 @Composable
 private fun StepEnergyRail(
     stages: List<StageUi>,
@@ -422,7 +394,6 @@ private fun StepEnergyRail(
         val cy = size.height / 2f
         val r = 7.dp.toPx()
         fun cx(i: Int) = size.width * (i + 0.5f) / n
-
         for (i in 0 until n - 1) {
             val x0 = cx(i) + r + 3.dp.toPx()
             val x1 = cx(i + 1) - r - 3.dp.toPx()
@@ -471,13 +442,11 @@ private fun StepEnergyRail(
             drawCircle(PlatinumColors.Onyx, r + 1.dp.toPx(), center)
             drawCircle(c, r, center)
             if (stages[i].status == StageStatus.COMPLETED) {
-                // mini check hint
                 drawCircle(PlatinumColors.Onyx.copy(alpha = 0.35f), r * 0.35f, center)
             }
         }
     }
 }
-
 @Composable
 private fun StageRowRich(stage: StageUi, isActive: Boolean, reduced: Boolean) {
     val bg = if (isActive) PlatinumColors.GraphiteHigh.copy(alpha = 0.9f) else Color.Transparent
@@ -546,7 +515,6 @@ private fun StageRowRich(stage: StageUi, isActive: Boolean, reduced: Boolean) {
         )
     }
 }
-
 @Composable
 private fun MetaChip(label: String, value: String) {
     Column(
@@ -559,12 +527,10 @@ private fun MetaChip(label: String, value: String) {
         Text(value, color = PlatinumColors.Text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
-
 private fun metaSegments(state: ProcessingUiState): String {
     val total = state.chunksTotal
     return if (total != null) "${state.chunksDone}/$total" else "${state.chunksDone}"
 }
-
 private fun fmtMs(ms: Long): String {
     val s = ms / 1000
     return if (s < 60) "${s}s" else "${s / 60}m ${s % 60}s"

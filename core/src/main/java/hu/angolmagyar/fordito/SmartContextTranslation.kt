@@ -1,25 +1,13 @@
 package hu.angolmagyar.fordito
-
-/**
- * Smart Context Translation – v2.64.0
- *
- * Kontextus-, kétértelműség- és hangnem-alapú fordítási alternatívák.
- * Teljesen offline, szabályalapú, nem generatív AI.
- * A javaslatok soha nem írják felül automatikusan a fordítást;
- * csak ellenőrzésre és választásra szolgálnak.
- */
 object SmartContextTranslation {
-
     enum class Tone { NEUTRAL, FORMAL, INFORMAL, TECHNICAL, FRIENDLY }
     enum class AmbiguityLevel { NONE, LOW, MEDIUM, HIGH }
-
     data class Alternative(
         val text: String,
         val tone: Tone,
         val reason: String,
         val confidenceHint: String = "heurisztikus"
     )
-
     data class ContextSuggestion(
         val source: String,
         val primary: String,
@@ -27,8 +15,6 @@ object SmartContextTranslation {
         val ambiguity: AmbiguityLevel,
         val notes: List<String>
     )
-
-    /** Gyakori kétértelmű angol szavak és lehetséges magyar irányok (rövid lista). */
     private val AMBIGUOUS = mapOf(
         "bank" to listOf(
             Alternative("pénzintézet", Tone.NEUTRAL, "pénzügyi intézmény"),
@@ -79,7 +65,6 @@ object SmartContextTranslation {
             Alternative("parancs", Tone.FORMAL, "utasítás")
         )
     )
-
     private val FORMAL_MARKERS = listOf(
         "please", "kindly", "would you", "could you", "sir", "madam",
         "regarding", "concerning", "pursuant", "hereby", "therefore"
@@ -93,13 +78,6 @@ object SmartContextTranslation {
         "algorithm", "dataset", "model", "pipeline", "deploy", "runtime",
         "bytecode", "compiler", "debug", "stacktrace"
     )
-
-    /**
-     * Forrásszöveg alapján javasol kontextus-érzékeny alternatívákat.
-     * @param sourceEnglish a fordítandó angol szöveg
-     * @param currentHungarian opcionális jelenlegi fordítás (ha van)
-     * @param preferredTone preferált hangnem (null = automatikus érzékelés)
-     */
     fun suggest(
         sourceEnglish: String,
         currentHungarian: String? = null,
@@ -109,16 +87,12 @@ object SmartContextTranslation {
         val notes = mutableListOf<String>()
         val alts = mutableListOf<Alternative>()
         var ambiguity = AmbiguityLevel.NONE
-
         if (src.isEmpty()) {
             return ContextSuggestion(src, currentHungarian.orEmpty(), emptyList(), AmbiguityLevel.NONE,
                 listOf("Üres forrásszöveg – nincs javaslat."))
         }
-
         val detectedTone = preferredTone ?: detectTone(src)
         notes += "Érzékelt hangnem: ${toneLabel(detectedTone)}"
-
-        // Kétértelmű szavak keresése
         val lower = src.lowercase()
         val words = lower.split(Regex("[^\\p{L}]+")).filter { it.length >= 3 }
         var ambCount = 0
@@ -155,8 +129,6 @@ object SmartContextTranslation {
         if (ambCount > 0) {
             notes += "$ambCount potenciálisan kétértelmű szó található a forrásban."
         }
-
-        // Hangnem-alapú finomítás
         when (detectedTone) {
             Tone.FORMAL -> {
                 alts += Alternative(
@@ -175,10 +147,8 @@ object SmartContextTranslation {
             Tone.FRIENDLY -> {
                 notes += "Barátságos hangnem – meleg, közvetlen fordítás ajánlott."
             }
-            Tone.NEUTRAL -> { /* no extra */ }
+            Tone.NEUTRAL -> {   }
         }
-
-        // Hossz- és struktúra alapú megjegyzések
         val wordCount = words.size
         if (wordCount > 40) {
             notes += "Hosszú mondat/szöveg – javasolt a tagolás vagy több alternatíva vizsgálata."
@@ -186,13 +156,11 @@ object SmartContextTranslation {
         if (src.contains("?") && !src.contains("!")) {
             notes += "Kérdő mondat – a magyar fordításban a szórend és a kérdőszó elhelyezése kritikus."
         }
-
         val primary = currentHungarian?.trim().orEmpty()
         val filteredAlts = alts
             .filter { it.text.isNotBlank() && it.text != primary }
             .distinctBy { it.text.lowercase() }
             .take(6)
-
         return ContextSuggestion(
             source = src,
             primary = primary,
@@ -201,12 +169,6 @@ object SmartContextTranslation {
             notes = notes
         )
     }
-
-
-    /**
-     * Óvatos, lokális kontextusbecslés néhány gyakori kétértelmű szóra.
-     * A találat nem bizonyítja a jelentést; csak az alternatívák szűkítésére szolgál.
-     */
     private fun inferSense(word: String, words: List<String>, index: Int): String? {
         val window = words.subList(maxOf(0, index - 3), minOf(words.size, index + 4)).toSet()
         return when (word) {
@@ -229,8 +191,6 @@ object SmartContextTranslation {
             else -> null
         }
     }
-
-    /** Egyszerű hangnem-érzékelés marker-szavak alapján. */
     fun detectTone(text: String): Tone {
         val lower = text.lowercase()
         var formal = 0
@@ -239,7 +199,6 @@ object SmartContextTranslation {
         for (m in FORMAL_MARKERS) if (lower.contains(m)) formal++
         for (m in INFORMAL_MARKERS) if (lower.contains(m)) informal++
         for (m in TECHNICAL_MARKERS) if (lower.contains(m)) technical++
-
         return when {
             technical >= 2 -> Tone.TECHNICAL
             formal >= 2 && formal > informal -> Tone.FORMAL
@@ -249,7 +208,6 @@ object SmartContextTranslation {
             else -> Tone.NEUTRAL
         }
     }
-
     private fun toneLabel(t: Tone): String = when (t) {
         Tone.NEUTRAL -> "semleges"
         Tone.FORMAL -> "formális"
@@ -257,8 +215,6 @@ object SmartContextTranslation {
         Tone.TECHNICAL -> "műszaki"
         Tone.FRIENDLY -> "barátságos"
     }
-
-    /** Nagyon egyszerű formálisabbá tétel (csak demonstrációs célra). */
     private fun makeMoreFormal(hu: String): String {
         var s = hu
         s = s.replace(Regex("\\bte\\b", RegexOption.IGNORE_CASE), "Ön")
@@ -266,10 +222,6 @@ object SmartContextTranslation {
         s = s.replace(Regex("\\bneked\\b", RegexOption.IGNORE_CASE), "Önnek")
         return s
     }
-
-    /**
-     * Gyors ellenőrzés: van-e a szövegben ismert kétértelmű szó.
-     */
     fun hasAmbiguity(sourceEnglish: String): Boolean {
         val words = sourceEnglish.lowercase().split(Regex("[^\\p{L}]+"))
         return words.any { it in AMBIGUOUS }

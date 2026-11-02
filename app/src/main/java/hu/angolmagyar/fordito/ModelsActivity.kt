@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -32,18 +31,10 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-
-/**
- * Modellek: jelölőnégyzetes választó, készülék-felmérés alapján javasolt kiválasztással,
- * "OK" gomb – Wi-Fin egyből letölt, mobilneten rákérdez.
- */
 class ModelsActivity : AppCompatActivity() {
-
     private lateinit var prefs: Prefs
     private lateinit var root: LinearLayout
     private val main = Handler(Looper.getMainLooper())
-
-    /** Kijelölt (letöltendő) elemek: Vosk spec id-k és "mlkit". */
     private val selected = LinkedHashSet<String>()
     private var firstBuild = true
     private var mlInstalled = false
@@ -58,8 +49,6 @@ class ModelsActivity : AppCompatActivity() {
     private var pauseBtn: android.widget.Button? = null
     private var cancelBtn: android.widget.Button? = null
     private var showMoreLangs = false
-
-    // letöltési sor
     private var paused = false
     private var pausing = false
     private var cancelled = false
@@ -72,11 +61,8 @@ class ModelsActivity : AppCompatActivity() {
     private var progPct = 0
     private var progMsg = ""
     private var dlListener: ((Int, String, Boolean, Boolean) -> Unit)? = null
-
     private fun dp(v: Int) = Ui.dp(this, v)
-
     private data class Item(val spec: ModelManager.Spec, val mb: Int, val note: String)
-
     private val items: List<Item> by lazy {
         listOf(
             Item(ModelManager.SMALL, 40, "gyors, takarékos"),
@@ -88,7 +74,6 @@ class ModelsActivity : AppCompatActivity() {
             Item(ModelManager.UK_SMALL, 137, "")
         )
     }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
@@ -114,27 +99,19 @@ class ModelsActivity : AppCompatActivity() {
             main.postDelayed({ if (!downloading && !isDestroyed) onOk() }, 700)
         }
     }
-
     companion object {
         const val EXTRA_AUTO = "auto_download"
     }
-
     override fun onDestroy() {
-        // Letöltés a ModelDownloadService-ben fut – képernyőzár nem szakítja meg.
         dlListener?.let { ModelDownloadService.removeListener(it) }
         dlListener = null
         super.onDestroy()
     }
-
     override fun onResume() {
         super.onResume()
         if (!downloading) refreshStatuses()
     }
-
-    // ----------------------------------------------------------------- állapotok
-
     private fun refreshStatuses() {
-        // ML Kit fordítómodell: mindkét nyelv letöltve?
         try {
             val mgr = RemoteModelManager.getInstance()
             val en = mgr.isModelDownloaded(TranslateRemoteModel.Builder(TranslateLanguage.ENGLISH).build())
@@ -149,7 +126,6 @@ class ModelsActivity : AppCompatActivity() {
         } catch (e: Exception) { DiagLog.swallow("ModelsActivity", e) }
         checkHungarian()
     }
-
     private fun checkHungarian() {
         if (!SystemAsrSupport.audioSourceSupported()) {
             huStatus = "Android 13 vagy újabb kell."
@@ -183,7 +159,6 @@ class ModelsActivity : AppCompatActivity() {
                     try { r.destroy() } catch (e: Exception) { DiagLog.swallow("ModelsActivity", e) }
                     if (!downloading) build()
                 }
-
                 override fun onError(error: Int) {
                     huStatus = "Állapot nem kérdezhető le (hiba $error). Próbáld a letöltést."
                     huCanDownload = true
@@ -195,7 +170,6 @@ class ModelsActivity : AppCompatActivity() {
             huStatus = "Állapot nem kérdezhető le: ${t.message}"
         }
     }
-
     private fun triggerHuDownload() {
         if (Build.VERSION.SDK_INT < 33) return
         try {
@@ -217,9 +191,6 @@ class ModelsActivity : AppCompatActivity() {
             Toast.makeText(this, "Nem indítható: ${t.message}", Toast.LENGTH_LONG).show()
         }
     }
-
-    // ------------------------------------------------------------------ felépítés
-
     private fun recommendedIds(): List<String> {
         val d = Engines.device(this)
         val ids = ArrayList<String>()
@@ -230,12 +201,10 @@ class ModelsActivity : AppCompatActivity() {
         ids.add("mlkit")
         return ids
     }
-
     private fun build() {
         root.removeAllViews()
         val dev = Engines.device(this)
         val rec = recommendedIds()
-
         if (firstBuild) {
             firstBuild = false
             for (id in rec) {
@@ -243,13 +212,10 @@ class ModelsActivity : AppCompatActivity() {
                 else if (!ModelManager.isInstalled(this, ModelManager.byId(id))) selected.add(id)
             }
         }
-
         root.addView(Ui.button(this, "← Vissza", false) { finish() })
         root.addView(Ui.title(this, "Modellek"))
         root.addView(Ui.heroHeader(this, "AI MODEL CENTER", "Felismerő modellek", "Offline beszédfelismerés és fordítás. Válassz modellt a készüléked teljesítményéhez igazítva."))
         root.addView(Ui.sectionLabel(this, "Elérhető motorok"))
-
-        // --- Vosk felismerők
         val vCard = Ui.card(this)
         vCard.addView(Ui.title(this, "Felismerők (offline)", 17f))
         vCard.addView(Ui.small(this, "Jelöld be, amit használni szeretnél, majd nyomj az OK gombra."))
@@ -293,7 +259,6 @@ class ModelsActivity : AppCompatActivity() {
             showMoreLangs = !showMoreLangs
             build()
         })
-        // használt angol modell
         val enInstalledSmall = ModelManager.isInstalled(this, ModelManager.SMALL)
         val enInstalledLarge = ModelManager.isInstalled(this, ModelManager.LARGE)
         if (enInstalledSmall || enInstalledLarge) {
@@ -313,8 +278,6 @@ class ModelsActivity : AppCompatActivity() {
             vCard.addView(g)
         }
         root.addView(vCard)
-
-        // --- Whisper (offline, magyarul is)
         val wCard = Ui.card(this)
         wCard.addView(Ui.title(this, "Whisper felismerő (offline, magyarul is)", 17f))
         if (!WhisperNative.available()) {
@@ -396,13 +359,10 @@ class ModelsActivity : AppCompatActivity() {
             }
         }
         root.addView(wCard)
-
-        // --- magyar felismerő
         val hCard = Ui.card(this)
         hCard.addView(Ui.title(this, "Magyar felismerő", 17f))
         val whisperOk = try { Engines.whisperSpec(this) != null } catch (_: Exception) { false }
         if (whisperOk) {
-            // Ha a Whisper működik, nincs szükség a Google-csomagra: ne jelenjen meg félrevezető "nem támogatja" üzenet.
             hCard.addView(Ui.body(this, "✓ A magyar felismerést a Whisper végzi – offline, a telefonon."))
             hCard.addView(Ui.small(this,
                 "Nincs szükség másik csomagra. Az Android beépített (Google) felismerője csak tartalék, " +
@@ -436,8 +396,6 @@ class ModelsActivity : AppCompatActivity() {
             })
         }
         root.addView(hCard)
-
-        // --- fordítás
         val tCard = Ui.card(this)
         tCard.addView(Ui.title(this, "Fordítás (ML Kit)", 17f))
         val tcb = CheckBox(this).apply {
@@ -452,8 +410,6 @@ class ModelsActivity : AppCompatActivity() {
         }
         tCard.addView(tcb)
         root.addView(tCard)
-
-        // --- letöltés
         val dCard = Ui.card(this)
         if (!downloading) {
             val unmetered = Engines.onUnmeteredNetwork(this)
@@ -477,7 +433,6 @@ class ModelsActivity : AppCompatActivity() {
         dCard.addView(label)
         platProgress = null
         if (downloading && Prefs(this).platinumTheme) {
-            // Platina haladássáv a sima helyett (a régi sáv és felirat rejtve marad, de tovább frissül)
             bar.visibility = View.GONE
             label.visibility = View.GONE
             platProgress = hu.angolmagyar.fordito.ui.processing.PlatinumProgressView(this).also {
@@ -502,27 +457,21 @@ class ModelsActivity : AppCompatActivity() {
         }
         root.addView(dCard)
     }
-
     private var okButton: android.widget.Button? = null
-
     private fun pendingIds(): List<String> = selected.filter { id ->
         if (id == "mlkit") !mlInstalled else !ModelManager.isInstalled(this, ModelManager.byId(id))
     }
-
     private fun totalMb(ids: List<String>): Int = ids.sumOf { id ->
         if (id == "mlkit") 60
         else items.firstOrNull { it.spec.id == id }?.mb ?: ModelManager.byId(id).approxMb
     }
-
     private fun okLabel(): String {
         val p = pendingIds()
         return if (p.isEmpty()) "OK" else "OK – letöltés (~${totalMb(p)} MB)"
     }
-
     private fun updateOkButton() {
         okButton?.text = okLabel()
     }
-
     private fun onOk() {
         if (downloading) return
         val ids = pendingIds()
@@ -545,7 +494,6 @@ class ModelsActivity : AppCompatActivity() {
                 .show()
         }
     }
-
     private fun startDownload(ids: List<String>) {
         queue = ids.sortedBy { if (it == "mlkit") 1 else 0 }
         queueTotal = queue.size
@@ -561,7 +509,6 @@ class ModelsActivity : AppCompatActivity() {
         attachDlListener()
         ModelDownloadService.start(this, queue)
     }
-
     private fun attachDlListener() {
         dlListener?.let { ModelDownloadService.removeListener(it) }
         val listener: (Int, String, Boolean, Boolean) -> Unit = { p, msg, isPaused, finished ->
@@ -606,22 +553,17 @@ class ModelsActivity : AppCompatActivity() {
             progMsg = ModelDownloadService.message
         }
     }
-
     private val MB = 1024L * 1024L
-
     private fun estBytes(id: String): Long =
         (if (id == "mlkit") 60 else items.firstOrNull { it.spec.id == id }?.mb ?: 0) * MB
-
     private fun shortName(id: String): String =
         if (id == "mlkit") "Fordítómodell"
         else ModelManager.byId(id).label.substringBefore("(").trim()
-
     private fun fmtEta(sec: Long): String = when {
         sec < 60 -> "kb. $sec mp"
         sec < 3600 -> "kb. ${(sec + 59) / 60} perc"
         else -> "kb. ${sec / 3600} ó ${(sec % 3600 + 59) / 60} p"
     }
-
     private fun friendly(e: Exception): String {
         val m = e.message ?: return "ismeretlen hiba"
         return when {
@@ -631,7 +573,6 @@ class ModelsActivity : AppCompatActivity() {
             else -> m
         }
     }
-
     private fun runQueue() {
         paused = false
         pausing = false
@@ -689,7 +630,6 @@ class ModelsActivity : AppCompatActivity() {
             main.post { onQueueStopped(failed) }
         }.start()
     }
-
     private fun onQueueStopped(failed: List<String>) {
         if (isDestroyed) return
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -724,14 +664,12 @@ class ModelsActivity : AppCompatActivity() {
         build()
         refreshStatuses()
     }
-
     private fun updatePauseUi() {
         val pb = pauseBtn ?: return
         pb.text = if (paused) "▶ Folytatás" else if (pausing) "Szünetel…" else "⏸ Szünet"
         pb.isEnabled = paused || (!pausing && !currentIsMl)
         cancelBtn?.isEnabled = paused || (!pausing && !currentIsMl)
     }
-
     private fun onPauseResume() {
         if (paused) {
             if (!Engines.online(this)) {
@@ -747,7 +685,6 @@ class ModelsActivity : AppCompatActivity() {
             updatePauseUi()
         }
     }
-
     private fun onCancel() {
         cancelled = true
         ModelDownloadService.cancel(this)
@@ -758,7 +695,6 @@ class ModelsActivity : AppCompatActivity() {
         build()
         refreshStatuses()
     }
-
     private fun post(pct: Int, msg: String) {
         progPct = pct
         progMsg = msg
@@ -772,7 +708,6 @@ class ModelsActivity : AppCompatActivity() {
             platProgress?.set(pct, msg)
         }
     }
-
     private fun downloadTranslator() {
         MlKitModels.ensure(
             listOf(TranslateLanguage.ENGLISH, TranslateLanguage.HUNGARIAN), { cancelled },

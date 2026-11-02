@@ -1,14 +1,10 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.content.Intent
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
-
-/** „Mi történt?” – a legutóbbi hibák és figyelmeztetések (melegedés, akku, megszakadt rögzítés…). */
 object LogDialog {
-
     fun show(ctx: Context) {
         val lines = AppState.readLog(80)
         val body = if (lines.isEmpty()) ctx.getString(R.string.log_empty) else lines.joinToString("\n\n")

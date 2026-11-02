@@ -1,17 +1,10 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import hu.angolmagyar.fordito.intelligence.ReviewState
 import hu.angolmagyar.fordito.intelligence.SpacedRepetition
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
-
-/**
- * Explicitly saved local phrases. Nothing is uploaded or written to diagnostic logs.
- * Review scheduling uses the shared SpacedRepetition (SM-2 style) engine for consistency
- * with ReviewCoachActivity (P4).
- */
 data class SavedPhrase(
     val id: String,
     val source: String,
@@ -20,14 +13,11 @@ data class SavedPhrase(
     val intervalDays: Int = 0,
     val nextReviewAt: Long = 0L,
     val reviewCount: Int = 0,
-    /** SM-2 repetitions counter (aligned with SpacedRepetition). */
     val repetitions: Int = 0,
     val easeFactor: Double = 2.5
 )
-
 class PhrasebookStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("local_phrasebook_v1", Context.MODE_PRIVATE)
-
     @Synchronized
     fun all(): List<SavedPhrase> {
         val raw = prefs.getString(KEY_ENTRIES, "[]") ?: "[]"
@@ -59,13 +49,9 @@ class PhrasebookStore(context: Context) {
             emptyList()
         }
     }
-
-    /** Phrases due for review at or before [now]. New items (never reviewed) are due immediately. */
     @Synchronized
     fun due(now: Long = System.currentTimeMillis()): List<SavedPhrase> =
         all().filter { it.nextReviewAt <= now }.sortedBy { it.nextReviewAt }
-
-    /** Saves only on an explicit user action; repeated identical pairs are deduplicated. */
     @Synchronized
     fun save(source: String, translation: String): Boolean {
         val cleanSource = source.trim()
@@ -80,22 +66,15 @@ class PhrasebookStore(context: Context) {
                 source = cleanSource,
                 translation = cleanTranslation,
                 savedAt = now,
-                nextReviewAt = now // due immediately for first review
+                nextReviewAt = now
             )
         ) + current
         persist(next.take(MAX_ENTRIES))
         return true
     }
-
-    /**
-     * Marks a phrase as reviewed using SpacedRepetition grades:
-     * 0 = again, 3 = hard, 4 = good, 5 = easy.
-     * Boolean overload kept for existing call sites (remembered → 4, miss → 0).
-     */
     @Synchronized
     fun review(id: String, remembered: Boolean): Boolean =
         review(id, grade = if (remembered) 4 else 0)
-
     @Synchronized
     fun review(id: String, grade: Int, now: Long = System.currentTimeMillis()): Boolean {
         var found = false
@@ -116,7 +95,6 @@ class PhrasebookStore(context: Context) {
         if (found) persist(next)
         return found
     }
-
     @Synchronized
     fun delete(id: String): Boolean {
         val current = all()
@@ -125,13 +103,11 @@ class PhrasebookStore(context: Context) {
         persist(next)
         return true
     }
-
     @Synchronized
     fun clear(): Boolean {
         prefs.edit().remove(KEY_ENTRIES).apply()
         return true
     }
-
     private fun persist(entries: List<SavedPhrase>) {
         val array = JSONArray()
         entries.forEach { e ->
@@ -151,7 +127,6 @@ class PhrasebookStore(context: Context) {
         }
         prefs.edit().putString(KEY_ENTRIES, array.toString()).apply()
     }
-
     companion object {
         private const val KEY_ENTRIES = "entries"
         private const val MAX_ENTRIES = 2000

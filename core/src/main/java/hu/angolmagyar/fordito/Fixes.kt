@@ -1,8 +1,5 @@
 package hu.angolmagyar.fordito
-
-/** Felhasználói javítólista: soronként "régi=új" (kis/nagybetű nem számít, egész szóra illeszt). */
 object Fixes {
-
     fun parse(text: String): List<Pair<Regex, String>> =
         text.lines().mapNotNull { line ->
             val i = line.indexOf('=')
@@ -18,7 +15,6 @@ object Fixes {
                 ) to to
             }
         }
-
     fun apply(text: String, rules: List<Pair<Regex, String>>): String {
         var result = text
         for ((re, to) in rules) {

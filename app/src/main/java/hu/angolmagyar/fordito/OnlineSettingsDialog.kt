@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.text.InputType
 import android.view.Gravity
 import android.view.View
@@ -13,15 +12,11 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-
-/** Az online (LLM-es) fordítás beállítása: szolgáltató, kulcs, modell, tudomásulvétel, kapcsolat-teszt. */
 object OnlineSettingsDialog {
-
     fun show(act: AppCompatActivity, onDone: () -> Unit) {
         val ctx = act
         val pad = Ui.dp(ctx, 16)
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, 0) }
-
         fun label(t: String) = Ui.body(ctx, t)
         fun field(hint: String, value: String, password: Boolean = false) = EditText(ctx).apply {
             setText(value)
@@ -32,11 +27,9 @@ object OnlineSettingsDialog {
                 (if (password) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_VARIATION_URI)
             setTextColor(Ui.color(ctx, R.color.textPrimary))
         }
-
         col.addView(Ui.small(ctx,
             "Ajánlott: DeepL – csak egy kulcs kell hozzá. Ingyenes kulcs (500 000 karakter/hó, kb. 25–40 film): " +
                 "deepl.com/pro-api → „DeepL API Free” – a kulcs végén :fx áll. Másold be ide, kapcsold be a tudomásulvételt, kész."))
-
         col.addView(label("Szolgáltató"))
         val provSpin = Spinner(ctx)
         val provNames = listOf("Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
@@ -47,12 +40,9 @@ object OnlineSettingsDialog {
             else -> 0
         })
         col.addView(provSpin)
-
         col.addView(label("API-kulcs"))
         val key = field("sk-…", OnlinePrefs.apiKey(ctx), true)
         col.addView(key)
-
-        // csak Claude / OpenAI esetén látszik; DeepL-nél nincs mit beállítani
         val advBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         advBox.addView(label("Modell"))
         val model = field("üresen: ${OnlineTranslator.DEFAULT_ANTHROPIC_MODEL}", OnlinePrefs.model(ctx))
@@ -67,11 +57,9 @@ object OnlineSettingsDialog {
             override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = syncAdv()
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
-
         col.addView(label("Háttér a fordítónak (téma, nevek – nem kötelező)"))
         val hint = field("pl. családi dráma, a szereplők: Nina, Jake", OnlinePrefs.hint(ctx))
         col.addView(hint)
-
         val consent = androidx.appcompat.widget.SwitchCompat(ctx).apply {
             text = "Tudomásul veszem: a felismert szöveg elhagyja a telefont (nem a hang, csak a szöveg)"
             minHeight = Ui.dp(ctx, 52)
@@ -80,7 +68,6 @@ object OnlineSettingsDialog {
         col.addView(consent)
         val result = TextView(ctx).apply { textSize = 13f; gravity = Gravity.START }
         col.addView(result)
-
         fun saveAll(): Boolean {
             OnlinePrefs.setProvider(ctx, when (provSpin.selectedItemPosition) {
                 1 -> OnlineTranslator.Provider.OPENAI
@@ -92,11 +79,9 @@ object OnlineSettingsDialog {
             OnlinePrefs.setBaseUrl(ctx, base.text.toString())
             OnlinePrefs.setHint(ctx, hint.text.toString())
             OnlinePrefs.setConsent(ctx, consent.isChecked)
-            // ha használható a beállítás, az online fordítás magától bekapcsol (offline tartalékkal)
             if (OnlinePrefs.usable(ctx) && OnlinePrefs.mode(ctx) == OnlinePrefs.OFF) OnlinePrefs.setMode(ctx, OnlinePrefs.AUTO)
             return keySaved
         }
-
         col.addView(Ui.smallButton(ctx, "Kapcsolat kipróbálása") {
             if (!saveAll()) {
                 result.text = "A kulcs biztonságos mentése nem sikerült. Ellenőrizd az Android Keystore állapotát; a kulcs nem lett titkosítatlanul eltárolva."
@@ -122,7 +107,6 @@ object OnlineSettingsDialog {
                 }.start()
             }
         })
-
         val sv = ScrollView(ctx).apply { addView(col) }
         AlertDialog.Builder(ctx)
             .setTitle("Online fordítás")

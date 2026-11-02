@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import android.content.Context
 import android.util.AttributeSet
 import android.widget.FrameLayout
@@ -62,19 +61,9 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.sin
-
 private const val BARS = 56
-
-/**
- * Élő fordítás – Diamond színház (v3.02)
- *
- * Valós hangszint + fázis (Figyel / Felismer / Fordít / Szünet) + spektrum + élő szövegcsík.
- * Nincs kitalált hang; az oszlopok az [AppState.level] történetéből épülnek.
- */
 @Composable
 fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
-    // Kotlin 2.0.21 Compose IR may lose the parameter mapping when this value is
-    // captured directly by generated animation/effect lambdas. Keep a stable State.
     val reducedMotion = rememberUpdatedState(reduced)
     val ctx = LocalContext.current
     val cinema = remember(ctx) { PremiumMotion.cinemaEnabled(ctx) }
@@ -83,7 +72,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
     var smoothLevel by remember { mutableFloatStateOf(0f) }
     var peak by remember { mutableIntStateOf(0) }
     var prevPhase by remember { mutableStateOf<LivePhase?>(null) }
-
     LaunchedEffect(Unit) {
         while (true) {
             val lvl = AppState.level.coerceIn(0f, 1f)
@@ -98,7 +86,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             delay(if (reducedMotion.value) 80L else 42L)
         }
     }
-
     val phase = rememberLivePhase(smoothLevel)
     LaunchedEffect(phase) {
         if (prevPhase != null && prevPhase != phase) {
@@ -128,7 +115,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             label = "r"
         ).value
     }
-
     val shape = RoundedCornerShape(20.dp)
     Column(
         modifier
@@ -167,7 +153,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             )
             PhaseBadge(phase, pulse)
         }
-
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -204,8 +189,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 )
             }
         }
-
-        // Spektrum
         if (silence) {
             Text(
                 "Várakozás a beszédre…",
@@ -256,8 +239,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 )
             }
         }
-
-        // Fázis lépések
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             LivePhase.entries.forEach { p ->
                 val on = p == phase
@@ -297,8 +278,6 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 }
             }
         }
-
-        // Broadcast lower-third / élő szöveg
         DiamondLowerThird(
             visible = AppState.lastCaptionEn.isNotBlank() || AppState.lastCaptionHu.isNotBlank(),
             phaseLabel = phaseTitle(phase),
@@ -309,14 +288,10 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
         )
     }
 }
-
 private enum class LivePhase { IDLE, LISTENING, RECOGNIZING, TRANSLATING, PAUSED }
-
 @Composable
 private fun rememberLivePhase(level: Float): LivePhase {
     var phase by remember { mutableStateOf(LivePhase.IDLE) }
-    // The polling coroutine survives recompositions; read the latest smoothed
-    // level instead of the value captured when LaunchedEffect(Unit) first ran.
     val latestLevel = rememberUpdatedState(level)
     LaunchedEffect(Unit) {
         while (true) {
@@ -329,7 +304,6 @@ private fun rememberLivePhase(level: Float): LivePhase {
                 AppState.lastCaptionHu.isNotBlank() -> LivePhase.TRANSLATING
                 else -> LivePhase.LISTENING
             }
-            // Quiet input is still a listening state unless a caption is being processed.
             if (AppState.running && !AppState.paused && currentLevel <= 0.08f &&
                 phase != LivePhase.TRANSLATING && phase != LivePhase.RECOGNIZING
             ) {
@@ -340,7 +314,6 @@ private fun rememberLivePhase(level: Float): LivePhase {
     }
     return phase
 }
-
 private fun phaseOrder(p: LivePhase) = when (p) {
     LivePhase.IDLE -> 0
     LivePhase.LISTENING -> 1
@@ -348,7 +321,6 @@ private fun phaseOrder(p: LivePhase) = when (p) {
     LivePhase.TRANSLATING -> 3
     LivePhase.PAUSED -> -1
 }
-
 private fun phaseColor(p: LivePhase) = when (p) {
     LivePhase.IDLE -> PlatinumColors.Steel
     LivePhase.LISTENING -> PlatinumColors.Emerald
@@ -356,7 +328,6 @@ private fun phaseColor(p: LivePhase) = when (p) {
     LivePhase.TRANSLATING -> PlatinumColors.DiamondWhite
     LivePhase.PAUSED -> PlatinumColors.Amber
 }
-
 private fun phaseTitle(p: LivePhase) = when (p) {
     LivePhase.IDLE -> "Készenlét"
     LivePhase.LISTENING -> "Figyelés"
@@ -364,7 +335,6 @@ private fun phaseTitle(p: LivePhase) = when (p) {
     LivePhase.TRANSLATING -> "Fordítás"
     LivePhase.PAUSED -> "Szüneteltetve"
 }
-
 private fun phaseDetail(p: LivePhase) = when (p) {
     LivePhase.IDLE -> "Indítsd az élő fordítást a mikrofon engedélyével."
     LivePhase.LISTENING -> "A mikrofon aktív – beszélj természetesen."
@@ -372,7 +342,6 @@ private fun phaseDetail(p: LivePhase) = when (p) {
     LivePhase.TRANSLATING -> "A felismert szöveg fordítása folyamatban."
     LivePhase.PAUSED -> "A felvétel szünetel – folytathatod bármikor."
 }
-
 private fun phaseShort(p: LivePhase) = when (p) {
     LivePhase.IDLE -> "Kész"
     LivePhase.LISTENING -> "Figyel"
@@ -380,7 +349,6 @@ private fun phaseShort(p: LivePhase) = when (p) {
     LivePhase.TRANSLATING -> "Fordít"
     LivePhase.PAUSED -> "Szünet"
 }
-
 @Composable
 private fun PhaseBadge(phase: LivePhase, pulse: Float) {
     Text(
@@ -391,7 +359,6 @@ private fun PhaseBadge(phase: LivePhase, pulse: Float) {
         letterSpacing = 1.2.sp
     )
 }
-
 @Composable
 private fun PhaseOrb(
     phase: LivePhase,
@@ -438,13 +405,10 @@ private fun PhaseOrb(
         )
     }
 }
-
-/** View-burkoló az Élő fordítás képernyőhöz. */
 class DiamondLiveView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     init {
         addView(
             ComposeView(ctx).apply {
-                // Resolve the motion preference in composition; do not capture a constructor-local value.
                 setContent {
                     DiamondLiveTheater(reduced = PremiumMotion.reduced(LocalContext.current))
                 }

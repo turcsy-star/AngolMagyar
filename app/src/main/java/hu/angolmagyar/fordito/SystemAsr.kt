@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.content.Intent
 import android.media.AudioFormat
@@ -16,33 +15,19 @@ import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-
-/**
- * Az Android beépített (Google) beszédfelismerője – ezt használjuk magyarra, mert a Vosk-hoz
- * nem létezik magyar modell. A PCM hangot csövön (pipe) adjuk át a felismerőnek
- * (RecognizerIntent.EXTRA_AUDIO_SOURCE, Android 13+), így a mikrofon mellett a belső hang
- * és a fájlból kinyert hang is felismerhető.
- */
 object SystemAsrSupport {
-
-    /** Eszközön futó (offline) felismerő elérhető-e. */
     fun onDeviceAvailable(ctx: Context): Boolean =
         Build.VERSION.SDK_INT >= 33 && try {
             SpeechRecognizer.isOnDeviceRecognitionAvailable(ctx)
         } catch (_: Throwable) {
             false
         }
-
-    /** Bármilyen (akár felhős) felismerő elérhető-e. */
     fun anyAvailable(ctx: Context): Boolean = try {
         SpeechRecognizer.isRecognitionAvailable(ctx)
     } catch (_: Throwable) {
         false
     }
-
     fun audioSourceSupported(): Boolean = Build.VERSION.SDK_INT >= 33
-
-    /** Főszálon hívd. */
     fun create(ctx: Context, allowOnline: Boolean): SpeechRecognizer? {
         return try {
             if (onDeviceAvailable(ctx)) SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
@@ -52,7 +37,6 @@ object SystemAsrSupport {
             null
         }
     }
-
     fun buildIntent(lang: String, source: ParcelFileDescriptor?, partial: Boolean): Intent {
         val i = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -67,12 +51,10 @@ object SystemAsrSupport {
         }
         return i
     }
-
     fun firstResult(b: Bundle?): String {
         val l = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         return l?.firstOrNull()?.trim() ?: ""
     }
-
     fun shortsToBytes(data: ShortArray, len: Int): ByteArray {
         val b = ByteArray(len * 2)
         for (i in 0 until len) {
@@ -82,7 +64,6 @@ object SystemAsrSupport {
         }
         return b
     }
-
     fun errorText(code: Int): String = when (code) {
         SpeechRecognizer.ERROR_AUDIO -> "hangátviteli hiba"
         SpeechRecognizer.ERROR_CLIENT -> "kliens hiba"
@@ -98,11 +79,6 @@ object SystemAsrSupport {
         else -> "hiba ($code)"
     }
 }
-
-/**
- * Élő felismerés: folyamatosan újraindított munkamenetek, a hangot a [feed] adja be.
- * A visszahívások a főszálon érkeznek.
- */
 class LiveSystemAsr(
     private val ctx: Context,
     private val lang: String,
@@ -114,7 +90,6 @@ class LiveSystemAsr(
         fun onFinal(text: String)
         fun onFatal(message: String)
     }
-
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var running = false
     private var recognizer: SpeechRecognizer? = null
@@ -123,7 +98,6 @@ class LiveSystemAsr(
     private var writer: Thread? = null
     private var quickErrors = 0
     private var lastErrorAt = 0L
-
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
@@ -131,19 +105,16 @@ class LiveSystemAsr(
         override fun onBufferReceived(buffer: ByteArray?) {}
         override fun onEndOfSpeech() {}
         override fun onEvent(eventType: Int, params: Bundle?) {}
-
         override fun onPartialResults(partialResults: Bundle?) {
             val t = SystemAsrSupport.firstResult(partialResults)
             if (t.isNotBlank() && running) cb.onPartial(t)
         }
-
         override fun onResults(results: Bundle?) {
             val t = SystemAsrSupport.firstResult(results)
             if (t.isNotBlank() && running) cb.onFinal(t)
             quickErrors = 0
             endSession(0)
         }
-
         override fun onError(error: Int) {
             if (!running) return
             when (error) {
@@ -154,8 +125,6 @@ class LiveSystemAsr(
                 SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> endSession(100)
                 SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> endSession(600)
                 SpeechRecognizer.ERROR_CLIENT -> {
-                    // Gyakori ideiglenes hiba (nincs offline csomag / Google szolgáltatás).
-                    // Többszöri ismétlődés után adunk értelmes üzenetet, és Whisper-t javasolunk.
                     val now = System.currentTimeMillis()
                     quickErrors = if (now - lastErrorAt < 5000) quickErrors + 1 else 1
                     lastErrorAt = now
@@ -183,7 +152,6 @@ class LiveSystemAsr(
             }
         }
     }
-
     fun start() {
         if (running) return
         if (!SystemAsrSupport.audioSourceSupported()) {
@@ -227,8 +195,6 @@ class LiveSystemAsr(
             }
         }, "sys-asr-writer").also { it.isDaemon = true; it.start() }
     }
-
-    /** Bármelyik szálról hívható: 16 kHz mono PCM. */
     fun feed(data: ShortArray, len: Int) {
         if (!running || len <= 0) return
         val b = SystemAsrSupport.shortsToBytes(data, len)
@@ -237,7 +203,6 @@ class LiveSystemAsr(
             queue.offer(b)
         }
     }
-
     private fun startSession() {
         if (!running) return
         val r = recognizer ?: return
@@ -253,7 +218,6 @@ class LiveSystemAsr(
             cb.onFatal("Magyar felismerés indítási hiba: ${t.message}")
         }
     }
-
     private fun endSession(delayMs: Long) {
         main.post {
             try { sessionOut?.close() } catch (_: Exception) {}
@@ -262,7 +226,6 @@ class LiveSystemAsr(
             if (running) main.postDelayed({ startSession() }, delayMs)
         }
     }
-
     fun stop() {
         running = false
         queue.clear()
@@ -277,11 +240,6 @@ class LiveSystemAsr(
         writer = null
     }
 }
-
-/**
- * Fájl-átirathoz: rövid hangszeletek blokkoló felismerése.
- * Háttérszálról használd: [open], majd többször [transcribe], végül [close].
- */
 class BlockingAsr(
     private val ctx: Context,
     private val lang: String,
@@ -293,7 +251,6 @@ class BlockingAsr(
     @Volatile private var finalText: String? = null
     @Volatile private var lastPartial = ""
     @Volatile private var lastError = 0
-
     private val listener = object : RecognitionListener {
         override fun onReadyForSpeech(params: Bundle?) {}
         override fun onBeginningOfSpeech() {}
@@ -305,19 +262,15 @@ class BlockingAsr(
             val t = SystemAsrSupport.firstResult(partialResults)
             if (t.isNotBlank()) lastPartial = t
         }
-
         override fun onResults(results: Bundle?) {
             finalText = SystemAsrSupport.firstResult(results)
             latch?.countDown()
         }
-
         override fun onError(error: Int) {
             lastError = error
             latch?.countDown()
         }
     }
-
-    /** @return hibaüzenet, vagy null, ha sikerült. */
     fun open(): String? {
         if (!SystemAsrSupport.audioSourceSupported()) {
             return "A magyar felismerőhöz Android 13 vagy újabb kell."
@@ -338,8 +291,6 @@ class BlockingAsr(
         l.await(10, TimeUnit.SECONDS)
         return err
     }
-
-    /** Egy hangszelet szövege (üres, ha nincs beszéd). Fatális hibánál kivételt dob. */
     fun transcribe(pcm: ShortArray): String {
         val r = recognizer ?: return ""
         val l = CountDownLatch(1)
@@ -362,7 +313,6 @@ class BlockingAsr(
             started.countDown()
         }
         started.await(5, TimeUnit.SECONDS)
-        // a szelet + 700 ms csend a végén, hogy a felismerő lezárja a mondatot
         val w = Thread {
             try {
                 val bytes = SystemAsrSupport.shortsToBytes(pcm, pcm.size)
@@ -395,7 +345,6 @@ class BlockingAsr(
         latch = null
         return (finalText ?: lastPartial).trim()
     }
-
     fun close() {
         main.post {
             try { recognizer?.destroy() } catch (_: Exception) {}

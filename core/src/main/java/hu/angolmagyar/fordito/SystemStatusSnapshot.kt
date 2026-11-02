@@ -1,15 +1,6 @@
 package hu.angolmagyar.fordito
-
-/**
- * Platinum Global Dashboard – v2.66.0
- *
- * Egységes, adatforrás-független állapot-pillanatkép a modulokról és a rendszerről.
- * A UI (Compose / View) ezt tölti fel a készülék aktuális adataival.
- */
 object SystemStatusSnapshot {
-
     enum class Level { OK, WARN, ERROR, UNKNOWN, DISABLED }
-
     data class ModuleStatus(
         val id: String,
         val title: String,
@@ -17,13 +8,11 @@ object SystemStatusSnapshot {
         val detail: String,
         val actionable: Boolean = false
     )
-
     data class QuickAction(
         val id: String,
         val label: String,
         val description: String
     )
-
     data class Snapshot(
         val generatedAtMs: Long,
         val appVersionName: String,
@@ -43,8 +32,6 @@ object SystemStatusSnapshot {
                 else -> Level.OK
             }
     }
-
-    /** Alap modul-lista sablon (a UI tölti ki a valós értékeket). */
     fun templateModules(): List<ModuleStatus> = listOf(
         ModuleStatus("asr", "Beszédfelismerés (ASR)", Level.UNKNOWN, "Modell / engedély ellenőrzése"),
         ModuleStatus("translate_offline", "Offline fordítás", Level.UNKNOWN, "ML Kit / helyi motor"),
@@ -59,7 +46,6 @@ object SystemStatusSnapshot {
         ModuleStatus("motion", "Platinum Motion", Level.OK, "Profilok és csökkentés v2.65"),
         ModuleStatus("global_ui", "Infinity Global UI", Level.WARN, "Migráció részben kész – v3.00-ig")
     )
-
     fun defaultQuickActions(): List<QuickAction> = listOf(
         QuickAction("diagnostics", "Diagnosztika", "Engedélyek, modellek, hálózat"),
         QuickAction("models", "Modellek", "Offline ASR / fordító modellek"),
@@ -68,7 +54,6 @@ object SystemStatusSnapshot {
         QuickAction("privacy", "Adatvédelem", "Helyi adatok és hálózati kapcsolók"),
         QuickAction("settings", "Beállítások", "Megjelenés, mozgás, OLED")
     )
-
     fun build(
         versionName: String,
         versionCode: Int,

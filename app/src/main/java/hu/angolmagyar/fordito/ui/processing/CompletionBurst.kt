@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -17,8 +16,6 @@ import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-
-/** Egyszeri, rövid sikeres befejezési animáció (gyűrű + szikrák). Csökkentett módban nem rajzol. */
 @Composable
 fun CompletionBurst(
     modifier: Modifier = Modifier,

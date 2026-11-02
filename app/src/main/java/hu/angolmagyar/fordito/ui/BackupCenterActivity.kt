@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -46,7 +45,6 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
 class BackupCenterActivity : ComponentActivity() {
     private val database by lazy { AppDatabase.get(this) }
     private var status by mutableStateOf("A Diamond mentés AES-256-GCM titkosítást használ. A jelszót csak te ismered.")
@@ -59,9 +57,7 @@ class BackupCenterActivity : ComponentActivity() {
     private var dailyAuto by mutableStateOf(false)
     private var weeklyAuto by mutableStateOf(false)
     private var autoBackupInfo by mutableStateOf("Automatikus mentés nincs bekapcsolva.")
-
     private enum class PasswordPurpose { EXPORT, IMPORT }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -106,20 +102,17 @@ class BackupCenterActivity : ComponentActivity() {
             }
         }
     }
-
     private val createDocument = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) writeBackup(uri)
     }
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) readBackup(uri)
     }
-
     private fun requestPassword(purpose: PasswordPurpose) {
         passwordPurpose = purpose
         password = ""
         passwordDialog = true
     }
-
     private fun submitPassword() {
         val secret = password
         password = ""
@@ -130,11 +123,8 @@ class BackupCenterActivity : ComponentActivity() {
             createDocument.launch("AngolMagyar_Infinity_Diamond_$stamp.pibackup")
         } else unlockPendingBackup(secret)
     }
-
     private var exportPassword: String? = null
-
     private fun openBackup() { openDocument.launch(arrayOf("application/octet-stream", "application/json", "*/*")) }
-
     private fun writeBackup(uri: Uri) {
         val secret = exportPassword ?: return
         exportPassword = null
@@ -152,7 +142,6 @@ class BackupCenterActivity : ComponentActivity() {
             busy = false
         }
     }
-
     private fun readBackup(uri: Uri) {
         lifecycleScope.launch {
             busy = true
@@ -180,9 +169,7 @@ class BackupCenterActivity : ComponentActivity() {
             busy = false
         }
     }
-
     private var pendingEncrypted: ByteArray? = null
-
     private fun unlockPendingBackup(secret: String) {
         val encrypted = pendingEncrypted ?: return
         lifecycleScope.launch {
@@ -200,7 +187,6 @@ class BackupCenterActivity : ComponentActivity() {
             busy = false
         }
     }
-
     private fun restorePreviewedBackup() {
         val backup = pendingBackup ?: return
         lifecycleScope.launch {
@@ -224,7 +210,6 @@ class BackupCenterActivity : ComponentActivity() {
             busy = false
         }
     }
-
     @Composable
     private fun BackupCenterScreen(status: String, busy: Boolean, daily: Boolean, weekly: Boolean, autoInfo: String, onBack: () -> Unit, onExport: () -> Unit, onImport: () -> Unit, onSchedule: (Boolean, Boolean) -> Unit) {
         Column(Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {

@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -28,11 +27,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
-
-/**
- * Broadcast-stílusú lower-third (v3.10 Ultimate Cinema).
- * TV-s becsúszó sáv élő felirathoz / fordításhoz.
- */
 @Composable
 fun DiamondLowerThird(
     visible: Boolean,

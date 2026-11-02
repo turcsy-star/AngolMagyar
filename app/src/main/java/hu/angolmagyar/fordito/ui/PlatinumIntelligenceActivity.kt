@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -44,8 +43,6 @@ import hu.angolmagyar.fordito.SettingsActivity
 import hu.angolmagyar.fordito.ui.design.LuxuryPalettes
 import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
-
-/** Feature hub: links to existing, real app screens and clearly labels capabilities still on the roadmap. */
 class PlatinumIntelligenceActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,10 +72,8 @@ class PlatinumIntelligenceActivity : ComponentActivity() {
             }
         }
     }
-
     private fun open(clazz: Class<*>) = startActivity(Intent(this, clazz))
 }
-
 @Composable
 private fun IntelligenceHub(
     onBack: () -> Unit,
@@ -154,7 +149,6 @@ private fun IntelligenceHub(
         Spacer(Modifier.height(8.dp))
     }
 }
-
 @Composable
 private fun HubSection(title: String, subtitle: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -164,7 +158,6 @@ private fun HubSection(title: String, subtitle: String, content: @Composable () 
         content()
     }
 }
-
 @Composable
 private fun HubAction(title: String, detail: String, status: String, onClick: () -> Unit, roadmap: Boolean = false, enabled: Boolean = true) {
     PremiumCard {

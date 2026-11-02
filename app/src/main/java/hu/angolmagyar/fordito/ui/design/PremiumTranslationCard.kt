@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,17 +19,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-/**
- * Reusable, accessible source/translation card for translation and transcript screens.
- * Platform actions (clipboard and text-to-speech) are injected by the caller so this
- * presentation component does not own Android services or leak Activity references.
- *
- * Optional intelligence layer (P2/P3):
- * - memorySuggestion / onAcceptMemory: show approved TM suggestion; never auto-applied.
- * - qualityLabels: deterministic offline flags (numbers, negation, names).
- * - contextNote: short ambiguity / tone note from SmartContextTranslation.
- */
 @Composable
 fun PremiumTranslationCard(
     sourceLabel: String,
@@ -52,7 +40,6 @@ fun PremiumTranslationCard(
             TranslationTextBlock(label = sourceLabel, value = sourceText, emptyText = "Nincs megadva forrásszöveg.")
             androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             TranslationTextBlock(label = targetLabel, value = translatedText, emptyText = "A fordítás itt jelenik meg.")
-
             if (!memorySuggestion.isNullOrBlank() || qualityLabels.isNotEmpty() || !contextNote.isNullOrBlank()) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (!memorySuggestion.isNullOrBlank()) {
@@ -104,7 +91,6 @@ fun PremiumTranslationCard(
                     }
                 }
             }
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -123,7 +109,6 @@ fun PremiumTranslationCard(
         }
     }
 }
-
 @Composable
 private fun TranslationTextBlock(label: String, value: String, emptyText: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

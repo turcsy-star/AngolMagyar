@@ -1,8 +1,5 @@
 package hu.angolmagyar.fordito.intelligence
-
-/** UTF-8 CSV interchange: english,hungarian,example. Quotes and commas are supported. */
 data class DictionaryEntry(val english: String, val hungarian: String, val example: String = "")
-
 object DictionaryCsv {
     fun export(entries: List<DictionaryEntry>): String = buildString {
         appendLine("english,hungarian,example")
@@ -25,7 +22,7 @@ object DictionaryCsv {
                 c == '"' -> quoted = !quoted
                 (c == ',' || c == '\n' || c == '\r') && !quoted -> {
                     row.add(cell.toString()); cell.setLength(0)
-                    if (c == ',' ) { /* next column */ } else { if (row.isNotEmpty()) rows.add(row); row = mutableListOf(); if (c == '\r' && i+1 < input.length && input[i+1] == '\n') i++ }
+                    if (c == ',' ) {   } else { if (row.isNotEmpty()) rows.add(row); row = mutableListOf(); if (c == '\r' && i+1 < input.length && input[i+1] == '\n') i++ }
                 }
                 else -> cell.append(c)
             }

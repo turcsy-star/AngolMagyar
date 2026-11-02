@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
@@ -24,19 +23,11 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import kotlin.math.abs
-
-/**
- * Lebegő felirat más appok fölött.
- * - fent vékony hangszintcsík; koppintásra vezérlősáv (szünet, A−, A+, bezárás)
- * - függőlegesen húzható, a pozíciót megjegyzi
- * - a régebbi magyar sorok fokozatosan halványulnak
- */
 class Overlay(
     private val ctx: Context,
     private val prefs: Prefs,
     private val cb: Callbacks
 ) {
-
     interface Callbacks {
         fun onTogglePause()
         fun onSizeDelta(delta: Int)
@@ -48,10 +39,8 @@ class Overlay(
         fun onToggleEnglish() {}
         fun onSaveFavorite() {}
     }
-
     private val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val handler = Handler(Looper.getMainLooper())
-
     private val root = LinearLayout(ctx)
     private val levelBar = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal)
     private val buttons = LinearLayout(ctx)
@@ -64,27 +53,20 @@ class Overlay(
     private var pinchAcc = 1f
     private var pinching = false
     private val bgShape = GradientDrawable()
-
     private lateinit var lp: WindowManager.LayoutParams
     private var added = false
     private var expanded = false
     private var lastEn = ""
     private var lastLines: List<String> = emptyList()
-
     private val collapse = Runnable { setExpanded(false) }
-
     private fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
-
     private fun chipBg() = GradientDrawable().apply {
         cornerRadius = dp(20).toFloat()
         setColor(0x33FFFFFF)
     }
-
     private fun pressFeedback(@Suppress("UNUSED_PARAMETER") v: View) {
         Haptics.tick(ctx)
     }
-
-    /** Szöveges chip (leírással a kisegítő technológiáknak). */
     private fun chip(label: String, desc: String, onClick: () -> Unit): TextView = TextView(ctx).apply {
         text = label
         contentDescription = desc
@@ -101,8 +83,6 @@ class Overlay(
             scheduleCollapse()
         }
     }
-
-    /** Ikon chip. */
     private fun iconChip(iconRes: Int, desc: String, onClick: () -> Unit): ImageView = ImageView(ctx).apply {
         setImageResource(iconRes)
         setColorFilter(Color.WHITE)
@@ -117,36 +97,28 @@ class Overlay(
             scheduleCollapse()
         }
     }
-
     private fun chipLp(): LinearLayout.LayoutParams =
         LinearLayout.LayoutParams(dp(48), dp(40)).apply { marginEnd = dp(6); topMargin = dp(4) }
-
     @SuppressLint("ClickableViewAccessibility")
     fun add() {
         if (added) return
-
         bgShape.cornerRadius = dp(18).toFloat()
         root.background = InsetDrawable(bgShape, dp(10), 0, dp(10), 0)
         root.orientation = LinearLayout.VERTICAL
         root.setPadding(dp(24), dp(10), dp(24), dp(12))
         root.elevation = dp(8).toFloat()
-
         levelBar.max = 100
         levelBar.progressTintList = ColorStateList.valueOf(0xFF34D399.toInt())
         levelBar.progressBackgroundTintList = ColorStateList.valueOf(0x22FFFFFF)
         levelBar.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(5))
         levelBar.scaleY = 1.2f
-
         buttons.orientation = LinearLayout.VERTICAL
         row1.orientation = LinearLayout.HORIZONTAL
         row1.gravity = Gravity.CENTER_VERTICAL
         row2.orientation = LinearLayout.HORIZONTAL
         row2.gravity = Gravity.CENTER_VERTICAL
-
-        // 1. sor: szünet, push-to-talk, irány, angol sor, kedvenc, (hely), bezárás
         pauseBtn = iconChip(R.drawable.ic_pause, ctx.getString(R.string.ov_pause)) { cb.onTogglePause() }
         row1.addView(pauseBtn, chipLp())
-        // Push-to-talk: nyomva tartásra hallgat
         val pttChip = iconChip(R.drawable.ic_mic, ctx.getString(R.string.ov_ptt)) {}
         pttChip.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
@@ -169,8 +141,6 @@ class Overlay(
         row1.addView(iconChip(R.drawable.ic_star, ctx.getString(R.string.ov_favorite)) { cb.onSaveFavorite() }, chipLp())
         row1.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
         row1.addView(iconChip(R.drawable.ic_close, ctx.getString(R.string.ov_close)) { cb.onClose() }, chipLp())
-
-        // 2. sor: betűméret, késleltetés
         row2.addView(chip("A−", ctx.getString(R.string.ov_a_minus)) { cb.onSizeDelta(-2) }, chipLp())
         row2.addView(chip("A+", ctx.getString(R.string.ov_a_plus)) { cb.onSizeDelta(2) }, chipLp())
         row2.addView(
@@ -184,30 +154,24 @@ class Overlay(
         buttons.addView(row1)
         buttons.addView(row2)
         buttons.visibility = View.GONE
-
         warnView.setTextColor(0xFFFFB454.toInt())
         warnView.textSize = 12f
         warnView.visibility = View.GONE
-
         enView.maxLines = 2
         enView.ellipsize = TextUtils.TruncateAt.START
-
         huView.setTypeface(huView.typeface, android.graphics.Typeface.BOLD)
         huView.maxLines = prefs.maxOverlayLines.coerceIn(2, 6)
-
         root.addView(levelBar)
         root.addView(buttons)
         root.addView(warnView)
         root.addView(enView)
         root.addView(huView)
-
         val scaleDetector = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScaleBegin(d: ScaleGestureDetector): Boolean {
                 pinching = true
                 pinchAcc = 1f
                 return true
             }
-
             override fun onScale(d: ScaleGestureDetector): Boolean {
                 pinchAcc *= d.scaleFactor
                 if (pinchAcc > 1.12f) {
@@ -219,12 +183,10 @@ class Overlay(
                 }
                 return true
             }
-
             override fun onScaleEnd(d: ScaleGestureDetector) {
                 pinching = false
             }
         })
-
         root.setOnTouchListener(object : View.OnTouchListener {
             private var startY = 0f
             private var lastY = 0f
@@ -232,7 +194,6 @@ class Overlay(
             private var dragged = false
             private var lastTapMs = 0L
             private var multi = false
-
             override fun onTouch(v: View, e: MotionEvent): Boolean {
                 scaleDetector.onTouchEvent(e)
                 when (e.actionMasked) {
@@ -257,17 +218,14 @@ class Overlay(
                     }
                     MotionEvent.ACTION_UP -> {
                         if (multi || pinching) {
-                            // csippentés vége – nem koppintás
                         } else if (dragged) {
                             prefs.overlayY = lp.y
                         } else if (System.currentTimeMillis() - downAt >= 550) {
-                            // Hosszú nyomás: az utolsó mondat mentése kedvencek közé + vágólapra
                             Haptics.click(ctx)
                             cb.onSaveFavorite()
                         } else {
                             val now = System.currentTimeMillis()
                             if (now - lastTapMs < 320) {
-                                // Dupla koppintás → szünet / folytatás
                                 Haptics.tick(ctx)
                                 cb.onTogglePause()
                                 lastTapMs = 0L
@@ -281,7 +239,6 @@ class Overlay(
                 return true
             }
         })
-
         val top = prefs.atTop
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -296,32 +253,23 @@ class Overlay(
             gravity = (if (top) Gravity.TOP else Gravity.BOTTOM) or Gravity.CENTER_HORIZONTAL
             y = if (prefs.overlayY >= 0) prefs.overlayY else if (top) dp(48) else dp(96)
         }
-
         applyStyle()
-
         try {
             wm.addView(root, lp)
             added = true
         } catch (_: Exception) {
-            // Nincs overlay-engedély, vagy a rendszer elutasította.
         }
     }
-
-    /** A beállítások (méret, szín, kontraszt, angol sor) újraalkalmazása. */
     fun applyStyle() {
         val hc = prefs.highContrast
         val size = prefs.textSizeSp + if (hc) 2 else 0
         huView.textSize = size.toFloat()
         huView.setTextColor(if (hc) Color.WHITE else prefs.textColor)
         if (hc) huView.setShadowLayer(6f, 0f, 0f, Color.BLACK) else huView.setShadowLayer(0f, 0f, 0f, 0)
-
         enView.textSize = (size * 0.62f).coerceAtLeast(11f)
         enView.setTextColor(if (hc) Color.WHITE else 0xFFBBBBBB.toInt())
-
         renderContent()
     }
-
-    /** en: angol (halvány) sor; lines: magyar sorok régitől az újig. */
     fun setContent(en: String, lines: List<String>) {
         val max = prefs.maxOverlayLines.coerceIn(2, 6)
         val trimmed = if (lines.size > max) lines.takeLast(max) else lines
@@ -338,7 +286,6 @@ class Overlay(
             }
         }
     }
-
     fun setWarning(text: String?) {
         if (text.isNullOrBlank()) {
             warnView.visibility = View.GONE
@@ -348,25 +295,20 @@ class Overlay(
         }
         updateBg()
     }
-
     fun setPaused(paused: Boolean) {
         if (!added) return
         pauseBtn.setImageResource(if (paused) R.drawable.ic_play else R.drawable.ic_pause)
         pauseBtn.contentDescription = ctx.getString(if (paused) R.string.ov_resume else R.string.ov_pause)
     }
-
     fun setLevel(level: Float) {
         if (!added) return
         levelBar.progress = (level.coerceIn(0f, 1f) * 100).toInt()
     }
-
     fun setPttActive(active: Boolean) {
-        // vizuális visszajelzés a szintcsíkon
         levelBar.progressTintList = android.content.res.ColorStateList.valueOf(
             if (active) 0xFF4CD08A.toInt() else 0xFF888888.toInt()
         )
     }
-
     fun remove() {
         handler.removeCallbacksAndMessages(null)
         if (!added) return
@@ -376,7 +318,6 @@ class Overlay(
         } catch (_: Exception) {
         }
     }
-
     private fun renderContent() {
         val grav = when (prefs.hAlign) {
             Prefs.ALIGN_LEFT -> Gravity.START or Gravity.CENTER_VERTICAL
@@ -388,7 +329,6 @@ class Overlay(
         val showEn = prefs.showEnglish && lastEn.isNotBlank()
         enView.text = lastEn
         enView.visibility = if (showEn) View.VISIBLE else View.GONE
-
         val base = if (prefs.highContrast) Color.WHITE else prefs.textColor
         val sb = SpannableStringBuilder()
         lastLines.forEachIndexed { i, line ->
@@ -410,20 +350,16 @@ class Overlay(
         huView.visibility = if (lastLines.isEmpty()) View.GONE else View.VISIBLE
         updateBg()
     }
-
     private fun updateBg() {
         val empty = lastLines.isEmpty() && lastEn.isBlank() && warnView.visibility != View.VISIBLE
         val base = if (prefs.highContrast) 245 else prefs.bgAlphaPct.coerceIn(10, 100) * 255 / 100
-        // enyhe kékes fekete – cinema
         bgShape.setColor(Color.argb(if (empty) base * 40 / 100 else base, 8, 10, 18))
     }
-
     private fun setExpanded(e: Boolean) {
         expanded = e
         buttons.visibility = if (e) View.VISIBLE else View.GONE
         if (e) scheduleCollapse() else handler.removeCallbacks(collapse)
     }
-
     private fun scheduleCollapse() {
         handler.removeCallbacks(collapse)
         handler.postDelayed(collapse, prefs.autoCollapseMs.toLong())

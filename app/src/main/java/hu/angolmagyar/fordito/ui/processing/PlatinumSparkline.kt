@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,8 +15,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
-
-/** A teljes haladás időbeli menete – a mintákat a panel a valós %-értékekből gyűjti (nincs szimuláció). */
 @Composable
 fun PlatinumSparkline(samples: List<Pair<Long, Int>>, modifier: Modifier = Modifier) {
     if (samples.size < 2) return
@@ -27,7 +24,6 @@ fun PlatinumSparkline(samples: List<Pair<Long, Int>>, modifier: Modifier = Modif
             val t0 = samples.first().first
             val span = (samples.last().first - t0).coerceAtLeast(1L).toFloat()
             fun pt(s: Pair<Long, Int>) = Offset(size.width * (s.first - t0) / span, size.height * (1f - s.second.coerceIn(0, 100) / 100f))
-            // vezetősínek 25/50/75%
             for (q in 1..3) drawLine(PlatinumColors.SteelDark.copy(alpha = 0.3f), Offset(0f, size.height * q / 4f), Offset(size.width, size.height * q / 4f), 1.dp.toPx())
             val line = Path()
             samples.forEachIndexed { i, s -> val p = pt(s); if (i == 0) line.moveTo(p.x, p.y) else line.lineTo(p.x, p.y) }

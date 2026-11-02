@@ -1,27 +1,21 @@
 package hu.angolmagyar.fordito
-
-/** ZIP extraction guardrails shared by import and model-install flows. */
 object ArchiveSafetyPolicy {
     const val DEFAULT_MAX_ENTRIES = 50_000
     const val DEFAULT_MAX_UNCOMPRESSED_BYTES = 2L * 1024 * 1024 * 1024
     const val DEFAULT_MAX_ENTRY_BYTES = 512L * 1024 * 1024
     const val DEFAULT_MAX_COMPRESSION_RATIO = 250L
-
     enum class Rejection { EMPTY, TOO_MANY_ENTRIES, INVALID_PATH, TOO_LARGE, ZIP_BOMB }
-
     data class EntryMetadata(
         val name: String,
         val uncompressedBytes: Long,
         val compressedBytes: Long
     )
-
     data class Limits(
         val maxEntries: Int = DEFAULT_MAX_ENTRIES,
         val maxTotalBytes: Long = DEFAULT_MAX_UNCOMPRESSED_BYTES,
         val maxEntryBytes: Long = DEFAULT_MAX_ENTRY_BYTES,
         val maxCompressionRatio: Long = DEFAULT_MAX_COMPRESSION_RATIO
     )
-
     fun validate(entries: List<EntryMetadata>, limits: Limits = Limits()): Rejection? {
         if (entries.isEmpty()) return Rejection.EMPTY
         if (entries.size > limits.maxEntries) return Rejection.TOO_MANY_ENTRIES
@@ -39,7 +33,6 @@ object ArchiveSafetyPolicy {
         }
         return null
     }
-
     fun isSafeRelativePath(raw: String): Boolean {
         if (raw.isBlank() || raw.startsWith('/') || raw.startsWith('\\') || raw.contains('\\')) return false
         if (raw.matches(Regex("^[A-Za-z]:.*"))) return false

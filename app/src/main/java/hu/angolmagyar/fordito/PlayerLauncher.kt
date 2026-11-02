@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
@@ -7,8 +6,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
-
-/** A videó megnyitása külső lejátszóban a kész felirattal (MX Player "subs" extra; a többi lejátszó a videó melletti SRT-t tölti be). */
 object PlayerLauncher {
     fun open(ctx: Context, video: Uri, srt: File?) {
         try {

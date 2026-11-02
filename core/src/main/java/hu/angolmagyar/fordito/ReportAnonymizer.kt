@@ -1,10 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Hibajelentés/napló anonimizálása megosztás előtt: fájlnevek, útvonalak, URI-k, e-mail címek, IP-címek és
- * titoknak látszó tokenek (API-kulcsok) kicserélése. Ugyanaz a fájlnév ugyanazt a jelölőt kapja, így a napló
- * követhető marad.
- */
 object ReportAnonymizer {
     private val EXT = "mp4|mkv|mov|avi|webm|m4a|mp3|wav|aac|ogg|opus|flac|srt|vtt|ass|txt|zip|json|csv"
     private val URI = Regex("""(?:content|file)://[^\s"']+""")
@@ -16,9 +10,7 @@ object ReportAnonymizer {
     private val URL_QUERY = Regex("""(https?://[^\s"'?]+)\?[^\s"']+""")
     private val SECRET = Regex("""\b(?:sk-[A-Za-z0-9_-]{16,}|AIza[A-Za-z0-9_-]{20,}|[A-Fa-f0-9]{32,}|[A-Za-z0-9+/_-]{40,}={0,2})\b""")
     private val JOB_LINE = Regex("""(FÁJL INDUL:\s*)(.+?)(\s·|$)""", RegexOption.MULTILINE)
-
     data class Result(val text: String, val replaced: Int)
-
     fun anonymize(text: String): Result {
         var n = 0
         val names = LinkedHashMap<String, Int>()

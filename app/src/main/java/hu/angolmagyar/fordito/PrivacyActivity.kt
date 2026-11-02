@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -47,8 +46,6 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-/** Adatvédelem: mi marad a telefonon, mi kerül ki; mentés, visszaállítás, törlés. (Compose, 4.2.10) */
 class PrivacyActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,16 +58,13 @@ class PrivacyActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var allowOnline by remember { mutableStateOf(prefs.allowOnlineAsr) }
     var confirmDelete by remember { mutableStateOf(false) }
-
     fun toast(msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
-
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
@@ -99,7 +93,6 @@ private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
             toast(msg)
         }
     }
-
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .statusBarsPadding().navigationBarsPadding()
@@ -109,7 +102,6 @@ private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
         OutlinedButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("← Vissza") }
         Text("Adatvédelem és mentés", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
             modifier = Modifier.semantics { heading() })
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Mi marad a telefonon?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
@@ -121,7 +113,6 @@ private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Mi kerül ki a hálózatra?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
@@ -136,7 +127,6 @@ private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
                 }
             }
         }
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Mentés és visszaállítás", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
@@ -152,7 +142,6 @@ private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
                 }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Visszaállítás fájlból…") }
             }
         }
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Törlés", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
@@ -163,7 +152,6 @@ private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
             }
         }
     }
-
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

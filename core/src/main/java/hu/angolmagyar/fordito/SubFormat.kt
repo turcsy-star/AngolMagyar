@@ -1,22 +1,12 @@
 package hu.angolmagyar.fordito
-
 import java.util.Locale
-
-/**
- * Felirat-formázás: kiegyensúlyozott sortörés, hosszú blokkok szétvágása, olvasható időzítés,
- * beszélőszínek és az SRT visszaolvasása (a szerkesztőhöz). Tiszta Kotlin, egységtesztelhető.
- */
 object SubFormat {
     const val MAX_LINE = 42
     private const val MIN_DUR_MS = 1200L
     private const val MAX_DUR_MS = 7000L
-
     private val PALETTE = listOf("#FFD54F", "#4FC3F7", "#81C784", "#F48FB1", "#CE93D8", "#FFB74D")
-
     private fun words(text: String): List<String> =
         text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-
-    /** Ha két sorba elfér, a két sor hossza közel egyenlő (nem az első sor a hosszú, a második csonk). */
     fun wrapBalanced(text: String, maxLen: Int = MAX_LINE): List<String> {
         val greedy = SrtExporter.wrap(text, maxLen)
         if (greedy.size != 2) return greedy
@@ -33,15 +23,11 @@ object SubFormat {
         }
         return best
     }
-
-    /** Hány feliratblokk kell a szöveghez (egy blokk legfeljebb 2 sor). */
     fun partsNeeded(text: String): Int {
         if (text.isBlank()) return 1
         val lines = SrtExporter.wrap(text).size
         return if (lines <= 2) 1 else (lines + 1) / 2
     }
-
-    /** A szöveg szétvágása legfeljebb [n] részre, szóhatáron, lehetőleg írásjelnél. */
     fun splitText(text: String, n: Int): List<String> {
         val w = words(text)
         if (w.isEmpty()) return emptyList()
@@ -67,8 +53,6 @@ object SubFormat {
         if (cur.isNotEmpty()) parts.add(cur.joinToString(" "))
         return parts
     }
-
-    /** A túl hosszú blokkokat (2 sornál több) időarányosan több blokkra vágja; a forrás és a cél együtt. */
     fun reflow(cues: List<SrtExporter.Cue>): List<SrtExporter.Cue> {
         val out = ArrayList<SrtExporter.Cue>(cues.size)
         for (c in cues) {
@@ -91,11 +75,6 @@ object SubFormat {
         }
         return out
     }
-
-    /**
-     * Olvasható időzítés: legalább ~1,2 mp (hosszabb szövegnél karakterszámmal arányos), nem húzódik
-     * feleslegesen a csendbe, és nem lóg bele a következő blokkba.
-     */
     fun fixTiming(cues: List<SrtExporter.Cue>): List<SrtExporter.Cue> {
         val out = ArrayList<SrtExporter.Cue>(cues.size)
         for ((i, c) in cues.withIndex()) {
@@ -107,15 +86,12 @@ object SubFormat {
             if (end > maxEnd) end = maxEnd
             val next = cues.getOrNull(i + 1)?.startMs
             if (next != null && end > next - 40) {
-                // ha a következő blokk közel kezdődik, nem lógunk bele (legalább 200 ms látszik)
                 end = if (next - 40 >= c.startMs + 500) next - 40 else maxOf(next - 40, c.startMs + 200)
             }
             out.add(c.copy(endMs = end))
         }
         return out
     }
-
-    /** Olvasási sebesség: ami 20 karakter/mp fölött van, annak a végét a következő blokk előtti szabad helyig kitoljuk. */
     fun fixReadingSpeed(cues: List<SrtExporter.Cue>, maxCps: Double = 20.0): List<SrtExporter.Cue> {
         val out = ArrayList<SrtExporter.Cue>(cues.size)
         for ((i, c) in cues.withIndex()) {
@@ -130,12 +106,8 @@ object SubFormat {
         }
         return out
     }
-
-    /** A teljes formázás: szétvágás + időzítés + olvasási sebesség. */
     fun polish(cues: List<SrtExporter.Cue>): List<SrtExporter.Cue> =
         fixReadingSpeed(fixTiming(reflow(cues.sortedBy { it.startMs })))
-
-    /** Beszélőnként más szín (SRT <font color>), a megjelenés sorrendjében. */
     fun speakerColors(cues: List<SrtExporter.Cue>): Map<String, String> {
         val m = LinkedHashMap<String, String>()
         for (c in cues) {
@@ -143,11 +115,7 @@ object SubFormat {
         }
         return m
     }
-
-    // ------------------------------------------------------------------ SRT visszaolvasás
-
     private val TIME = Regex("""(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})""")
-
     fun parseTime(s: String): Long? {
         val m = TIME.find(s.trim()) ?: return null
         val h = m.groupValues[1].toLong()
@@ -156,8 +124,6 @@ object SubFormat {
         val ms = m.groupValues[4].padEnd(3, '0').toLong()
         return ((h * 60 + mi) * 60 + se) * 1000 + ms
     }
-
-    /** SRT szöveg → blokkok (a teljes blokkszöveg a source mezőben, sortörésekkel). */
     fun parseSrt(text: String): List<SrtExporter.Cue> {
         val out = ArrayList<SrtExporter.Cue>()
         val blocks = text.replace("\r\n", "\n").replace('\r', '\n').trim().split(Regex("\n\\s*\n"))
@@ -174,8 +140,6 @@ object SubFormat {
         }
         return out
     }
-
-    /** Blokkok → SRT úgy, hogy a source szövegét (sortöréseivel együtt) változtatás nélkül írja. */
     fun buildRaw(cues: List<SrtExporter.Cue>): String {
         val sb = StringBuilder()
         var idx = 1
@@ -189,8 +153,6 @@ object SubFormat {
         }
         return sb.toString()
     }
-
-    /** Gyanús blokk: üres, nagyon rövid hosszú ideig, vagy ugyanaz mint az előző. */
     fun suspicious(prev: SrtExporter.Cue?, c: SrtExporter.Cue): String? {
         val t = c.source.trim()
         if (t.isEmpty()) return "üres"

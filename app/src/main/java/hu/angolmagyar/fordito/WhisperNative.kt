@@ -1,27 +1,19 @@
 package hu.angolmagyar.fordito
-
-/** JNI híd a whisper.cpp-hez. Egy példány = egy betöltött modell; egyszerre egy szál használja. */
 class WhisperNative private constructor(private var handle: Long) {
-
     interface Listener {
         fun onProgress(percent: Int)
-        /** t0/t1: 10 ms-os egységekben a chunk elejéhez képest. */
         fun onSegment(t0: Long, t1: Long, text: ByteArray)
     }
-
     data class TokenScore(
         val text: String,
         val probability: Float,
         val startMs: Long,
         val endMs: Long
     ) {
-        /** Jelzésre szolgáló érték, nem a szó helyességének bizonyítéka. */
         val needsReview: Boolean get() = !probability.isFinite() || probability < 0.35f
     }
-
     class Seg(val startMs: Long, val endMs: Long, val text: String, val noSpeech: Float,
               val avgLogProb: Float = 1f, val tokens: List<TokenScore> = emptyList()) {
-        /** Szavankénti, óvatos minimum-token pontszám; az SRT-sorok kiemeléséhez használjuk. */
         val wordConfidence: List<Float> by lazy {
             val out = ArrayList<Float>()
             var current: Float? = null
@@ -38,15 +30,12 @@ class WhisperNative private constructor(private var handle: Long) {
             if (out.size == text.trim().split(Regex("\\s+")).size) out else emptyList()
         }
     }
-
-    /** 0 = rendben. */
     fun transcribe(pcm: FloatArray, lang: String, threads: Int, beam: Int,
                    prompt: String?, listener: Listener?, vadModel: String? = null): Int {
         val h = handle
         if (h == 0L) return -101
         return nTranscribe(h, threads, pcm, lang, prompt, beam, vadModel, listener)
     }
-
     fun segments(): List<Seg> {
         val h = handle
         if (h == 0L) return emptyList()
@@ -70,20 +59,15 @@ class WhisperNative private constructor(private var handle: Long) {
         }
         return out
     }
-
     fun abort(on: Boolean) { val h = handle; if (h != 0L) nAbort(h, on) }
-
     @Synchronized fun close() {
         val h = handle
         handle = 0L
         if (h != 0L) nFree(h)
     }
-
     companion object {
         private var loaded: Boolean? = null
         private var loadError: String? = null
-
-        /** A natív kód ARMv8.2 + dotprod + fp16 utasításokra épül; régebbi CPU-n nem szabad betölteni (SIGILL). */
         private fun cpuOk(): Boolean {
             if (!Perf.isArm64()) return false
             return try {
@@ -92,7 +76,6 @@ class WhisperNative private constructor(private var handle: Long) {
                 feat.contains("asimddp") && (feat.contains("fphp") || feat.contains("asimdhp"))
             } catch (_: Exception) { true }
         }
-
         @Synchronized fun available(): Boolean {
             if (loaded == null) {
                 loaded = if (!cpuOk()) {
@@ -103,27 +86,19 @@ class WhisperNative private constructor(private var handle: Long) {
             }
             return loaded == true
         }
-
         fun error(): String = loadError ?: ""
-
-        /** null, ha a modell nem tölthető be. */
         fun open(path: String): WhisperNative? {
             if (!available()) return null
             val h = nInit(path)
             return if (h == 0L) null else WhisperNative(h)
         }
-
         fun systemInfo(): String = if (available()) nSystemInfo() else ""
-
-        /** Silero VAD: beszédszakaszok (t0,t1 párok, centiszekundum); null = hiba / nincs natív könyvtár. */
         fun vadSegments(modelPath: String, audio: FloatArray, threads: Int): FloatArray? {
             if (!available()) return null
             return try { nVad(modelPath, audio, threads, 0.5f, 100) } catch (_: Throwable) { null }
         }
-
         @JvmStatic private external fun nVad(path: String, audio: FloatArray, threads: Int,
                                              threshold: Float, minSilenceMs: Int): FloatArray?
-
         @JvmStatic private external fun nInit(path: String): Long
         @JvmStatic private external fun nFree(h: Long)
         @JvmStatic private external fun nAbort(h: Long, on: Boolean)

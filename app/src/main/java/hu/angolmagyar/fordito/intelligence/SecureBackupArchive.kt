@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.intelligence
-
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -11,8 +10,6 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
-
-/** Authenticated, password-protected envelope for the portable learning backup. */
 object SecureBackupArchive {
     private const val MAGIC = "AMPIBKP1"
     private const val SALT_SIZE = 16
@@ -20,7 +17,6 @@ object SecureBackupArchive {
     private const val KEY_BITS = 256
     private const val ITERATIONS = 210_000
     private const val MAX_CIPHER_BYTES = 24 * 1024 * 1024
-
     fun encrypt(plainText: String, password: CharArray): ByteArray {
         require(password.size >= 8) { "A jelszónak legalább 8 karakteresnek kell lennie." }
         val random = SecureRandom()
@@ -47,7 +43,6 @@ object SecureBackupArchive {
             }
         } finally { key.encoded?.fill(0) }
     }
-
     fun decrypt(payload: ByteArray, password: CharArray): String {
         require(payload.size in 40..MAX_CIPHER_BYTES) { "Érvénytelen vagy túl nagy titkosított mentés." }
         require(password.isNotEmpty()) { "Add meg a mentés jelszavát." }
@@ -75,14 +70,12 @@ object SecureBackupArchive {
             throw IllegalArgumentException("Hibás jelszó vagy sérült mentés.", badTag)
         } finally { key.encoded?.fill(0) }
     }
-
     private fun deriveKey(password: CharArray, salt: ByteArray, iterations: Int = ITERATIONS): SecretKeySpec {
         val spec = PBEKeySpec(password, salt, iterations, KEY_BITS)
         return try { SecretKeySpec(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded, "AES") }
         finally { spec.clearPassword() }
     }
 }
-
 data class BackupPreview(
     val createdAt: Long,
     val dictionaryCount: Int,

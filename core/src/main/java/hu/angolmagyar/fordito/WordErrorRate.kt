@@ -1,10 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Referenciaátirat és felismert szöveg összehasonlítása regressziós tesztekhez.
- * Az írásjeleket és a kis-/nagybetűt normalizálja, de a magyar ékezeteket megőrzi.
- * Ez diagnosztikai mérőszám, nem a fordítás szemantikai minőségének mérője.
- */
 object WordErrorRate {
     data class Result(
         val referenceWords: Int,
@@ -17,9 +11,7 @@ object WordErrorRate {
             if (errors == 0) 0.0 else 1.0
         } else errors.toDouble() / referenceWords
     }
-
     private val NON_WORD = Regex("[^\\p{L}\\p{N}']+")
-
     fun normalize(text: String): List<String> = text
         .lowercase()
         .replace('’', '\'')
@@ -27,8 +19,6 @@ object WordErrorRate {
         .trim()
         .split(Regex("\\s+"))
         .filter { it.isNotBlank() }
-
-    /** Levenshtein-hátsókövetés: helyettesítés, törlés és beszúrás külön számlálva. */
     fun compare(reference: String, hypothesis: String): Result {
         val ref = normalize(reference)
         val hyp = normalize(hypothesis)

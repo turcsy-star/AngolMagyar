@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -54,11 +53,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-
-/**
- * P8 – Dokumentum / kamera: fotó vagy kép kiválasztása → eszközön futó OCR → szerkeszthető szöveg → fordítás.
- * A képből semmi nem kerül ki a telefonról; a fordítómodell első használatkor tölthető le.
- */
 class DocumentCameraActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,7 +65,6 @@ class DocumentCameraActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 private fun DocumentCameraScreen(onBack: () -> Unit) {
     val ctx = LocalContext.current
@@ -81,7 +74,6 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
     var translated by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var photoUri by remember { mutableStateOf<Uri?>(null) }
-
     fun recognize(uri: Uri) {
         busy = true
         translated = ""
@@ -104,7 +96,6 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
             }
         }
     }
-
     fun importText(uri: Uri) {
         busy = true
         scope.launch {
@@ -123,7 +114,6 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
             }
         }
     }
-
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = photoUri
         if (ok && uri != null) recognize(uri) else status = "A fotókészítés megszakadt."
@@ -138,7 +128,6 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
             else -> status = "Ez a fájltípus nem támogatott. Válassz képet vagy szövegfájlt."
         }
     }
-
     fun launchCamera() {
         runCatching {
             val dir = File(ctx.cacheDir, "ocr").apply { mkdirs() }
@@ -148,7 +137,6 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
             takePicture.launch(uri)
         }.onFailure { status = "A kamera nem indítható: ${it.message ?: "ismeretlen hiba"}" }
     }
-
     fun translate() {
         val source = ocrText.trim()
         if (source.isEmpty()) { status = "Nincs lefordítandó szöveg."; return }
@@ -171,13 +159,11 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
                 translator.close()
             }
     }
-
     fun copy(label: String, text: String) {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText(label, text))
         status = "Vágólapra másolva."
     }
-
     Column(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
             .statusBarsPadding().navigationBarsPadding()
@@ -230,7 +216,6 @@ private fun DocumentCameraScreen(onBack: () -> Unit) {
         }
     }
 }
-
 private fun readinessLabel(r: CaptureReadiness): String = when (r) {
     CaptureReadiness.READY -> "kész"
     CaptureReadiness.EXPERIMENTAL -> "kísérleti – eszközteszt után lesz végleges"

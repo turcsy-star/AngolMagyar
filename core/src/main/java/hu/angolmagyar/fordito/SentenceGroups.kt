@@ -1,17 +1,8 @@
 package hu.angolmagyar.fordito
-
 import kotlin.math.roundToInt
-
-/**
- * Kontextusos fordítás segédje: a rövid, mondat közepén vágott felismerési blokkokat mondatokká fogja össze
- * (a gépi fordítás így sokkal jobb), majd a lefordított mondatot arányosan visszaosztja a blokkokra.
- */
 object SentenceGroups {
     data class Item(val startMs: Long, val endMs: Long, val text: String)
-
     private const val SENTENCE_END = ".?!…\"”)"
-
-    /** Szavak, amelyekre egy valódi mondat nem végződik – ha ilyen után "." áll, az a Whisper-darab végi hamis pont. */
     private val DANGLING = setOf(
         "a", "an", "the", "and", "or", "but", "so", "of", "to", "in", "on", "at", "for", "with", "from", "by",
         "my", "your", "his", "our", "their", "is", "are", "was", "were", "am", "be", "been", "i", "we", "they",
@@ -19,20 +10,16 @@ object SentenceGroups {
         "if", "because", "as", "than", "not", "just", "very", "supposed", "gonna", "wanna", "going"
     )
     private val WH = setOf("what", "where", "why", "how", "who", "when")
-
-    /** True, ha a "." végű blokk valójában félbevágott mondat (hamis pont a darab végén). */
     fun falseStop(text: String): Boolean {
         val t = text.trim()
         if (!t.endsWith(".") || t.endsWith("...")) return false
         val words = t.trimEnd('.').split(Regex("[\\s,;:!?]+")).filter { it.isNotBlank() }
         val last = words.lastOrNull()?.lowercase()?.trim('"', '\'', '“', '”') ?: return false
         if (last in DANGLING) return true
-        // a kérdőszóval induló utolsó tagmondat pont nélkül/ponttal végződve is kérdés → folytatódik
         val clause = t.trimEnd('.').split(Regex("[.?!]")).last().trim().lowercase()
         val cw = clause.split(Regex("[\\s,]+")).filter { it.isNotBlank() }
         return cw.size <= 6 && cw.take(3).any { it in WH }
     }
-
     fun group(
         items: List<Item>, maxChars: Int = 260, maxGapMs: Long = 1500, maxItems: Int = 6
     ): List<IntRange> {
@@ -50,8 +37,6 @@ object SentenceGroups {
                 val gap = items[i + 1].startMs - items[i].endMs
                 val next = items[i + 1].text.trim()
                 val nextLower = next.isNotEmpty() && next[0].isLowerCase()
-                // a mondat közepén vágott blokk (vessző / nincs záró írásjel + kisbetűs folytatás) kicsit hosszabb szünetet is áthidal;
-                // a "…" végű blokk kisbetűs folytatással szintén egy mondat
                 val ellipsis = t.endsWith("...") || t.endsWith("…")
                 val sentenceEnd = ends && !(ellipsis && nextLower) && !(falseStop(t) && gap <= maxOf(maxGapMs, 2500L))
                 val gapLimit = if (!ends && nextLower) maxOf(maxGapMs, 3000L) else maxGapMs
@@ -65,13 +50,9 @@ object SentenceGroups {
         }
         return out
     }
-
-    /** Magyar szavak, amelyekre egy sor nem végződhet szépen (névelő, kötőszó, igekötő). */
     private val HU_DANGLING = setOf(
         "a", "az", "egy", "és", "hogy", "de", "vagy", "meg", "is", "mint", "mert", "ha", "ki", "el", "fel", "le", "be", "át"
     )
-
-    /** A vágás "ára" a cand. szó után (kisebb = szebb): mondatvégi írásjel a legjobb, a függő szó a legrosszabb. */
     private fun cutCost(words: List<String>, cand: Int): Double {
         if (cand >= words.size) return 0.0
         val w = words[cand - 1]
@@ -84,12 +65,6 @@ object SentenceGroups {
         if (core in HU_DANGLING) c += 2.0
         return c
     }
-
-    /**
-     * A cél-szöveg szétosztása a forrásblokkok hosszának arányában. A vágáspontot az arányos helytől legfeljebb
-     * 4 szóval arrébb keresi: a mondatvégi írásjel a legjobb, utána a vessző; kötőszó, névelő után nem vág szívesen.
-     * (A fordítás szórendje eltér az angoltól, ezért a tisztán arányos vágás gyakran mondat közepére esne.)
-     */
     fun distribute(target: String, srcLens: List<Int>): List<String> {
         val n = srcLens.size
         if (n == 0) return emptyList()
@@ -107,7 +82,6 @@ object SentenceGroups {
                 e = words.size
             } else {
                 val ideal = words.size * acc.toDouble() / total
-                // ha elég szó van, minden résznek jusson legalább egy
                 val enough = words.size - used >= n - i
                 val minE = minOf(words.size, used + (if (enough) 1 else 0))
                 val maxE = maxOf(minE, words.size - (if (enough) n - 1 - i else 0))

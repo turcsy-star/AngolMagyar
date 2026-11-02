@@ -1,49 +1,32 @@
 package hu.angolmagyar.fordito.capture
-
-/**
- * P8 – Camera / document import contracts.
- *
- * These APIs exist so UI and navigation can compile against a stable surface, but
- * **no CameraX / ML Kit OCR / PDF parser is activated here**. A feature is only
- * considered ready after permission UX, size limits, privacy copy and on-device tests.
- */
 data class OcrBlock(
     val text: String,
     val confidence: Float?,
     val languageHint: String? = null
 )
-
 data class DocumentPage(
     val index: Int,
     val plainText: String,
     val isScannedLikely: Boolean
 )
-
 enum class CaptureReadiness {
-    /** Not implemented / dependencies not present. */
     UNAVAILABLE,
-    /** Code path exists but device test / permission flow incomplete. */
     EXPERIMENTAL,
     READY
 }
-
 interface CameraTranslateEngine {
     fun readiness(): CaptureReadiness
-    /** Must return null when not READY or permission missing. */
     fun recognize(imageJpeg: ByteArray): List<OcrBlock>?
 }
-
 interface DocumentImportEngine {
     fun readiness(): CaptureReadiness
     fun importPdf(bytes: ByteArray, maxPages: Int = 50): List<DocumentPage>?
     fun importPlainText(bytes: ByteArray, charsetName: String = "UTF-8"): DocumentPage?
 }
-
 object UnavailableCameraEngine : CameraTranslateEngine {
     override fun readiness() = CaptureReadiness.UNAVAILABLE
     override fun recognize(imageJpeg: ByteArray): List<OcrBlock>? = null
 }
-
 object UnavailableDocumentEngine : DocumentImportEngine {
     override fun readiness() = CaptureReadiness.UNAVAILABLE
     override fun importPdf(bytes: ByteArray, maxPages: Int): List<DocumentPage>? = null
@@ -56,11 +39,9 @@ object UnavailableDocumentEngine : DocumentImportEngine {
         }
     }
 }
-
 object CaptureRegistry {
     @Volatile var camera: CameraTranslateEngine = UnavailableCameraEngine
     @Volatile var documents: DocumentImportEngine = UnavailableDocumentEngine
-
     fun cameraReady(): Boolean = camera.readiness() == CaptureReadiness.READY
     fun documentsReady(): Boolean = documents.readiness() == CaptureReadiness.READY
 }

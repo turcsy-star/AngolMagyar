@@ -1,17 +1,8 @@
 package hu.angolmagyar.fordito
-
-/**
- * Determinisztikus, platformfüggetlen munkafolyamat-vezérlő a Platinum 7.0-hoz.
- *
- * A motor nem végez hálózati vagy fájlműveletet, és nem indít el feldolgozást magától.
- * A host alkalmazás hajtja végre a RUNNING lépést, majd explicit módon jelenti az
- * eredményt. Így az offline korlátok és a lépések sorrendje központilag ellenőrizhető.
- */
 object PlatinumWorkflow {
     enum class Kind { TEXT_TRANSLATION, AUDIO_TO_SUBTITLE }
     enum class RunStatus { READY, RUNNING, FAILED, COMPLETED, CANCELLED }
     enum class StepStatus { PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED }
-
     data class StepDefinition(
         val id: String,
         val title: String,
@@ -20,7 +11,6 @@ object PlatinumWorkflow {
         val requiresNetwork: Boolean = false,
         val maxAttempts: Int = 2
     )
-
     data class Definition(val id: String, val kind: Kind, val steps: List<StepDefinition>)
     data class StepState(
         val definition: StepDefinition,
@@ -36,12 +26,10 @@ object PlatinumWorkflow {
         val status: RunStatus = RunStatus.READY,
         val revision: Long = 1
     )
-
     sealed class Outcome {
         data class Accepted(val run: Run) : Outcome()
         data class Rejected(val reason: String) : Outcome()
     }
-
     fun validate(definition: Definition): List<String> = buildList {
         if (definition.id.isBlank()) add("A munkafolyamat azonosítója nem lehet üres.")
         if (definition.steps.isEmpty()) add("A munkafolyamatnak legalább egy lépést kell tartalmaznia.")
@@ -56,15 +44,12 @@ object PlatinumWorkflow {
         }
         if (hasCycle(definition.steps)) add("A munkafolyamat függőségi gráfja körkörös.")
     }
-
     fun create(runId: String, definition: Definition, offlineMode: Boolean): Outcome {
         if (runId.isBlank()) return Outcome.Rejected("A futásazonosító nem lehet üres.")
         val errors = validate(definition)
         if (errors.isNotEmpty()) return Outcome.Rejected(errors.distinct().joinToString(" "))
         return Outcome.Accepted(Run(runId, definition, offlineMode, definition.steps.map(::StepState)))
     }
-
-    /** A következő végrehajtható lépést adja vissza, de nem indítja el. */
     fun nextRunnable(run: Run, capabilities: Set<String>, networkAvailable: Boolean): String? {
         if (run.status in setOf(RunStatus.COMPLETED, RunStatus.CANCELLED, RunStatus.FAILED)) return null
         val states = run.steps.associateBy { it.definition.id }
@@ -75,7 +60,6 @@ object PlatinumWorkflow {
                 !state.definition.requiresNetwork.let { needsNetwork -> needsNetwork && (run.offlineMode || !networkAvailable) }
         }?.definition?.id
     }
-
     fun start(run: Run, stepId: String, capabilities: Set<String>, networkAvailable: Boolean): Outcome {
         if (run.status in setOf(RunStatus.COMPLETED, RunStatus.CANCELLED, RunStatus.FAILED)) {
             return Outcome.Rejected("A lezárt munkafolyamat nem indítható.")
@@ -99,13 +83,10 @@ object PlatinumWorkflow {
         updated[index] = state.copy(status = StepStatus.RUNNING, attempts = state.attempts + 1, lastError = null)
         return Outcome.Accepted(run.copy(steps = updated, status = RunStatus.RUNNING, revision = run.revision + 1))
     }
-
     fun complete(run: Run, stepId: String): Outcome = updateRunning(run, stepId) { it.copy(status = StepStatus.SUCCEEDED, lastError = null) }
-
     fun fail(run: Run, stepId: String, safeError: String): Outcome = updateRunning(run, stepId) {
         it.copy(status = StepStatus.FAILED, lastError = safeError.trim().take(500).ifBlank { "Ismeretlen feldolgozási hiba." })
     }
-
     fun retry(run: Run, stepId: String): Outcome {
         if (run.status in setOf(RunStatus.COMPLETED, RunStatus.CANCELLED)) return Outcome.Rejected("A lezárt munkafolyamat nem módosítható.")
         val index = run.steps.indexOfFirst { it.definition.id == stepId }
@@ -117,7 +98,6 @@ object PlatinumWorkflow {
         updated[index] = state.copy(status = StepStatus.PENDING, lastError = null)
         return Outcome.Accepted(restate(run.copy(steps = updated, revision = run.revision + 1)))
     }
-
     fun cancel(run: Run): Outcome {
         if (run.status == RunStatus.COMPLETED) return Outcome.Rejected("A befejezett munkafolyamat nem szakítható meg.")
         if (run.status == RunStatus.CANCELLED) return Outcome.Accepted(run)
@@ -126,7 +106,6 @@ object PlatinumWorkflow {
         }
         return Outcome.Accepted(run.copy(steps = updated, status = RunStatus.CANCELLED, revision = run.revision + 1))
     }
-
     private fun updateRunning(run: Run, stepId: String, transform: (StepState) -> StepState): Outcome {
         val index = run.steps.indexOfFirst { it.definition.id == stepId }
         if (index < 0) return Outcome.Rejected("Ismeretlen munkafolyamat-lépés.")
@@ -135,7 +114,6 @@ object PlatinumWorkflow {
         updated[index] = transform(updated[index])
         return Outcome.Accepted(restate(run.copy(steps = updated, revision = run.revision + 1)))
     }
-
     private fun restate(run: Run): Run {
         val status = when {
             run.steps.all { it.status == StepStatus.SUCCEEDED } -> RunStatus.COMPLETED
@@ -145,7 +123,6 @@ object PlatinumWorkflow {
         }
         return run.copy(status = status)
     }
-
     private fun hasCycle(steps: List<StepDefinition>): Boolean {
         val byId = steps.associateBy { it.id }
         val visiting = mutableSetOf<String>()
@@ -161,7 +138,6 @@ object PlatinumWorkflow {
         }
         return steps.any { visit(it.id) }
     }
-
     val textTranslationTemplate = Definition(
         id = "platinum_text_translation",
         kind = Kind.TEXT_TRANSLATION,
@@ -172,7 +148,6 @@ object PlatinumWorkflow {
             StepDefinition("save_local", "Eredmény mentése", setOf("quality_audit"), setOf("local_storage"))
         )
     )
-
     val audioToSubtitleTemplate = Definition(
         id = "platinum_audio_to_subtitle",
         kind = Kind.AUDIO_TO_SUBTITLE,

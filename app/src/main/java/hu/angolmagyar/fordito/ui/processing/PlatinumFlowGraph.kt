@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -37,14 +36,10 @@ import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
 import kotlin.math.PI
 import kotlin.math.sin
-
-/** A folyamatábra egy csomópontja. [stageIndex] a hozzá tartozó SrtJob-lépés. */
 data class FlowNode(
     val title: String, val status: StageStatus, val sub: String,
     val stageIndex: Int, val isTranslation: Boolean = false, val progress: Float? = null
 )
-
-/** A tényleges folyamatból építi a csomópontokat; fordításnál a felismerés után külön Fordítás csomópont jön. */
 fun flowNodes(state: ProcessingUiState): List<FlowNode> {
     val st = state.stages
     if (st.size < 5) return emptyList()
@@ -53,21 +48,14 @@ fun flowNodes(state: ProcessingUiState): List<FlowNode> {
     val r = st[3]
     out.add(FlowNode(if (state.withTranslation) "Felismerés" else r.title, r.status, subLabel(r), 3, progress = r.progress))
     if (state.withTranslation) {
-        // a fordítás a felismeréssel együtt, szegmensenként halad (egyetlen SrtJob-lépés)
         val ts = if (r.status == StageStatus.PENDING) StageStatus.PENDING else r.status
         out.add(FlowNode("Fordítás", ts, if (state.translatedLines > 0) "${state.translatedLines} sor" else "", 3, true, r.progress))
     }
     out.add(FlowNode(st[4].title, st[4].status, subLabel(st[4]), 4, progress = st[4].progress))
     return out
 }
-
 private fun nodePos(i: Int, n: Int, w: Float, h: Float) =
     Offset(w * (i + 0.5f) / n, h * (if (i % 2 == 0) 0.40f else 0.60f))
-
-/**
- * Összekapcsolt, ívelt folyamatábra: a csomópontok között animált adatáramlás (csak futó szakaszon),
- * érintésre kijelölhető csomópontok (haptikus visszajelzéssel). A kitöltés a valós haladásból jön.
- */
 @Composable
 fun PlatinumFlowGraph(
     state: ProcessingUiState, selected: Int?, onSelect: (Int?) -> Unit,
@@ -79,7 +67,6 @@ fun PlatinumFlowGraph(
     val n = nodes.size
     val haptic = LocalHapticFeedback.current
     val ms = if (reduced) 0 else 320
-
     val phase = if (reduced) 0f else {
         rememberInfiniteTransition(label = "flow").animateFloat(
             0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "ph"
@@ -97,7 +84,6 @@ fun PlatinumFlowGraph(
             }, tween(if (reduced) 0 else 600), label = "f"
         ).value
     }
-
     Column(modifier.fillMaxWidth()) {
         Canvas(
             Modifier.fillMaxWidth().height(100.dp)
@@ -119,7 +105,6 @@ fun PlatinumFlowGraph(
             val r = 13.dp.toPx()
             val w = size.width; val h = size.height
             val pm = PathMeasure()
-
             for (i in 0 until n - 1) {
                 val a = nodePos(i, n, w, h); val b = nodePos(i + 1, n, w, h)
                 val mx = (a.x + b.x) / 2f
@@ -135,7 +120,6 @@ fun PlatinumFlowGraph(
                     drawPath(seg, Brush.horizontalGradient(listOf(PlatinumColors.Steel, PlatinumColors.PlatinumHigh, PlatinumColors.Platinum), a.x, b.x),
                         style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
                 }
-                // adatáramlás: fénypontok csak ott, ahol a forráslépés tényleg fut
                 if (nodes[i].status == StageStatus.RUNNING && !reducedMotion.value) {
                     for (k in 0 until 3) {
                         val t = (phase + k / 3f) % 1f

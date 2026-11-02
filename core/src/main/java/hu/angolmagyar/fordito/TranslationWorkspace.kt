@@ -1,15 +1,7 @@
 package hu.angolmagyar.fordito
-
 import java.time.Instant
-
-/**
- * Platformfüggetlen fordítási munkaterület: változatok, audit és visszaállítható előzmény.
- * A tároló memóriabeli adapter; tartós tárolást a host réteg adhat hozzá titkosított
- * vagy Room-alapú adattárolóval. Egy korábbi változat soha nem módosul helyben.
- */
 object TranslationWorkspace {
     enum class Style { NATURAL, LITERAL, FORMAL, BUSINESS, CONVERSATIONAL }
-
     data class Variant(
         val id: String,
         val source: String,
@@ -20,18 +12,13 @@ object TranslationWorkspace {
         val parentId: String? = null,
         val note: String = ""
     )
-
     data class DiffPart(val kind: Kind, val text: String) {
         enum class Kind { UNCHANGED, ADDED, REMOVED }
     }
-
     data class RevisionHistory(val sourceKey: String, val variants: List<Variant>)
-
     class RevisionStore(private val maxRevisionsPerSource: Int = 50) {
         private val history = linkedMapOf<String, MutableList<Variant>>()
-
         init { require(maxRevisionsPerSource >= 2) { "Legalább két verziót meg kell őrizni." } }
-
         @Synchronized
         fun append(variant: Variant): Boolean {
             if (variant.id.isBlank() || variant.source.isBlank() || variant.translation.isBlank() || variant.providerId.isBlank()) return false
@@ -43,12 +30,9 @@ object TranslationWorkspace {
             while (revisions.size > maxRevisionsPerSource) revisions.removeAt(0)
             return true
         }
-
         @Synchronized
         fun list(source: String): RevisionHistory =
             RevisionHistory(sourceKey(source), history[sourceKey(source)]?.toList().orEmpty())
-
-        /** Visszaállítás új verziót hoz létre; a korábbi rekord változatlan marad. */
         @Synchronized
         fun restore(source: String, variantId: String, newId: String, providerId: String = "local-restore"): Variant? {
             val revisions = history[sourceKey(source)] ?: return null
@@ -62,15 +46,8 @@ object TranslationWorkspace {
             )
             return restored.takeIf { append(it) }
         }
-
         private fun sourceKey(source: String): String = source.trim().replace(Regex("\\s+"), " ").lowercase()
     }
-
-    /**
-     * Token-alapú, determinisztikus diff. A whitespace tokenként megmarad.
-     * Nagyon nagy szövegnél biztonságos, egyetlen csereblokkot ad vissza a memória
-     * négyzetes növekedésének elkerülésére.
-     */
     fun diff(before: String, after: String, maxTokens: Int = 400): List<DiffPart> {
         if (before == after) return listOfNotNull(before.takeIf { it.isNotEmpty() }?.let { DiffPart(DiffPart.Kind.UNCHANGED, it) })
         val a = tokenize(before)
@@ -100,13 +77,10 @@ object TranslationWorkspace {
         }
         return coalesce(raw)
     }
-
     fun audit(variant: Variant): TranslationQualityAudit.Report =
         TranslationQualityAudit.inspect(variant.source, variant.translation)
-
     private fun tokenize(text: String): List<String> = Regex("\\s+|[^\\s]+")
         .findAll(text).map { it.value }.toList()
-
     private fun coalesce(parts: List<DiffPart>): List<DiffPart> {
         val result = mutableListOf<DiffPart>()
         parts.forEach { part ->

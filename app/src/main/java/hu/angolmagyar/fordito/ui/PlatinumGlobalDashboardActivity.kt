@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -41,11 +40,6 @@ import hu.angolmagyar.fordito.ui.design.InfinityGlobalUi
 import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
-
-/**
- * Platinum Global Dashboard – v2.66.0
- * Egységes állapotközpont: modul- és rendszerállapot + gyorsműveletek.
- */
 class PlatinumGlobalDashboardActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,7 +60,6 @@ class PlatinumGlobalDashboardActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 private fun GlobalDashboardScreen(
     onBack: () -> Unit,
@@ -90,10 +83,8 @@ private fun GlobalDashboardScreen(
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionCode
         }
     } catch (_: Exception) { 6600 }
-
     val micOk = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
         PackageManager.PERMISSION_GRANTED
-
     val modules = remember(micOk, prefs.reduceMotion) {
         SystemStatusSnapshot.templateModules().map { m ->
             when (m.id) {
@@ -118,7 +109,6 @@ private fun GlobalDashboardScreen(
             }
         }
     }
-
     val snapshot = remember(modules, versionName, versionCode) {
         SystemStatusSnapshot.build(
             versionName = versionName,
@@ -130,7 +120,6 @@ private fun GlobalDashboardScreen(
             )
         )
     }
-
     Column(
         Modifier
             .fillMaxSize()
@@ -144,7 +133,6 @@ private fun GlobalDashboardScreen(
             style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Egységes állapotközpont", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("v$versionName ($versionCode) · Összkép: ${levelLabel(snapshot.overall)}")
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Összefoglaló", fontWeight = FontWeight.SemiBold)
@@ -155,10 +143,8 @@ private fun GlobalDashboardScreen(
                 }
             }
         }
-
         Text("Modulok", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         modules.forEach { mod -> ModuleRow(mod) }
-
         Text("Gyorsműveletek", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -179,7 +165,6 @@ private fun GlobalDashboardScreen(
         Spacer(Modifier.height(8.dp))
     }
 }
-
 @Composable
 private fun ModuleRow(mod: ModuleStatus) {
     PremiumCard {
@@ -194,7 +179,6 @@ private fun ModuleRow(mod: ModuleStatus) {
         }
     }
 }
-
 private fun levelLabel(level: Level): String = when (level) {
     Level.OK -> "Rendben"
     Level.WARN -> "Figyelmeztetés"
@@ -202,7 +186,6 @@ private fun levelLabel(level: Level): String = when (level) {
     Level.UNKNOWN -> "Ismeretlen"
     Level.DISABLED -> "Kikapcsolva"
 }
-
 @Composable
 private fun levelColor(level: Level) = when (level) {
     Level.OK -> MaterialTheme.colorScheme.primary

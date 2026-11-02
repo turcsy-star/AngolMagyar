@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -29,39 +28,28 @@ import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
-
 class LiveTranslateActivity : AppCompatActivity() {
-
     companion object {
         const val EXTRA_AUTO_START = "auto_start"
         const val EXTRA_PROFILE = "profile"
         private const val TIPS_VERSION = 29
     }
-
     private lateinit var prefs: Prefs
     private val handler = Handler(Looper.getMainLooper())
-
     private lateinit var column: LinearLayout
-
-    // Futás kártya élő elemei (a tick frissíti őket, nem kell újraépíteni)
     private var timerText: TextView? = null
     private lateinit var meterText: TextView
     private lateinit var meter: ProgressBar
     private lateinit var hintText: TextView
     private var captionText: TextView? = null
     private var livePanels: LivePanels? = null
-
-    // Állapot
     private var translatorReady = false
     private var downloading = false
     private var downloadMsg = ""
     private var downloadPct = 0
-
-    // Pending műveletek
     private var pendingMode: String? = null
     private var pendingTest = false
     private var shownTestResult: String? = null
-
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             val mode = pendingMode
@@ -74,7 +62,6 @@ class LiveTranslateActivity : AppCompatActivity() {
                 toast(getString(R.string.m_no_mic))
             }
         }
-
     private val projectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
             val data = res.data
@@ -84,43 +71,31 @@ class LiveTranslateActivity : AppCompatActivity() {
                 toast(getString(R.string.m_projection_denied))
             }
         }
-
     private val ticker = object : Runnable {
         override fun run() {
             tick()
             handler.postDelayed(this, 500)
         }
     }
-
     private fun dp(v: Int) = Ui.dp(this, v)
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-
     private fun hasMic() = ContextCompat.checkSelfPermission(
         this, Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
-
     private fun hasOverlay() = Settings.canDrawOverlays(this)
-
     private fun voskReady() = Engines.missingForLive(this, prefs) == null
-
     private fun batteryOk(): Boolean = try {
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     } catch (_: Exception) {
         false
     }
-
     private fun trReady() = prefs.polyMode || translatorReady
-
     private fun allReady() = voskReady() && trReady() && hasOverlay() && hasMic()
-
-    // ------------------------------------------------------------------ életciklus
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         App.applyOledToWindow(this)
         prefs = Prefs(this)
         publishShortcuts()
-
         column = Ui.column(this).apply {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
@@ -131,14 +106,11 @@ class LiveTranslateActivity : AppCompatActivity() {
             v.setPadding(b.left, b.top, b.right, b.bottom)
             insets
         }
-
         if (!prefs.onboarded && savedInstanceState == null && intent.getStringExtra(EXTRA_AUTO_START) == null) {
             startActivity(Intent(this, SetupWizardActivity::class.java))
         }
         handleAutoStart(intent)
     }
-
-    /** Hosszú nyomás az app ikonon: Mikrofon / Belső hang / Átiratok. */
     private fun publishShortcuts() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return
         try {
@@ -150,7 +122,6 @@ class LiveTranslateActivity : AppCompatActivity() {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 }
                 if (mode == null) {
-                    // Átiratok – külön activity
                     return android.content.pm.ShortcutInfo.Builder(this, id)
                         .setShortLabel(label)
                         .setLongLabel(label)
@@ -192,13 +163,11 @@ class LiveTranslateActivity : AppCompatActivity() {
         } catch (_: Exception) {
         }
     }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleAutoStart(intent)
     }
-
     override fun onResume() {
         super.onResume()
         checkTranslatorModel()
@@ -206,12 +175,10 @@ class LiveTranslateActivity : AppCompatActivity() {
         firstBuild = false
         handler.post(ticker)
     }
-
     override fun onPause() {
         super.onPause()
         handler.removeCallbacks(ticker)
     }
-
     private fun handleAutoStart(i: Intent?) {
         if (i == null) return
         val profileName = i.getStringExtra(EXTRA_PROFILE)
@@ -229,7 +196,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         i.removeExtra(EXTRA_AUTO_START)
         handler.post { if (allReady()) proceed(mode, false) else toast(getString(R.string.m_finish_setup)) }
     }
-
     private fun checkTranslatorModel() {
         RemoteModelManager.getInstance()
             .isModelDownloaded(TranslateRemoteModel.Builder(TranslateLanguage.HUNGARIAN).build())
@@ -240,12 +206,8 @@ class LiveTranslateActivity : AppCompatActivity() {
                 }
             }
     }
-
-    // ------------------------------------------------------------------------- UI
-
     private var meterShown = false
     private var firstBuild = true
-
     private fun modeName(mode: String?) = getString(
         when (mode) {
             TranslateService.MODE_INTERNAL -> R.string.m_mode_internal
@@ -253,15 +215,12 @@ class LiveTranslateActivity : AppCompatActivity() {
             else -> R.string.m_mode_mic
         }
     )
-
-    /** @param animate a kártyák belépő animációja (csak szerkezetváltáskor; frissítéskor nincs villogás) */
     private fun rebuild(animate: Boolean = true) {
         column.removeAllViews()
         meterShown = false
         timerText = null
         captionText = null
         livePanels = null
-
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
@@ -275,8 +234,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         })
         column.addView(header)
         column.addView(Ui.heroHeader(this, "LIVE TRANSLATION", "Élő fordítás", "Valós idejű beszédfelismerés és fordítás – válaszd ki a hangforrást, majd indítsd el a mikrofont vagy a belső hangot."))
-
-        // Státusz sáv
         val dirLabel = when {
             prefs.isConversation() -> getString(R.string.m_dir_conv) +
                 if (prefs.autoLangSwitch) " " + getString(R.string.m_dir_auto) else ""
@@ -302,7 +259,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             if (prefs.meetingMode) add(getString(R.string.m_extra_meeting))
         }.joinToString(" · ").let { if (it.isBlank()) "" else " · $it" }
         column.addView(Ui.small(this, "$dirLabel  ·  $modelLabel  ·  ${prefs.delayMs} ms$extras"))
-
         if (prefs.tipsSeenVersion < TIPS_VERSION && !AppState.running) {
             val tip = Ui.card(this)
             tip.addView(Ui.title(this, getString(R.string.m_tip_title), 16f))
@@ -313,17 +269,13 @@ class LiveTranslateActivity : AppCompatActivity() {
             })
             column.addView(tip)
         }
-
         errorCard()
         if (!AppState.running) polyCard()
-
         if (AppState.running) {
             runningCard()
         } else {
             readyCards()
         }
-
-        // Alsó műveletek
         val tools = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -347,10 +299,8 @@ class LiveTranslateActivity : AppCompatActivity() {
         })
         column.addView(tools)
         column.addView(Ui.button(this, getString(R.string.log_title), false) { LogDialog.show(this) })
-
         if (animate) Ui.animateIn(column) else Ui.settle(column)
     }
-
     private fun stepRow(done: Boolean, title: String, desc: String, action: String?, onAction: (() -> Unit)?) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -366,15 +316,12 @@ class LiveTranslateActivity : AppCompatActivity() {
         if (!done && action != null && onAction != null) row.addView(Ui.button(this, action, true, onAction))
         wizardHost.addView(row)
     }
-
     private lateinit var wizardHost: LinearLayout
-
     private fun wizardCard() {
         val card = Ui.card(this)
         card.addView(Ui.title(this, getString(R.string.m_wizard_title), 18f))
         card.addView(Ui.small(this, getString(R.string.m_wizard_sub)))
         wizardHost = card
-
         val spec = prefs.effectiveSpec(this)
         if (downloading) {
             val txt = Ui.body(this, downloadMsg)
@@ -404,17 +351,13 @@ class LiveTranslateActivity : AppCompatActivity() {
         ) {
             BatterySettings.open(this)
         }
-
         card.addView(Ui.button(this, "Előkészítés ellenőrzése", false) {
             NavTransitions.open(this, DiagnosticsActivity::class.java)
         })
         column.addView(card)
     }
-
     private fun readyCards() {
         val last = prefs.lastMode
-
-        // Profilok: egy koppintás = beállítások + indítás
         column.addView(Ui.small(this, getString(R.string.m_profiles)).apply {
             setPadding(0, dp(14), 0, dp(2))
         })
@@ -441,9 +384,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             isHorizontalScrollBarEnabled = false
             addView(chipRow)
         })
-
-        // Mit szeretnél? – ikonos csempék, mindegyik saját varázslóval.
-        // Modellek nélkül is látszanak, csak szürkék; koppintásra a letöltéshez visznek.
         val modelsOk = voskReady() && trReady()
         fun open(task: String) {
             val needsLive = task == TaskSetupActivity.TASK_LIVE || task == TaskSetupActivity.TASK_INTERPRETER
@@ -483,23 +423,18 @@ class LiveTranslateActivity : AppCompatActivity() {
             Ui.tile(this, R.drawable.ic_clipboard, "Átirat", "fájlból vagy felvételből", modelsOk) { open(TaskSetupActivity.TASK_TRANSCRIBE) },
             Ui.tile(this, R.drawable.ic_subtitles, "Film felirat", "fájlból .srt felirat (több nyelv)", modelsOk) { open(TaskSetupActivity.TASK_SUBTITLE) }
         ))
-
-        // Gyors indítás: a legutóbbi beállításokkal
         column.addView(Ui.small(this, "Élő indítás (nem fájl-SRT – az a Film felirat csempe)").apply { setPadding(0, dp(16), 0, dp(2)) })
         column.addView(Ui.modeCard(
             this, R.drawable.ic_play, getString(R.string.m_card_internal), getString(R.string.m_card_internal_sub),
             last == TranslateService.MODE_INTERNAL
         ) { proceed(TranslateService.MODE_INTERNAL, false) })
-
         column.addView(Ui.modeCard(
             this, R.drawable.ic_mic, getString(R.string.m_card_mic), getString(R.string.m_card_mic_sub),
             last == TranslateService.MODE_MIC
         ) { proceed(TranslateService.MODE_MIC, false) })
-
         column.addView(Ui.button(this, getString(R.string.m_quick_test), false) {
             proceed(TranslateService.MODE_MIC, true)
         })
-
         val result = AppState.testResult
         if (result != null) {
             val rc = Ui.card(this)
@@ -510,7 +445,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             shownTestResult = result
         }
     }
-
     private fun saveProfileDialog() {
         val input = androidx.appcompat.widget.AppCompatEditText(this).apply {
             hint = getString(R.string.m_profile_name_hint)
@@ -535,7 +469,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_cancel, null)
             .show()
     }
-
     private fun confirmDeleteProfile(name: String) {
         AlertDialog.Builder(this)
             .setMessage(getString(R.string.m_profile_delete, name))
@@ -546,15 +479,12 @@ class LiveTranslateActivity : AppCompatActivity() {
             .setNegativeButton(R.string.common_cancel, null)
             .show()
     }
-
     private fun elapsedLabel(): String {
         if (AppState.sessionStartedAt <= 0) return "0:00"
         val sec = ((android.os.SystemClock.elapsedRealtime() - AppState.sessionStartedAt) / 1000).toInt()
         return if (sec >= 3600) String.format("%d:%02d:%02d", sec / 3600, (sec % 3600) / 60, sec % 60)
         else String.format("%d:%02d", sec / 60, sec % 60)
     }
-
-    /** Futó kártya állapotsora: irány és felismerő motor(ok). */
     private fun engineLine(): String {
         val s = Engines.sides(prefs)
         val parts = ArrayList<String>()
@@ -577,7 +507,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         }
         return dir + " · " + parts.joinToString(" + ")
     }
-
     private fun runningCard() {
         meterShown = true
         val card = Ui.card(this)
@@ -595,7 +524,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         }
         card.addView(meter)
         if (prefs.platinumTheme) {
-            // Platinum / Diamond: prémium élő színház (fázis + spektrum + élő szöveg)
             meterText.visibility = View.GONE
             meter.visibility = View.GONE
             val lpMeter = LinearLayout.LayoutParams(
@@ -604,7 +532,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             card.addView(hu.angolmagyar.fordito.ui.processing.DiamondLiveView(this), lpMeter)
         }
         if (prefs.polyMode) {
-            // többnyelvű mód: két panel (eredeti | fordítás), beszélő- és nyelvjelöléssel, alul a célnyelv-választóval
             val lp = LivePanels(this, prefs)
             livePanels = lp
             lp.update(AppState.liveLog.value)
@@ -623,7 +550,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             setTextColor(Ui.color(this@LiveTranslateActivity, R.color.warn))
         }
         card.addView(hintText)
-
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row.addView(Ui.button(this, getString(if (AppState.paused) R.string.m_resume else R.string.m_pause), false) {
             startService(
@@ -646,8 +572,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         card.addView(row)
         column.addView(card)
     }
-
-    /** Mód-választó: többnyelvű (minden nyelv, auto) vagy klasszikus (rögzített nyelvpár). */
     private fun polyCard() {
         val card = Ui.card(this)
         card.addView(Ui.title(this, "🌍 Többnyelvű mód", 16f))
@@ -665,7 +589,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         card.addView(sw)
         column.addView(card)
     }
-
     private fun errorCard() {
         val err = AppState.lastError ?: return
         val card = Ui.card(this)
@@ -673,7 +596,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             setTextColor(Ui.color(this@LiveTranslateActivity, R.color.err))
         })
         card.addView(Ui.body(this, err.message))
-
         when (err.code) {
             AppState.ERR_NO_OVERLAY ->
                 card.addView(Ui.button(this, getString(R.string.m_allow), true) { openOverlaySettings() })
@@ -694,11 +616,7 @@ class LiveTranslateActivity : AppCompatActivity() {
         card.addView(Ui.button(this, getString(R.string.m_hide), false) { AppState.lastError = null; rebuild(false) })
         column.addView(card)
     }
-
-    // ------------------------------------------------------------------ időzítő
-
     private fun tick() {
-        // Átállás futó/nem futó állapot között -> újraépítés
         val needRunning = AppState.running
         if (needRunning != meterShown) {
             rebuild()
@@ -717,14 +635,9 @@ class LiveTranslateActivity : AppCompatActivity() {
             rebuild(false)
         }
     }
-
-    // ------------------------------------------------------------------- letöltés
-
-    /** A modellek letöltése a külön Modellek képernyőn történik. */
     private fun startDownload() {
         NavTransitions.open(this, ModelsActivity::class.java)
     }
-
     private var rebuildPosted = false
     private fun rebuildSoon() {
         if (rebuildPosted) return
@@ -734,7 +647,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             if (!isFinishing) rebuild(false)
         }, 400)
     }
-
     private fun finishDownload(msg: String) {
         runOnUiThread {
             downloading = false
@@ -743,15 +655,11 @@ class LiveTranslateActivity : AppCompatActivity() {
             rebuild(false)
         }
     }
-
-    // ------------------------------------------------------------------- indítás
-
     private fun openOverlaySettings() {
         startActivity(
             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
         )
     }
-
     private fun requestPerms(mode: String? = null, test: Boolean = false) {
         pendingMode = mode
         pendingTest = test
@@ -759,7 +667,6 @@ class LiveTranslateActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= 33) perms += Manifest.permission.POST_NOTIFICATIONS
         permLauncher.launch(perms.toTypedArray())
     }
-
     private fun proceed(mode: String, test: Boolean) {
         if (AppState.running) {
             toast(getString(R.string.m_already_running))
@@ -781,7 +688,6 @@ class LiveTranslateActivity : AppCompatActivity() {
             return
         }
         if (mode == TranslateService.MODE_INTERNAL && !test) {
-            // Egyszeri tájékoztatás a belső hang korlátairól
             if (!prefs.hintShown) {
                 prefs.hintShown = true
                 AlertDialog.Builder(this)
@@ -796,12 +702,10 @@ class LiveTranslateActivity : AppCompatActivity() {
             launchService(mode, test, 0, null)
         }
     }
-
     private fun startProjection() {
         val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         projectionLauncher.launch(mpm.createScreenCaptureIntent())
     }
-
     private fun launchService(mode: String, test: Boolean, resultCode: Int, data: Intent?) {
         val intent = Intent(this, TranslateService::class.java).apply {
             action = TranslateService.ACTION_START

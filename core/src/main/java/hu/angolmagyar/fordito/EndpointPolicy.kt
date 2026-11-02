@@ -1,16 +1,9 @@
 package hu.angolmagyar.fordito
-
 import java.net.URI
-
-/**
- * Custom online fordítási végpontok alapértelmezett transport-szabálya.
- * HTTPS tetszőleges érvényes hoston engedélyezett; HTTP kizárólag loopback vagy RFC1918 IPv4 címen.
- * Nem végez DNS-feloldást, így a döntés determinisztikus és hálózati mellékhatás nélküli.
- */
 object EndpointPolicy {
     fun isAllowed(baseUrl: String): Boolean {
         val raw = baseUrl.trim()
-        if (raw.isEmpty()) return true // a szolgáltató saját HTTPS alapértelmezett végpontja
+        if (raw.isEmpty()) return true
         val uri = try { URI(raw) } catch (_: Exception) { return false }
         val scheme = uri.scheme?.lowercase() ?: return false
         val host = uri.host?.lowercase()?.removeSuffix(".") ?: return false
@@ -19,7 +12,6 @@ object EndpointPolicy {
         if (scheme != "http") return false
         return host == "localhost" || host.endsWith(".localhost") || isPrivateIpv4(host)
     }
-
     private fun isPrivateIpv4(host: String): Boolean {
         val parts = host.split('.')
         if (parts.size != 4) return false

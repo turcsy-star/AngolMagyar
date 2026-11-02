@@ -17,8 +17,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 40410
-        versionName = "4.2.10"
+        versionCode = 40409
+        versionName = "4.2.9"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
@@ -108,9 +108,6 @@ android {
         compose = true
     }
 
-    testOptions {
-        unitTests.isIncludeAndroidResources = true
-    }
 
     packaging {
         jniLibs {
@@ -164,12 +161,5 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
 
-    testImplementation("junit:junit:4.13.2")
 
-    // Compose screenshot smoke test (Robolectric + Roborazzi)
-    testImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
-    testImplementation("org.robolectric:robolectric:4.14.1")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.44.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.44.0")
 }

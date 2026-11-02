@@ -1,11 +1,5 @@
 package hu.angolmagyar.fordito
-
-/**
- * S1/S2… → emberi nevek (pl. S1=Anna, S2=Péter).
- * Prefs.speakerNames: soronként „S1=Név” vagy „1=Név”.
- */
 object SpeakerNames {
-
     fun parse(text: String): Map<String, String> {
         val map = linkedMapOf<String, String>()
         for (line in text.lines()) {
@@ -22,13 +16,10 @@ object SpeakerNames {
         }
         return map
     }
-
-    /** speakerId 0-based → megjelenített név (Anna) vagy S1. */
     fun label(speakerId: Int, map: Map<String, String>): String {
         val key = "S${speakerId + 1}"
         return map[key] ?: key
     }
-
     fun label(key: String, map: Map<String, String>): String {
         val k = key.trim().uppercase().let {
             when {
@@ -39,6 +30,5 @@ object SpeakerNames {
         }
         return map[k] ?: key
     }
-
     fun fromPrefs(prefs: Prefs): Map<String, String> = parse(prefs.speakerNames)
 }

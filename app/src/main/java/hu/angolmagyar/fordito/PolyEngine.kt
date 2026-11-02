@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.os.Handler
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -11,12 +10,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
-
-/**
- * Többnyelvű élő mód: a Whisper automatikusan felismeri a nyelvet (99 nyelv), a beszélőket a hangmagasság
- * alapján különíti el, a szöveget pedig a kiválasztott célnyelvre fordítja (ML Kit offline, vagy online modell,
- * ha be van állítva). Az eredményt az [AppState.liveLog] tartalmazza (kétpaneles nézet).
- */
 class PolyEngine(
     private val ctx: Context,
     private val prefs: Prefs,
@@ -24,12 +17,10 @@ class PolyEngine(
     private val listener: Listener
 ) {
     interface Listener {
-        /** Főszálon: egy kész (lefordított) sor az átfedő feliratnak és a mentésnek. */
         fun onFinalLine(original: String, translated: String)
         fun onFatal(message: String)
         fun onNote(message: String?)
     }
-
     private val exec = Executors.newSingleThreadExecutor()
     private val tracker = SpeakerTracker()
     private val translators = HashMap<String, Translator>()
@@ -37,15 +28,11 @@ class PolyEngine(
     private val failed = HashMap<String, Long>()
     private var asr: LiveWhisperAsr? = null
     private var lastLang = ""
-    /** Az utolsó néhány (eredeti, fordítás) pár – kontextus az online fordításhoz. */
     private val history = java.util.ArrayDeque<Pair<String, String>>()
-
     @Volatile private var stopped = false
-
     fun start() {
         AppState.liveClear()
         tracker.reset()
-        // pontosabb felismeréshez nagyobb modellt ajánl, ha csak kicsi van telepítve
         try {
             val spec = Engines.whisperSpec(ctx)
             if (spec != null && (spec.id == ModelManager.WH_BASE.id || spec.id == ModelManager.WH_SMALL.id)) {
@@ -63,10 +50,7 @@ class PolyEngine(
         asr = a
         a.start()
     }
-
-    /** 16 kHz mono PCM. */
     fun feed(data: ShortArray, len: Int) { asr?.feed(data, len) }
-
     fun stop() {
         stopped = true
         asr?.stop()
@@ -75,26 +59,19 @@ class PolyEngine(
         for (t in translators.values) try { t.close() } catch (_: Exception) {}
         translators.clear()
     }
-
-    // ------------------------------------------------------------------ egy szakasz feldolgozása
-
     private fun handle(raw: String, audio: FloatArray) {
         if (stopped) return
         val text = raw.trim()
         if (text.isEmpty() || TextPolish.isNoise(text)) return
-
         val speaker = try { tracker.assign(audio) } catch (_: Throwable) { 0 }
-
         var lang = try { LanguageIdHelper.identifyBlocking(text, 1500) } catch (_: Throwable) { null }
             ?.let { LangCatalog.norm(it) } ?: ""
-        if (lang.isEmpty()) lang = lastLang // rövid mondatnál az előző nyelvet tartjuk
+        if (lang.isEmpty()) lang = lastLang
         if (lang.isNotEmpty()) lastLang = lang
-
         val tgt = LangCatalog.norm(prefs.polyTarget)
         val id = AppState.nextLiveId()
         val same = lang.isNotEmpty() && lang == tgt
         AppState.liveAppend(LiveLine(id, speaker, lang, text, if (same) text else ""))
-
         val translated = when {
             same -> text
             lang.isEmpty() -> text
@@ -102,19 +79,14 @@ class PolyEngine(
         }
         if (translated.isNotBlank() && !same) AppState.liveSetTranslation(id, translated)
         else if (translated.isBlank()) AppState.liveSetTranslation(id, "⚠ nem sikerült lefordítani")
-
         val shown = translated.ifBlank { text }
         if (!stopped) main.post { if (!stopped) listener.onFinalLine(text, shown) }
     }
-
-    // ------------------------------------------------------------------ fordítás
-
     private fun translate(text: String, src: String, tgt: String): String? {
         val online = translateOnline(text, src, tgt)
         if (online != null) return online
         return translateMlKit(text, src, tgt)
     }
-
     private fun translateOnline(text: String, src: String, tgt: String): String? {
         return try {
             if (OnlinePrefs.mode(ctx) == OnlinePrefs.OFF) return null
@@ -132,9 +104,7 @@ class PolyEngine(
             } else null
         } catch (_: Throwable) { null }
     }
-
     private fun mlLang(code: String): String? = TranslateLanguage.fromLanguageTag(code)
-
     private fun translateMlKit(text: String, src: String, tgt: String): String? {
         val s = mlLang(src)
         val t = mlLang(tgt)
@@ -167,8 +137,6 @@ class PolyEngine(
             null
         }
     }
-
-    /** Egy ML Kit feladat bevárása (exec szálon hívd); hibánál/időtúllépésnél kivételt dob. */
     private fun <T> await(task: com.google.android.gms.tasks.Task<T>, timeoutSec: Long): T? {
         val latch = CountDownLatch(1)
         val ok = AtomicReference<Boolean?>(null)

@@ -1,20 +1,14 @@
 package hu.angolmagyar.fordito
-
-/** Közös, konzervatív minőségi küszöbök; a jelölés nem jelent automatikus törlést. */
 object QualityRules {
     const val REVIEW_LP = -1.0f
     const val REPEAT_MIN_WORDS = 4
     const val ISOLATED_GAP_MS = 90_000L
     const val ISOLATED_MAX_WORDS = 6
 }
-
-/** Feliratblokkok gyanús jeleinek összegyűjtése az ellenőrző nézethez (felismerés + fordítás szempontjából). */
 object LineQuality {
     private val SENT_END = ".?!…\"”)"
     private val LETTER = Regex("\\p{L}")
-
     private fun words(t: String) = t.trim().split(Regex("\\s+")).count { it.isNotEmpty() }
-
     fun flags(prev: SrtExporter.Cue?, c: SrtExporter.Cue, next: SrtExporter.Cue?, hasTarget: Boolean): List<String> {
         val out = ArrayList<String>()
         val en = c.source.trim()
@@ -45,7 +39,6 @@ object LineQuality {
             !(prev == null && next == null) && words(shown) <= QualityRules.ISOLATED_MAX_WORDS) out.add("magányos")
         return out
     }
-
     fun summarize(cues: List<SrtExporter.Cue>): List<List<String>> {
         val hasTarget = cues.any { it.target.isNotBlank() }
         return cues.mapIndexed { i, c -> flags(cues.getOrNull(i - 1), c, cues.getOrNull(i + 1), hasTarget) }

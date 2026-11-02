@@ -1,21 +1,12 @@
 package hu.angolmagyar.fordito
-
 import kotlin.math.abs
 import kotlin.math.sqrt
-
-/**
- * Hangminőség-előszűrés a felismerés előtt: egyenáram-eltolás és mély zúgás (kb. 70 Hz alatt) eltávolítása,
- * majd a halk felvételek hangerejének felhúzása. A már jól kivezérelt hangot nem bántja. A tömböt helyben módosítja.
- */
 object AudioPrep {
     private const val TARGET_RMS = 0.08f
     private const val MAX_GAIN = 6f
     private const val PEAK_LIMIT = 0.97f
-
-    /** @return true, ha módosított valamit. */
     fun prepare(a: FloatArray, sampleRate: Int = 16000): Boolean {
         if (a.size < sampleRate / 2) return false
-        // 1) egyenáram + 1. rendű felüláteresztő (~70 Hz)
         val rc = 1.0 / (2 * Math.PI * 70.0)
         val dt = 1.0 / sampleRate
         val alpha = (rc / (rc + dt)).toFloat()
@@ -28,7 +19,6 @@ object AudioPrep {
             prevOut = y
             a[i] = y
         }
-        // 2) a beszédes részek (nem csendes minták) átlagos hangereje
         var sum = 0.0
         var n = 0
         var peak = 0f

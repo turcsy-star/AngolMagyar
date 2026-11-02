@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -34,26 +33,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PremiumColors
 import hu.angolmagyar.fordito.ui.design.PremiumMotion
-
-/**
- * A cinematic feldolgozó kártya: fejléc (összesített %), 5 lépéses folyamatvonal, az aktív lépés
- * leírása, az éppen hallott / lefordított mondat, figyelmeztetés vagy hiba, befejezéskor animáció.
- * Minden érték a [ProcessingUiState]-ből jön; ami nem ismert, az nem jelenik meg.
- */
 @Composable
 fun ProcessingPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(22.dp)
     var entered by remember { mutableStateOf(reduced) }
     LaunchedEffect(Unit) { entered = true }
-
-    // a befejezési animáció csak akkor fut, ha a "kész" átmenetet élőben látjuk (nem újranyitáskor)
     var prevFinished by remember { mutableStateOf(state.finished) }
     var burst by remember { mutableStateOf(false) }
     LaunchedEffect(state.finished, state.errorMessage, state.cancelled) {
         if (state.finished && !prevFinished && state.errorMessage == null && !state.cancelled && !reduced) burst = true
         prevFinished = state.finished
     }
-
     AnimatedVisibility(
         visible = entered,
         enter = if (reduced) fadeIn(tween(0)) else fadeIn(tween(PremiumMotion.CARD_ENTER)) +
@@ -105,7 +95,6 @@ fun ProcessingPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifi
         }
     }
 }
-
 @Composable
 private fun Header(s: ProcessingUiState) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -127,7 +116,6 @@ private fun Header(s: ProcessingUiState) {
         }
     }
 }
-
 @Composable
 private fun ActiveDetail(s: ProcessingUiState) {
     val active = s.stages.firstOrNull { it.status == StageStatus.RUNNING || it.status == StageStatus.WARNING }
@@ -136,7 +124,6 @@ private fun ActiveDetail(s: ProcessingUiState) {
     val line = listOf(active.title + pct, active.detail).filter { it.isNotBlank() }.joinToString(" – ")
     Text(line, color = PremiumColors.TextSecondary, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
-
 @Composable
 private fun LiveText(s: ProcessingUiState) {
     if (!s.running) return
@@ -145,7 +132,6 @@ private fun LiveText(s: ProcessingUiState) {
     if (s.translated.isNotBlank())
         Text("→ ${s.translated}", color = PremiumColors.BrightBlue, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
-
 @Composable
 private fun Notice(s: ProcessingUiState) {
     val (text, color) = when {
@@ -158,7 +144,6 @@ private fun Notice(s: ProcessingUiState) {
         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(color.copy(alpha = 0.12f)).padding(10.dp)
     )
 }
-
 @Composable
 private fun Chips(s: ProcessingUiState) {
     val items = ArrayList<String>()

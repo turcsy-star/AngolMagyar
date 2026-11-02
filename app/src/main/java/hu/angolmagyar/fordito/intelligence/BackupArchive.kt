@@ -1,23 +1,18 @@
 package hu.angolmagyar.fordito.intelligence
-
 import hu.angolmagyar.fordito.core.db.DictionaryEntity
 import hu.angolmagyar.fordito.core.db.ReviewScheduleEntity
 import hu.angolmagyar.fordito.core.db.TranslationEntity
 import org.json.JSONArray
 import org.json.JSONObject
-
-/** Versioned, portable backup format. Contains only local dictionary and learning data. */
 data class LearningBackup(
     val createdAt: Long,
     val dictionary: List<DictionaryEntity>,
     val translations: List<TranslationEntity>,
     val reviews: List<ReviewScheduleEntity>
 )
-
 object BackupArchive {
     const val CURRENT_VERSION = 1
     private const val MAX_ENTRIES = 100_000
-
     fun encode(backup: LearningBackup): String {
         val root = JSONObject()
             .put("format", "angolmagyar-infinity-backup")
@@ -42,7 +37,6 @@ object BackupArchive {
             })
         return root.toString(2)
     }
-
     fun decode(json: String): LearningBackup {
         require(json.length <= 20_000_000) { "A mentésfájl túl nagy." }
         val root = JSONObject(json)

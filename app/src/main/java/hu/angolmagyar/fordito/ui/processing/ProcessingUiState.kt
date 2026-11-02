@@ -1,17 +1,13 @@
 package hu.angolmagyar.fordito.ui.processing
-
 enum class StageStatus { PENDING, RUNNING, COMPLETED, WARNING, FAILED, CANCELLED }
-
 data class StageUi(
     val index: Int,
     val title: String,
     val status: StageStatus,
-    /** null = nem ismert (nincs kitalált százalék). */
     val progress: Float?,
     val detail: String,
     val durationMs: Long
 )
-
 data class ProcessingUiState(
     val running: Boolean = false,
     val finished: Boolean = false,
@@ -21,7 +17,6 @@ data class ProcessingUiState(
     val stages: List<StageUi> = emptyList(),
     val overallPercent: Int? = null,
     val elapsedMs: Long = 0L,
-    /** null = még nincs becslés. */
     val remainingMs: Long? = null,
     val etaBasis: String = "",
     val chunksDone: Int = 0,
@@ -32,6 +27,5 @@ data class ProcessingUiState(
     val fileNo: Int = 0,
     val fileTotal: Int = 0,
     val withTranslation: Boolean = false,
-    /** Eddig lefordított sorok (online + offline motor együtt). */
     val translatedLines: Int = 0
 )

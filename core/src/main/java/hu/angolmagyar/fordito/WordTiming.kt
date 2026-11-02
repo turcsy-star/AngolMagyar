@@ -1,18 +1,7 @@
 package hu.angolmagyar.fordito
-
 import kotlin.math.abs
-
-/**
- * Felirat-időzítés finomítása szó- vagy beszédszakasz-időbélyegekhez (Whisper szóidők, VAD tartományok).
- * Csak az időket módosítja, a szöveget soha. Ha egy blokkhoz nincs szakasz, az változatlan marad.
- */
 object WordTiming {
     data class Span(val startMs: Long, val endMs: Long)
-
-    /**
-     * A blokk elejét az első, végét az utolsó hozzá tartozó szakaszhoz igazítja (kis ráhagyással),
-     * de legfeljebb [maxShiftMs]-mal, a szomszédos blokkokba soha nem lóg bele, és a minimális hossz megmarad.
-     */
     fun snapCues(
         cues: List<SrtExporter.Cue>,
         spans: List<Span>,
@@ -26,7 +15,6 @@ object WordTiming {
         val order = cues.indices.sortedBy { cues[it].startMs }
         val sortedSpans = spans.filter { it.endMs > it.startMs }.sortedBy { it.startMs }
         if (sortedSpans.isEmpty()) return cues
-        // minden szakasz azt a blokkot kapja, amelyik középpontját tartalmazza; különben a legközelebbit (maxShift-en belül)
         val first = LongArray(cues.size) { Long.MAX_VALUE }
         val last = LongArray(cues.size) { Long.MIN_VALUE }
         for (sp in sortedSpans) {
@@ -60,16 +48,11 @@ object WordTiming {
             e = e.coerceIn(c.endMs - maxShiftMs, c.endMs + maxShiftMs)
             e = minOf(e, nextStart - minGapMs)
             if (e - s < minDurMs) e = minOf(s + minDurMs, nextStart - minGapMs)
-            if (e <= s) continue // nincs hely: marad az eredeti
+            if (e <= s) continue
             out[i] = c.copy(startMs = s, endMs = e)
         }
         return out
     }
-
-    /**
-     * Globális eltolás becslése (medián): mennyivel jár a felirat a szakaszok előtt (+) vagy mögött (−).
-     * Csak akkor ad értéket, ha legalább [minPairs] blokkhoz van szakasz.
-     */
     fun estimateOffsetMs(cues: List<SrtExporter.Cue>, spans: List<Span>, minPairs: Int = 5, window: Long = 3000): Long? {
         if (spans.isEmpty()) return null
         val sorted = spans.sortedBy { it.startMs }
@@ -82,18 +65,11 @@ object WordTiming {
         diffs.sort()
         return diffs[diffs.size / 2]
     }
-
-    /** Minden blokkot [offsetMs]-sal eltol (negatív kezdet 0-ra vágva). */
     fun shift(cues: List<SrtExporter.Cue>, offsetMs: Long): List<SrtExporter.Cue> =
         if (offsetMs == 0L) cues else cues.map {
             val s = maxOf(0L, it.startMs + offsetMs)
             it.copy(startMs = s, endMs = maxOf(s + 1, it.endMs + offsetMs))
         }
-
-    /**
-     * Egyetlen Whisper-szegmens határainak szűkítése a tokenidőkhöz: csak szűkít (soha nem bővít), így nem okozhat
-     * átfedést. Megbízhatatlan tokenidőknél (kevés token, nem növekvő sorrend, a szegmensen kívül) az eredeti marad.
-     */
     fun tighten(
         startMs: Long,
         endMs: Long,

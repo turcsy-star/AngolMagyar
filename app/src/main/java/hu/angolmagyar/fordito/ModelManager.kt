@@ -1,16 +1,10 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.ZipFile
-
-/**
- * Natív Vosk felismerő modellek több nyelvhez (small = mobilbarát).
- */
 object ModelManager {
-
     data class Spec(
         val id: String,
         val label: String,
@@ -18,15 +12,12 @@ object ModelManager {
         val dirName: String,
         val lang: String = "en",
         val optional: Boolean = false,
-        /** Egyfájlos modell (Whisper ggml): a fájl neve; null = Vosk ZIP-mappa. */
         val file: String? = null,
         val approxMb: Int = 0
     ) {
         val isWhisper: Boolean get() = file != null
     }
-
     private const val HF = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
-
     val WH_BASE = Spec("wh_base", "Whisper base (~57 MB)", HF + "ggml-base-q5_1.bin",
         "wh-base", "multi", file = "ggml-base-q5_1.bin", approxMb = 57)
     val WH_SMALL = Spec("wh_small", "Whisper small (~181 MB)", HF + "ggml-small-q5_1.bin",
@@ -37,9 +28,7 @@ object ModelManager {
         "wh-medium", "multi", file = "ggml-medium-q5_0.bin", approxMb = 515)
     val WH_LARGE = Spec("wh_large", "Whisper large-v3 (~1,1 GB)", HF + "ggml-large-v3-q5_0.bin",
         "wh-large", "multi", file = "ggml-large-v3-q5_0.bin", approxMb = 1080)
-
     val WHISPER = listOf(WH_SMALL, WH_TURBO, WH_MEDIUM, WH_LARGE, WH_BASE)
-
     val SMALL = Spec(
         "small", "Angol small (~40 MB)",
         "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
@@ -79,13 +68,10 @@ object ModelManager {
         "https://alphacephei.com/vosk/models/vosk-model-small-uk-v3-small.zip",
         "vosk-model-small-uk-v3-small", "uk"
     )
-
     val ALL = listOf(
         SMALL, LARGE, HU_LARGE,
         DE_SMALL, FR_SMALL, ES_SMALL, IT_SMALL, UK_SMALL
     )
-
-    /** Nyelvenként ajánlott (small) modell. */
     fun forSourceLang(lang: String, preferLargeEn: Boolean = false, ctx: Context? = null): Spec {
         return when (lang) {
             "hu" -> HU_LARGE
@@ -100,66 +86,47 @@ object ModelManager {
             }
         }
     }
-
     fun byId(id: String?): Spec =
         ALL.firstOrNull { it.id == id } ?: WHISPER.firstOrNull { it.id == id } ?: SMALL
-
-    /** A telepített, legnagyobb használható Whisper modell (preferált id előnyben), vagy null. */
     fun bestWhisper(ctx: Context, preferredId: String?): Spec? {
         WHISPER.firstOrNull { it.id == preferredId && isInstalled(ctx, it) }?.let { return it }
         return listOf(WH_LARGE, WH_TURBO, WH_MEDIUM, WH_SMALL, WH_BASE).firstOrNull { isInstalled(ctx, it) }
     }
-
     fun forLang(lang: String, preferLarge: Boolean, ctx: Context): Spec =
         forSourceLang(lang, preferLarge && lang == "en", ctx)
-
     fun dir(ctx: Context, spec: Spec): File =
         if (spec.file != null) File(File(File(ctx.filesDir, "models"), "whisper"), spec.file)
         else File(File(ctx.filesDir, "models"), spec.dirName)
-
     fun isInstalled(ctx: Context, spec: Spec): Boolean =
         if (spec.file != null) dir(ctx, spec).let { it.isFile && it.length() > 20L * 1024 * 1024 || (it.isFile && spec.approxMb < 20) }
         else File(dir(ctx, spec), "am").isDirectory
-
     fun sizeMb(ctx: Context, spec: Spec): Long {
         val d = dir(ctx, spec)
         if (!d.exists()) return 0
         return d.walkTopDown().filter { it.isFile }.map { it.length() }.sum() / (1024 * 1024)
     }
-
-    /** Modell mappa törlése – hely felszabadítás. */
     fun delete(ctx: Context, spec: Spec): Boolean {
         val d = dir(ctx, spec)
         if (!d.exists()) return true
         return d.deleteRecursively()
     }
-
     fun installedSpecs(ctx: Context): List<Spec> = (ALL + WHISPER).filter { isInstalled(ctx, it) }
-
-    /** Szüneteltetés / megszakítás jelzése a letöltő szálnak. */
     class DlControl {
         @Volatile var paused = false
         @Volatile var conn: HttpURLConnection? = null
-
         fun pause() {
             paused = true
             val c = conn
             if (c != null) Thread { try { c.disconnect() } catch (e: Exception) { DiagLog.swallow("ModelManager", e) } }.start()
         }
     }
-
     class PausedException : Exception("szüneteltetve")
-
     private fun partFile(ctx: Context, spec: Spec): File {
         val d = File(ctx.filesDir, "dl")
         d.mkdirs()
         return File(d, "${spec.dirName}.zip.part")
     }
-
-    /** Félbehagyott (folytatható) letöltés mérete bájtban. */
     fun partialBytes(ctx: Context, spec: Spec): Long = partFile(ctx, spec).let { if (it.exists()) it.length() else 0L }
-
-    /** Egyszerű változat (Beállítások): folyamat 0–100%. */
     fun download(ctx: Context, spec: Spec, onProgress: (Int, String) -> Unit) {
         download(ctx, spec, DlControl(), { done, total ->
             val mb = done / (1024 * 1024)
@@ -167,11 +134,6 @@ object ModelManager {
         }, { onProgress(80, it) })
         onProgress(100, "Kész: ${spec.label}")
     }
-
-    /**
-     * Folytatható letöltés (HTTP Range): a félbehagyott fájl a "dl" mappában marad,
-     * újraindításkor onnan megy tovább. Kapcsolat-megszakadásnál magától újrapróbál.
-     */
     fun download(
         ctx: Context, spec: Spec, ctl: DlControl,
         onBytes: (done: Long, total: Long) -> Unit, onStage: (String) -> Unit
@@ -210,12 +172,11 @@ object ModelManager {
         try {
             installFromZip(ctx, spec, part) { _, m -> onStage(m) }
         } catch (e: Exception) {
-            part.delete() // sérült letöltés: következőre tiszta lappal indul
+            part.delete()
             throw e
         }
         part.delete()
     }
-
     private fun fetchPart(spec: Spec, part: File, ctl: DlControl, onBytes: (Long, Long) -> Unit) {
         var have = if (part.exists()) part.length() else 0L
         val conn = URL(spec.url).openConnection() as HttpURLConnection
@@ -227,7 +188,7 @@ object ModelManager {
             if (ctl.paused) throw PausedException()
             conn.connect()
             val code = conn.responseCode
-            if (code == 416) { // már teljes
+            if (code == 416) {
                 onBytes(have, have)
                 return
             }
@@ -264,7 +225,6 @@ object ModelManager {
             ctl.conn = null
         }
     }
-
     fun installFromZip(ctx: Context, spec: Spec, zipFile: File, onProgress: (Int, String) -> Unit) {
         onProgress(80, "Kicsomagolás…")
         val target = dir(ctx, spec)
@@ -308,7 +268,6 @@ object ModelManager {
             if (target.exists()) backup.deleteRecursively()
         }
     }
-
     private fun unzip(zip: File, dest: File, onProgress: (Int, String) -> Unit) {
         val destCanon = dest.canonicalPath
         ZipFile(zip).use { zf ->

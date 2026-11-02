@@ -1,23 +1,15 @@
 package hu.angolmagyar.fordito
-
-/**
- * Offline tárgyalási összefoglaló: statisztika, beszélők, kulcsmondatok.
- * Nem LLM – szabályalapú, gyors, adatvédelembarát.
- */
 object MeetingSummary {
-
     data class Result(
         val title: String,
         val durationLabel: String,
         val cueCount: Int,
-        val speakers: List<Pair<String, Int>>, // label → sorok száma
+        val speakers: List<Pair<String, Int>>,
         val keyLines: List<String>,
         val fullText: String,
         val actions: List<String> = emptyList(),
         val decisions: List<String> = emptyList()
     )
-
-    /** Ékezet-független kulcsszavak (a [TranscriptRepo.fold] formájára). */
     private val ACTION_WORDS = listOf(
         "meg kell", "kell hogy", "feladat", "hatarido", "legyszi", "kerlek", "kerem",
         "elintez", "felelos", "teendo", "kuldd", "kuldj", "kovetkezo lepes", "utanajar",
@@ -29,7 +21,6 @@ object MeetingSummary {
         "rendben, akkor", "maradunk", "we agreed", "we decided", "decision", "approved",
         "agreed", "let's go with"
     )
-
     fun generate(
         cues: List<SrtExporter.Cue>,
         title: String = "Tárgyalás összefoglaló",
@@ -38,17 +29,14 @@ object MeetingSummary {
         if (cues.isEmpty()) {
             return Result(title, "0:00", 0, emptyList(), emptyList(), "$title\n\n(Üres átirat)\n")
         }
-
         val named = if (speakerMap.isEmpty()) cues else cues.map { c ->
             if (c.speaker.isBlank()) c
             else c.copy(speaker = SpeakerNames.label(c.speaker, speakerMap))
         }
-
         val start = named.minOf { it.startMs }
         val end = named.maxOf { it.endMs.coerceAtLeast(it.startMs + 1000) }
         val durMs = (end - start).coerceAtLeast(0)
         val durationLabel = formatDuration(durMs)
-
         val bySpeaker = linkedMapOf<String, Int>()
         for (c in named) {
             val sp = c.speaker.ifBlank { "—" }
@@ -57,8 +45,6 @@ object MeetingSummary {
         val speakers = bySpeaker.entries
             .sortedByDescending { it.value }
             .map { it.key to it.value }
-
-        // Kulcsmondatok: hosszabb cél (vagy forrás) sorok, max 12
         val scored = named.mapNotNull { c ->
             val line = c.target.ifBlank { c.source }.trim()
             if (line.length < 25) return@mapNotNull null
@@ -69,16 +55,13 @@ object MeetingSummary {
         }.sortedByDescending { it.first }.take(12)
             .sortedBy { it.second }
             .map { it.third }
-
         val actions = pick(named, ACTION_WORDS)
         val decisions = pick(named, DECISION_WORDS)
-
         val sb = StringBuilder()
         sb.append(title).append("\n")
         sb.append("=".repeat(title.length.coerceAtMost(40))).append("\n\n")
         sb.append("Időtartam: ").append(durationLabel).append("\n")
         sb.append("Bejegyzések: ").append(named.size).append("\n\n")
-
         if (speakers.isNotEmpty() && speakers.any { it.first != "—" }) {
             sb.append("Beszélők:\n")
             for ((name, n) in speakers) {
@@ -86,7 +69,6 @@ object MeetingSummary {
             }
             sb.append('\n')
         }
-
         if (scored.isNotEmpty()) {
             sb.append("Kiemelt mondatok:\n")
             for (line in scored) {
@@ -94,7 +76,6 @@ object MeetingSummary {
             }
             sb.append('\n')
         }
-
         if (decisions.isNotEmpty()) {
             sb.append("Döntések:\n")
             for (line in decisions) sb.append("  ✔ ").append(line).append('\n')
@@ -105,7 +86,6 @@ object MeetingSummary {
             for (line in actions) sb.append("  ☐ ").append(line).append('\n')
             sb.append('\n')
         }
-
         sb.append("Teljes átirat (rövidítve):\n")
         var lastSp = ""
         for (c in named.take(80)) {
@@ -120,7 +100,6 @@ object MeetingSummary {
             sb.append(t).append("  ").append(line).append('\n')
         }
         if (named.size > 80) sb.append("\n… (+").append(named.size - 80).append(" további sor)\n")
-
         return Result(
             title = title,
             durationLabel = durationLabel,
@@ -132,8 +111,6 @@ object MeetingSummary {
             decisions = decisions
         )
     }
-
-    /** Kulcsszavakra illeszkedő sorok időrendben (max. 10), időbélyeggel. */
     private fun pick(cues: List<SrtExporter.Cue>, words: List<String>): List<String> {
         val out = mutableListOf<String>()
         for (c in cues) {
@@ -149,7 +126,6 @@ object MeetingSummary {
         }
         return out
     }
-
     private fun formatDuration(ms: Long): String {
         val totalSec = ms / 1000
         val h = totalSec / 3600

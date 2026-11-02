@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -15,21 +14,12 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
 import org.json.JSONObject
-
-/**
- * Éjszakai üzemmód: a várakozó fájlokat eltesszük, és amint a telefon töltőn van (és Wi-Fi-n, ha online
- * fordítás is kell), értesítést küldünk. A feldolgozást az értesítésre koppintás után, a Fájl képernyő
- * indítja: az Android a háttérből nem engedi szabadon indítani az adatszinkron előtér-szolgáltatást,
- * ezért a felhasználó egy koppintással jóváhagy – reggelre így is kész lehet.
- */
 object NightMode {
     private const val JOB_ID = 4410
     private const val KEY = "nightQueue"
     private const val CH = "night_mode"
     const val EXTRA_NIGHT = "night_start"
-
     private fun sp(ctx: Context) = Prefs(ctx).raw()
-
     fun pending(ctx: Context): List<Pair<Uri, String>> {
         val raw = sp(ctx).getString(KEY, null) ?: return emptyList()
         return try {
@@ -40,20 +30,17 @@ object NightMode {
             emptyList()
         }
     }
-
     fun clear(ctx: Context) {
         sp(ctx).edit().remove(KEY).apply()
         try { (ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler).cancel(JOB_ID) } catch (_: Exception) {}
     }
-
-    /** Elteszi a várakozó fájlokat és ütemez; ad: ütemezett fájlok száma. */
     fun schedule(ctx: Context, items: List<SrtJob.QItem>): Int {
         if (items.isEmpty()) return 0
         val arr = JSONArray()
         for (q in items) {
             try {
                 ctx.contentResolver.takePersistableUriPermission(q.uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (_: Exception) { /* nem minden URI engedi: az app élő jogosultsága marad */ }
+            } catch (_: Exception) {   }
             arr.put(JSONObject().put("u", q.uri.toString()).put("n", q.name))
         }
         sp(ctx).edit().putString(KEY, arr.toString()).apply()
@@ -71,7 +58,6 @@ object NightMode {
         }
         return arr.length()
     }
-
     internal fun notifyReady(ctx: Context) {
         val n = pending(ctx).size
         if (n == 0) return
@@ -95,7 +81,6 @@ object NightMode {
         try { nm.notify(4411, note) } catch (e: SecurityException) { DiagLog.log("NightMode: nincs értesítési jog") }
     }
 }
-
 class NightJobService : JobService() {
     override fun onStartJob(params: JobParameters?): Boolean {
         try { NightMode.notifyReady(this) } catch (e: Exception) { DiagLog.log("NightJob hiba: ${e.message}") }

@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.wear
-
 import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.drawable.Icon
@@ -10,14 +9,7 @@ import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
-
-/**
- * Wear complication: mutatja, fut-e az élő fordítás, és indítja az órás appot.
- * A telefon WearBridge /am/status DataItem-jéből a legutóbbi állapotot a
- * shared prefs-ben tároljuk (a WearMainActivity frissíti).
- */
 class AmComplicationService : SuspendingComplicationDataSourceService() {
-
     override fun getPreviewData(type: ComplicationType): ComplicationData? {
         if (type != ComplicationType.SHORT_TEXT) return null
         return ShortTextComplicationData.Builder(
@@ -25,7 +17,6 @@ class AmComplicationService : SuspendingComplicationDataSourceService() {
             contentDescription = PlainComplicationText.Builder("AngolMagyar").build()
         ).setTitle(PlainComplicationText.Builder("Készenlét").build()).build()
     }
-
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         if (request.complicationType != ComplicationType.SHORT_TEXT) return null
         val prefs = applicationContext.getSharedPreferences("wear_status", MODE_PRIVATE)

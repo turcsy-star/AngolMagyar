@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
@@ -10,25 +9,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.TimeUnit
-
-/**
- * A felismerőnek átadott 16 kHz-es mono hang tömörített (AAC-LC, 24 kbps ≈ 11 MB/óra) mentése.
- * Nyers ADTS folyam: nincs konténer, ezért ha a folyamatot kilövik, a fájl akkor is lejátszható.
- * A kódolás külön szálon fut, a felismerést nem lassítja; ha lemarad, a hangot eldobja.
- */
 class AudioRecorder(private val file: File, private val sampleRate: Int = 16000) {
-
     private val queue = ArrayBlockingQueue<ShortArray>(400)
     private val end = ShortArray(0)
-
     @Volatile private var running = false
     private var thread: Thread? = null
-
     private var codec: MediaCodec? = null
     private var out: BufferedOutputStream? = null
     private var samplesFed = 0L
     private var eosSeen = false
-
     fun start(): Boolean {
         return try {
             file.parentFile?.mkdirs()
@@ -51,22 +40,16 @@ class AudioRecorder(private val file: File, private val sampleRate: Int = 16000)
             false
         }
     }
-
-    /** A hívó szálon gyorsan visszatér; a hangot másolja. */
     fun write(data: ShortArray, len: Int) {
         if (!running || len <= 0) return
-        queue.offer(data.copyOf(len)) // tele sor esetén eldobjuk
+        queue.offer(data.copyOf(len))
     }
-
-    /** Lezárás (nem blokkolja a hívót). */
     fun stop() {
         if (!running) return
         running = false
         if (!queue.offer(end)) {
-            // tele a sor: a ciklus a running=false miatt úgyis kilép, ha kiürült
         }
     }
-
     private fun loop() {
         try {
             while (true) {
@@ -85,7 +68,6 @@ class AudioRecorder(private val file: File, private val sampleRate: Int = 16000)
             release()
         }
     }
-
     private fun feed(chunk: ShortArray) {
         val c = codec ?: return
         val bytes = ByteArray(chunk.size * 2)
@@ -108,7 +90,6 @@ class AudioRecorder(private val file: File, private val sampleRate: Int = 16000)
             drain()
         }
     }
-
     private fun finish() {
         val c = codec ?: return
         var tries = 0
@@ -133,7 +114,6 @@ class AudioRecorder(private val file: File, private val sampleRate: Int = 16000)
         } catch (_: Exception) {
         }
     }
-
     private fun drain() {
         val c = codec ?: return
         val info = MediaCodec.BufferInfo()
@@ -169,12 +149,10 @@ class AudioRecorder(private val file: File, private val sampleRate: Int = 16000)
             }
         }
     }
-
-    /** 7 bájtos ADTS fejléc: MPEG-4, AAC-LC, 16 kHz (index 8), mono. */
     private fun adtsHeader(aacLen: Int): ByteArray {
         val frameLen = aacLen + 7
-        val freqIdx = 8 // 16000 Hz
-        val profile = 2 // AAC-LC
+        val freqIdx = 8
+        val profile = 2
         val chan = 1
         return byteArrayOf(
             0xFF.toByte(),
@@ -186,7 +164,6 @@ class AudioRecorder(private val file: File, private val sampleRate: Int = 16000)
             0xFC.toByte()
         )
     }
-
     private fun release() {
         try {
             codec?.stop()

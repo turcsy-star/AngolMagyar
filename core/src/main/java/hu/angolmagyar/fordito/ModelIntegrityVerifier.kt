@@ -1,13 +1,6 @@
 package hu.angolmagyar.fordito
-
 import java.io.InputStream
 import java.security.MessageDigest
-
-/**
- * Platformfüggetlen modell-integritás kapu. A fájl letöltését/telepítését nem végzi:
- * a host által átadott streamet korlátozottan olvassa, és csak hiteles digest esetén
- * ad VERIFIED eredményt. A caller felelőssége a stream lezárása.
- */
 object ModelIntegrityVerifier {
     data class ManifestEntry(
         val modelId: String,
@@ -16,19 +9,16 @@ object ModelIntegrityVerifier {
         val sha256: String,
         val maxBytes: Long = expectedBytes
     )
-
     enum class Status { VERIFIED, INVALID_MANIFEST, SIZE_MISMATCH, TOO_LARGE, HASH_MISMATCH, IO_ERROR }
     data class Result(val status: Status, val bytesRead: Long = 0, val actualSha256: String? = null) {
         val usable: Boolean get() = status == Status.VERIFIED
     }
-
     fun validateManifest(entry: ManifestEntry): Boolean =
         entry.modelId.isNotBlank() &&
             entry.version.isNotBlank() &&
             entry.expectedBytes > 0 &&
             entry.maxBytes >= entry.expectedBytes &&
             entry.sha256.matches(Regex("^[a-fA-F0-9]{64}$"))
-
     fun verify(entry: ManifestEntry, input: InputStream): Result {
         if (!validateManifest(entry)) return Result(Status.INVALID_MANIFEST)
         val digest = MessageDigest.getInstance("SHA-256")

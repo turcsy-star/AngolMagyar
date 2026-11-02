@@ -1,17 +1,11 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import hu.angolmagyar.fordito.SrtJob
-
-/** A [SrtJob] valós állapotából készít UI-állapotot. Nem talál ki értéket. */
 object SrtJobAdapter {
-
     private val titles = arrayOf("Előkészítés", "Hangkinyerés", "PCM betöltés", "Felismerés", "Mentés")
-
     fun snapshot(): ProcessingUiState {
         val job = SrtJob
         val now = System.currentTimeMillis()
         val warnRecog = job.skippedParts > 0 || job.translateNote.isNotBlank()
-
         val stages = job.steps.mapIndexed { i, s ->
             val warn = i == SrtJob.ST_RECOG && warnRecog
             StageUi(
@@ -29,7 +23,6 @@ object SrtJobAdapter {
                 durationMs = s.durMs
             )
         }
-
         val elapsed = when {
             job.startMs == 0L -> 0L
             job.endMs > 0L -> job.endMs - job.startMs
@@ -42,7 +35,6 @@ object SrtJobAdapter {
                 append(job.translateNote)
             }
         }.ifBlank { null }
-
         return ProcessingUiState(
             running = job.running,
             finished = job.finished,

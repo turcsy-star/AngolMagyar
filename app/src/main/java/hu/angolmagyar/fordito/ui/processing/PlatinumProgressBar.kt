@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import android.content.Context
 import android.util.AttributeSet
 import android.widget.FrameLayout
@@ -40,13 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
 import hu.angolmagyar.fordito.ui.design.PremiumMotion
-
-/**
- * Platina haladássáv letöltésekhez: kefélt fém kitöltés, 20 gravírozott osztás, csillanás.
- * pct < 0 = ismeretlen haladás: csak egy futó fénycsík jelzi, hogy dolgozik (százalék nélkül).
- */
 internal fun safeProgressPercent(pct: Int): Int = pct.coerceIn(0, 100)
-
 @Composable
 fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: Modifier = Modifier) {
     val reducedMotion = rememberUpdatedState(reduced)
@@ -56,7 +49,6 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
     val sweep = if (reducedMotion.value) 0.5f else rememberInfiniteTransition(label = "pb").animateFloat(
         0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "sw"
     ).value
-
     Column(
         modifier.fillMaxWidth().semantics {
             if (known) {
@@ -86,7 +78,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
                     Brush.verticalGradient(listOf(PlatinumColors.PlatinumHigh, PlatinumColors.Platinum, PlatinumColors.Steel), pad, pad + h),
                     Offset(pad, pad), Size(w, h), CornerRadius(h / 2f)
                 )
-                if (!reducedMotion.value && frac < 1f) { // csillanás a kitöltésen
+                if (!reducedMotion.value && frac < 1f) {
                     val cx = pad + w * sweep; val bw = 26.dp.toPx()
                     drawRoundRect(
                         Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.8f), Color.Transparent), cx - bw, cx + bw),
@@ -101,7 +93,6 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
                     Offset(x, pad), Size(bw, h), CornerRadius(h / 2f)
                 )
             }
-            // 20 gravírozott osztás
             for (i in 1 until 20) {
                 val x = pad + inner * i / 20f
                 val lit = known && x <= pad + inner * frac
@@ -114,17 +105,13 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
         if (message.isNotBlank()) Text(message, color = PlatinumColors.TextDim, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
-
-/** View-burkoló a View-alapú Modellkezelőhöz. */
 class PlatinumProgressView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     private var pct by mutableIntStateOf(-1)
     private var msg by mutableStateOf("")
     private val reduced = PremiumMotion.reduced(ctx)
-
     init {
         addView(ComposeView(ctx).apply { setContent { PlatinumProgressBar(pct, msg, reduced) } },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
-
     fun set(percent: Int, message: String) { if (pct != percent) pct = percent; if (msg != message) msg = message }
 }

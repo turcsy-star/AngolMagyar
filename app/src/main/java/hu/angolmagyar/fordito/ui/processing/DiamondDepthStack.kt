@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -16,11 +15,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
-
-/**
- * Háromrétegű mélység-háttér (v3.13): lassú aurora parallax.
- * reduceMotion / nem-cinema: statikus gradiens.
- */
 @Composable
 fun DiamondDepthStack(
     active: Boolean,
@@ -40,16 +34,13 @@ fun DiamondDepthStack(
             label = "drift"
         ).value
     }
-
     Box(modifier.fillMaxWidth()) {
         Canvas(Modifier.matchParentSize()) {
-            // Réteg 1 – mély ónix
             drawRect(
                 Brush.verticalGradient(
                     listOf(PlatinumColors.Onyx, PlatinumColors.Graphite.copy(alpha = 0.95f))
                 )
             )
-            // Réteg 2 – lassú aurora foltok (parallax eltolás)
             val dx = size.width * 0.08f * drift
             val dy = size.height * 0.05f * (1f - drift)
             drawCircle(
@@ -76,7 +67,6 @@ fun DiamondDepthStack(
                 radius = size.minDimension * 0.5f,
                 center = Offset(size.width * 0.85f - dx, size.height * 0.7f - dy)
             )
-            // Réteg 3 – finom élfény felül
             drawRect(
                 Brush.verticalGradient(
                     listOf(Color.White.copy(alpha = 0.06f), Color.Transparent)

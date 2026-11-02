@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -42,18 +41,11 @@ import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
 import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import kotlinx.coroutines.delay
-
-/**
- * Platinum Luxury feldolgozó kártya: műszer + gravírozott statisztikák + ékköves folyamatvonal.
- * Minden érték a [ProcessingUiState]-ből jön (valós adat); ami ismeretlen, az üresen vagy „számítás…” felirattal látszik.
- */
 @Composable
 fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(24.dp)
     var entered by remember { mutableStateOf(reduced) }
     LaunchedEffect(Unit) { entered = true }
-
-    // másodpercenként ketyegő óra a futó időhöz (az adat ~1 mp-enként frissül, közte az óra számol)
     val base = remember(state) { System.currentTimeMillis() }
     var tick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(state.running) {
@@ -62,31 +54,27 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
     val sinceBase = if (state.running) (tick - base).coerceAtLeast(0L) else 0L
     val elapsed = state.elapsedMs + sinceBase
     val remaining = state.remainingMs?.let { (it - sinceBase).coerceAtLeast(0L) }
-
     var selected by remember { mutableStateOf<Int?>(null) }
     val history = remember { mutableStateListOf<Pair<Long, Int>>() }
     LaunchedEffect(state.overallPercent, state.running) {
         val p = state.overallPercent
         if (state.running && p != null) {
-            if (history.isNotEmpty() && p < history.last().second) history.clear() // új feldolgozás
+            if (history.isNotEmpty() && p < history.last().second) history.clear()
             if (history.isEmpty() || history.last().second != p) {
                 history.add(System.currentTimeMillis() to p)
                 if (history.size > 150) history.removeAt(0)
             }
         }
     }
-
     var prevFinished by remember { mutableStateOf(state.finished) }
     var seal by remember { mutableStateOf(false) }
     LaunchedEffect(state.finished, state.errorMessage, state.cancelled) {
         if (state.finished && !prevFinished && state.errorMessage == null && !state.cancelled && !reduced) seal = true
         prevFinished = state.finished
     }
-
     val rim = Brush.linearGradient(
         listOf(PlatinumColors.PlatinumHigh.copy(alpha = 0.55f), PlatinumColors.SteelDark.copy(alpha = 0.25f), PlatinumColors.DiamondWhite.copy(alpha = 0.40f))
     )
-
     AnimatedVisibility(
         visible = entered,
         enter = if (reduced) fadeIn(tween(0)) else fadeIn(tween(PremiumMotion.CARD_ENTER)) + slideInVertically(tween(PremiumMotion.CARD_ENTER)) { it / 10 }
@@ -95,7 +83,7 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
             modifier.fillMaxWidth().clip(shape)
                 .background(Brush.verticalGradient(listOf(PlatinumColors.GraphiteHigh, PlatinumColors.Graphite, PlatinumColors.Onyx)))
                 .border(1.dp, rim, shape)
-                .drawBehind { // felső fényes hajszálvonal
+                .drawBehind {
                     drawLine(
                         Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.45f), Color.Transparent)),
                         Offset(size.width * 0.08f, 1f), Offset(size.width * 0.92f, 1f), 1.5.dp.toPx()
@@ -129,7 +117,6 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
                     }
                 }
                 Hairline()
-                // Prémium folyamat-színház: aktuális művelet + lépésvizualizáció + élő jel
                 if (state.running || state.finished || state.stages.isNotEmpty()) {
                     DiamondProcessTheater(state = state, reduced = reduced)
                 }
@@ -157,15 +144,12 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
         }
     }
 }
-
 private fun ProcessingUiState.startedOrDone() = running || finished || elapsedMs > 0
-
 private fun fmtClock(ms: Long): String {
     val s = ms / 1000
     val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
 }
-
 @Composable
 private fun Stat(label: String, value: String, sub: String = "") {
     Column {
@@ -174,7 +158,6 @@ private fun Stat(label: String, value: String, sub: String = "") {
         if (sub.isNotBlank()) Text(sub, color = PlatinumColors.TextDim, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
-
 @Composable
 private fun Hairline() {
     Box(
@@ -183,7 +166,6 @@ private fun Hairline() {
         ).padding(top = 1.dp)
     )
 }
-
 @Composable
 private fun NodeDetail(nd: FlowNode, state: ProcessingUiState, reduced: Boolean) {
     val st = state.stages.getOrNull(nd.stageIndex)

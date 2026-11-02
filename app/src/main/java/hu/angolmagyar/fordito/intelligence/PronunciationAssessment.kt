@@ -1,8 +1,5 @@
 package hu.angolmagyar.fordito.intelligence
-
-/** Compares a target phrase with a user-provided speech-recognition transcript (word error rate). */
 data class PronunciationResult(val scorePercent: Int, val substitutions: Int, val deletions: Int, val insertions: Int, val referenceWords: Int)
-
 object PronunciationAssessment {
     fun assess(reference: String, recognized: String): PronunciationResult {
         val a = tokens(reference); val b = tokens(recognized)

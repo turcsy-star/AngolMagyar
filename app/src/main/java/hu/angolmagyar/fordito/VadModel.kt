@@ -1,19 +1,13 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-
-/** A Silero VAD modell (whisper.cpp ggml formátum, ~1 MB): egyszeri letöltés, utána offline. */
 object VadModel {
     private const val NAME = "ggml-silero-v5.1.2.bin"
     private const val URL_STR = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
     private const val MIN_BYTES = 300_000L
-
     fun file(ctx: Context): File = File(File(ctx.filesDir, "vad").also { it.mkdirs() }, NAME)
-
-    /** A modellfájl, vagy null, ha nincs meg és nem tölthető le (ekkor marad a hangerő-alapú szűrés). */
     fun ensure(ctx: Context, say: (String) -> Unit): File? {
         val f = file(ctx)
         if (f.exists() && f.length() > MIN_BYTES) return f

@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.ComponentName
 import android.content.Context
 import android.os.SystemClock
@@ -7,10 +6,7 @@ import android.service.quicksettings.TileService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-
 data class AppError(val code: String, val message: String)
-
-/** Egy pillanatnyi állapot a UI számára (v2.21+ reaktív). */
 data class AppSnapshot(
     val running: Boolean = false,
     val paused: Boolean = false,
@@ -22,8 +18,6 @@ data class AppSnapshot(
     val lastCaptionHu: String = "",
     val lastCaptionEn: String = ""
 )
-
-/** Folyamaton belüli közös állapot a szolgáltatás és a képernyők között. */
 object AppState {
     const val ERR_NO_MODEL = "no_model"
     const val ERR_NO_TRANSLATOR = "no_translator"
@@ -32,7 +26,6 @@ object AppState {
     const val ERR_PROJECTION = "projection"
     const val ERR_AUDIO = "audio"
     const val ERR_OTHER = "other"
-
     @Volatile var running = false
         set(v) {
             if (field == v) return
@@ -65,12 +58,9 @@ object AppState {
             publish()
         }
     @Volatile var testResult: String? = null
-    /** Munkamenet kezdete (elapsedRealtime ms), 0 ha nem fut. */
     @Volatile var sessionStartedAt = 0L
     @Volatile var lastCaptionHu: String = ""
     @Volatile var lastCaptionEn: String = ""
-
-    // v2.22.4 – többnyelvű kétpaneles élő napló (eredeti | fordítás, beszélők, nyelvek)
     private val _liveLog = MutableStateFlow<List<LiveLine>>(emptyList())
     val liveLog: StateFlow<List<LiveLine>> = _liveLog.asStateFlow()
     private val liveIds = java.util.concurrent.atomic.AtomicLong(0)
@@ -78,12 +68,8 @@ object AppState {
     @Synchronized fun liveAppend(line: LiveLine) { _liveLog.value = LiveLog.append(_liveLog.value, line) }
     @Synchronized fun liveSetTranslation(id: Long, t: String) { _liveLog.value = LiveLog.setTranslation(_liveLog.value, id, t) }
     @Synchronized fun liveClear() { _liveLog.value = emptyList() }
-
-    // v2.21.1 – level throttling (max ~20 fps) a felesleges recomposition elkerülésére
     private var lastLevelPublishMs = 0L
     private const val LEVEL_THROTTLE_MS = 50L
-
-    /** Hangszint frissítése throttlinggel. A nyers érték mindig tárolódik. */
     fun updateLevel(newLevel: Float) {
         level = newLevel
         val now = SystemClock.uptimeMillis()
@@ -92,21 +78,15 @@ object AppState {
             publish()
         }
     }
-
-    // v2.21.0 – reaktív StateFlow + legacy listener
     private val _snapshot = MutableStateFlow(AppSnapshot())
     val snapshot: StateFlow<AppSnapshot> = _snapshot.asStateFlow()
-
     private val listeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
     fun addListener(l: () -> Unit) { listeners.add(l) }
     fun removeListener(l: () -> Unit) { listeners.remove(l) }
-
-    /** Frissíti a StateFlow-t és értesíti a legacy listenereket. */
     fun notifyListeners() {
         publish()
         for (l in listeners) try { l() } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
-
     private fun publish() {
         _snapshot.value = AppSnapshot(
             running = running,
@@ -120,12 +100,8 @@ object AppState {
             lastCaptionEn = lastCaptionEn
         )
     }
-
-    /** Hibanapló fájl (az App állítja be). */
     @Volatile var logFile: java.io.File? = null
     private val recent = ArrayDeque<String>()
-
-    /** Egy sor a hibanaplóba (memória + fájl, legfeljebb ~200 KB). */
     @Synchronized
     fun addLog(line: String) {
         val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
@@ -142,8 +118,6 @@ object AppState {
             f.appendText(entry + "\n")
         } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
-
-    /** A legutóbbi naplósorok (újabb elöl). */
     @Synchronized
     fun readLog(max: Int = 60): List<String> {
         val f = logFile
@@ -155,7 +129,6 @@ object AppState {
         val lines = if (fromFile.isNotEmpty()) fromFile else recent.toList().takeLast(max)
         return lines.reversed()
     }
-
     @Synchronized
     fun clearLog() {
         recent.clear()
@@ -163,7 +136,6 @@ object AppState {
             logFile?.delete()
         } catch (e: Exception) { DiagLog.swallow("AppState", e) }
     }
-
     fun notifyTile(ctx: Context) {
         try {
             TileService.requestListeningState(ctx, ComponentName(ctx, QuickTile::class.java))

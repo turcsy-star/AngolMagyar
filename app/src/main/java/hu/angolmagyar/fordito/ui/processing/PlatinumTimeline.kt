@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -33,7 +32,6 @@ import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
 import kotlin.math.PI
 import kotlin.math.sin
-
 internal fun jewelColor(s: StageStatus): Color = when (s) {
     StageStatus.PENDING -> PlatinumColors.GraphiteHigh
     StageStatus.RUNNING -> PlatinumColors.DiamondWhite
@@ -42,12 +40,10 @@ internal fun jewelColor(s: StageStatus): Color = when (s) {
     StageStatus.FAILED -> PlatinumColors.Ruby
     StageStatus.CANCELLED -> PlatinumColors.Steel
 }
-
 internal fun fmtDurationShort(ms: Long): String {
     val s = ms / 1000
     return if (s < 60) "$s mp" else "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
 }
-
 internal fun subLabel(s: StageUi): String = when (s.status) {
     StageStatus.PENDING -> ""
     StageStatus.RUNNING -> s.progress?.let { "${(it * 100).toInt()}%" } ?: "…"
@@ -55,15 +51,12 @@ internal fun subLabel(s: StageUi): String = when (s.status) {
     StageStatus.FAILED -> "hiba"
     StageStatus.CANCELLED -> "megszakítva"
 }
-
-/** Platina folyamatvonal: ékköves csomópontok, bevésett (gravírozott) sín, fényes csillanás a kitöltésen. */
 @Composable
 fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier = Modifier) {
     if (stages.isEmpty()) return
     val n = stages.size
     val reducedMotion = rememberUpdatedState(reduced)
     val ms = if (reducedMotion.value) 0 else 320
-
     val phase = if (reducedMotion.value) 0f else {
         rememberInfiniteTransition(label = "pt").animateFloat(
             0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "ph"
@@ -84,17 +77,14 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
             }, tween(if (reducedMotion.value) 0 else 600), label = "pf"
         ).value
     }
-
     Column(modifier.fillMaxWidth()) {
         Canvas(Modifier.fillMaxWidth().height(70.dp)) {
             val cy = size.height / 2f
             val r = 13.dp.toPx()
             fun cx(i: Int) = size.width * (i + 0.5f) / n
-
             for (i in 0 until n - 1) {
                 val x0 = cx(i) + r + 5.dp.toPx()
                 val x1 = cx(i + 1) - r - 5.dp.toPx()
-                // bevésett sín: sötét horony + vékony fényes perem
                 drawLine(PlatinumColors.Onyx, Offset(x0, cy), Offset(x1, cy), 5.dp.toPx(), StrokeCap.Round)
                 drawLine(PlatinumColors.SteelDark.copy(alpha = 0.55f), Offset(x0, cy + 2.6.dp.toPx()), Offset(x1, cy + 2.6.dp.toPx()), 1.dp.toPx(), StrokeCap.Round)
                 val f = fills[i].coerceIn(0f, 1f)
@@ -105,7 +95,6 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                         Offset(x0, cy), Offset(xe, cy), 3.dp.toPx(), StrokeCap.Round
                     )
                     if (stages[i].status == StageStatus.RUNNING && !reducedMotion.value) {
-                        // csillanás: fényes sáv fut végig a kitöltött szakaszon
                         val sx = x0 + (xe - x0) * phase
                         val w = 18.dp.toPx()
                         drawLine(
@@ -114,7 +103,6 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                         )
                     }
                 }
-                // osztásjelek a sínen (bevésett milestone-ok)
                 for (k in 1..3) {
                     val tx = x0 + (x1 - x0) * k / 4f
                     drawLine(PlatinumColors.SteelDark.copy(alpha = 0.8f), Offset(tx, cy - 6.dp.toPx()), Offset(tx, cy - 3.dp.toPx()), 1.dp.toPx())
@@ -148,17 +136,14 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
         }
     }
 }
-
 internal fun DrawScope.jewel(status: StageStatus, color: Color, check: Float, x: Float, y: Float, r: Float, phase: Float, reduced: Boolean) {
     val c = Offset(x, y)
     val running = status == StageStatus.RUNNING
-
     if (running) {
         val br = if (reduced) 0.5f else 0.5f + 0.5f * sin(phase * 2f * PI.toFloat())
         val gr = r * (2.1f + 0.2f * br)
         drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.30f + 0.12f * br), Color.Transparent), c, gr), gr, c)
     }
-    // fémes keret (foglalat)
     drawCircle(
         Brush.linearGradient(
             listOf(PlatinumColors.PlatinumHigh, PlatinumColors.Steel, PlatinumColors.SteelDark),
@@ -166,8 +151,6 @@ internal fun DrawScope.jewel(status: StageStatus, color: Color, check: Float, x:
         ), r + 3.dp.toPx(), c
     )
     drawCircle(PlatinumColors.Onyx, r + 0.6.dp.toPx(), c)
-
-    // ékkő
     if (status == StageStatus.PENDING) {
         drawCircle(PlatinumColors.Graphite, r - 1.dp.toPx(), c)
         drawCircle(PlatinumColors.SteelDark.copy(alpha = 0.6f), r - 1.dp.toPx(), c, style = Stroke(1.dp.toPx()))
@@ -179,8 +162,7 @@ internal fun DrawScope.jewel(status: StageStatus, color: Color, check: Float, x:
         Brush.radialGradient(listOf(hi, color, lo), Offset(x - r * 0.3f, y - r * 0.35f), r * 1.35f),
         r - 1.dp.toPx(), c
     )
-    drawCircle(Color.White.copy(alpha = 0.55f), r * 0.17f, Offset(x - r * 0.38f, y - r * 0.42f)) // csillanás
-
+    drawCircle(Color.White.copy(alpha = 0.55f), r * 0.17f, Offset(x - r * 0.38f, y - r * 0.42f))
     val sw = 2.2.dp.toPx()
     val ink = PlatinumColors.Onyx.copy(alpha = 0.85f)
     when (status) {

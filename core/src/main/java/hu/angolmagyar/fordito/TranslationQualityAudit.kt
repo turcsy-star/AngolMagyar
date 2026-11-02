@@ -1,10 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Determinisztikus fordítási ellenőrző az EN→HU munkafolyamathoz.
- * Heurisztikus figyelmeztetéseket ad, nem állít elő valószínűségi pontosságot,
- * és nem írja át automatikusan a fordítást.
- */
 object TranslationQualityAudit {
     enum class Severity { INFO, REVIEW, WARNING }
     data class Finding(val severity: Severity, val code: String, val message: String)
@@ -12,7 +6,6 @@ object TranslationQualityAudit {
         val needsReview: Boolean get() = findings.any { it.severity != Severity.INFO }
         val isEmpty: Boolean get() = findings.isEmpty()
     }
-
     fun inspect(sourceEnglish: String, translationHungarian: String): Report {
         val src = sourceEnglish.trim()
         val dst = translationHungarian.trim()
@@ -26,7 +19,6 @@ object TranslationQualityAudit {
             findings += Finding(Severity.REVIEW, "EMPTY_SOURCE", "A fordításnak nincs összehasonlítható forrásszövege.")
             return Report(findings)
         }
-
         TranslationCheck.check(src, dst).forEach { issue ->
             val code = when (issue) {
                 "szám eltér" -> "NUMBER_MISMATCH"
@@ -42,9 +34,6 @@ object TranslationQualityAudit {
             }
             findings += Finding(Severity.WARNING, code, message)
         }
-
-        // A nagy hosszeltérés csak ellenőrzési jelzés: rövid angol és magyar mondatok
-        // természetes hossza jelentősen eltérhet, ezért ez soha nem minősül hibabizonyítéknak.
         val srcWords = src.split(Regex("\\s+")).count { it.isNotBlank() }
         val dstWords = dst.split(Regex("\\s+")).count { it.isNotBlank() }
         if (srcWords >= 8 && dstWords >= 1 && (dstWords.toDouble() / srcWords < 0.35 || dstWords.toDouble() / srcWords > 2.8)) {

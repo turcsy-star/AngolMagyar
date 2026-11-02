@@ -1,38 +1,23 @@
 package hu.angolmagyar.fordito
-
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.sqrt
-
-/**
- * Könnyű, eszközön futó beszélő-követés élő hanghoz: minden beszédszakaszból alapfrekvenciát (F0) és
- * zengésjellemzőt számol, majd online csoportosít. Nem tökéletes (két hasonló hangú embert összevonhat),
- * de a női/férfi/gyerek hangok és a váltakozó beszélők megkülönböztetésére jól használható.
- */
 class SpeakerTracker(
     private val maxSpeakers: Int = 6,
-    /** ln(F0-arány) küszöb: ennél nagyobb eltérés = másik beszélő (0,22 ≈ 4 félhang) */
     private val newSpeakerLogDist: Double = 0.22
 ) {
     data class Voice(val f0: Double, val zcr: Double, val rms: Double)
-
     private class Cluster(var f0: Double, var zcr: Double, var n: Int)
-
     private val clusters = ArrayList<Cluster>()
     private var last = 0
-
     val speakerCount: Int get() = clusters.size
-
     fun reset() { clusters.clear(); last = 0 }
-
-    /** A beszédszakasz beszélője (1-től), 0 ha nem állapítható meg és még nincs korábbi beszélő. */
     fun assign(pcm: FloatArray, sampleRate: Int = 16_000): Int {
         val v = features(pcm, sampleRate)
         return assign(v)
     }
-
     fun assign(v: Voice): Int {
-        if (v.f0 <= 0.0) return last // zöngétlen/rövid: marad az előző beszélő
+        if (v.f0 <= 0.0) return last
         if (clusters.isEmpty()) {
             clusters.add(Cluster(v.f0, v.zcr, 1)); last = 1; return 1
         }
@@ -40,7 +25,6 @@ class SpeakerTracker(
         var bestD = Double.MAX_VALUE
         for ((i, c) in clusters.withIndex()) {
             val d = abs(ln(v.f0 / c.f0)) + 0.15 * abs(v.zcr - c.zcr) / (c.zcr + 0.02)
-            // az előző beszélő enyhe előnyt kap (a hang magassága mondaton belül is ingadozik)
             val dd = if (i + 1 == last) d * 0.85 else d
             if (dd < bestD) { bestD = dd; best = i }
         }
@@ -55,9 +39,7 @@ class SpeakerTracker(
         last = best + 1
         return last
     }
-
     companion object {
-        /** F0 (medián) autokorrelációval a zöngés keretekből; 60–400 Hz között keres. */
         fun features(pcm: FloatArray, sampleRate: Int = 16_000): Voice {
             val frame = sampleRate * 40 / 1000
             val hop = sampleRate * 20 / 1000
@@ -95,7 +77,6 @@ class SpeakerTracker(
                         rs[lag] = r
                         if (r > bestR) bestR = r
                     }
-                    // oktávhiba ellen: a legrövidebb lag, amelynek csúcsa közel akkora, mint a legjobb
                     var bestLag = 0
                     for (lag in minLag + 1 until maxLag) {
                         if (rs[lag] >= 0.85 * bestR && rs[lag] >= rs[lag - 1] && rs[lag] >= rs[lag + 1]) { bestLag = lag; break }

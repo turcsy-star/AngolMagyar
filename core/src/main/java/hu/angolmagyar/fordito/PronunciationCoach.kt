@@ -1,30 +1,18 @@
 package hu.angolmagyar.fordito
-
-/**
- * Kiejtés-edző: a célmondat és a beszédfelismerő által hallott szöveg szavankénti összevetése,
- * gyakorlandó szavak és tippek magyar anyanyelvűeknek. A felismerő szövegére épül, nem fonetikai pontozó.
- */
 object PronunciationCoach {
-
     enum class WordStatus { CORRECT, WRONG, MISSING }
-
     data class WordResult(val word: String, val heard: String?, val status: WordStatus)
-
     data class Analysis(
         val words: List<WordResult>,
-        /** A célmondatban nem szereplő, de hallott szavak. */
         val extras: List<String>,
         val scorePercent: Int,
         val practiceWords: List<String>,
         val tips: List<String>
     )
-
     private val TOKEN = Regex("[\\p{L}\\p{N}']+")
-
     private fun tokens(value: String): List<String> =
         TOKEN.findAll(value.replace('’', '\'').replace('‘', '\'').lowercase())
             .map { it.value.trim('\'') }.filter { it.isNotEmpty() }.toList()
-
     fun analyze(target: String, recognized: String): Analysis {
         val a = tokens(target)
         val b = tokens(recognized)
@@ -61,10 +49,7 @@ object PronunciationCoach {
         val practice = words.filter { it.status != WordStatus.CORRECT }.map { it.word }.distinct()
         return Analysis(words, extras, score, practice, tipsFor(practice))
     }
-
     private val SILENT_H = setOf("hour", "honest", "honor", "honour", "heir")
-
-    /** Tippek a gyakori magyar anyanyelvű kiejtési buktatókra, a gyakorlandó szavak alapján (legfeljebb 4). */
     fun tipsFor(words: List<String>): List<String> {
         val tips = LinkedHashSet<String>()
         for (raw in words) {
@@ -83,12 +68,8 @@ object PronunciationCoach {
         }
         return tips.take(4)
     }
-
-    /** A célmondat rövid darabokra vágva a lassú, szakaszos meghallgatáshoz. */
     fun slowChunks(target: String, maxWords: Int = 3): List<String> =
         target.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.chunked(maxWords.coerceAtLeast(1)).map { it.joinToString(" ") }
-
-    /** A legutóbbi próbák alakulása: "javul" / "romlik" / "stabil" / "kevés adat". */
     fun trend(scores: List<Int>): String {
         val last = scores.takeLast(5)
         if (last.size < 2) return "kevés adat"

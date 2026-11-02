@@ -1,15 +1,8 @@
 package hu.angolmagyar.fordito
-
-/**
- * Szereplők / helyek nevei: a felismerő által elrontott névalakot (pl. "Nena" → "Nina") a megadott névre javítja.
- * Csak mondat közbeni, nagybetűs szavakat javít, így a közönséges mondatkezdő szavak nem sérülnek.
- */
 object NameFix {
     private val WORD = Regex("\\p{L}[\\p{L}'’-]*")
-
     fun parseNames(text: String): List<String> =
         text.split(',', ';', '\n').map { it.trim() }.filter { it.length >= 3 }.distinct()
-
     private fun lev(a: String, b: String): Int {
         val d = IntArray(b.length + 1) { it }
         for (i in 1..a.length) {
@@ -23,14 +16,13 @@ object NameFix {
         }
         return d[b.length]
     }
-
     private fun matchName(w: String, names: List<String>): String? {
         val wl = w.lowercase()
         var best: String? = null
         var bestD = Int.MAX_VALUE
         for (n in names) {
             val nl = n.lowercase()
-            if (nl == wl) return null // már jó
+            if (nl == wl) return null
             if (nl[0] != wl[0] || Math.abs(nl.length - wl.length) > 1) continue
             val lim = if (nl.length >= 7) 2 else 1
             val d = lev(nl, wl)
@@ -38,7 +30,6 @@ object NameFix {
         }
         return best
     }
-
     fun apply(text: String, names: List<String>): String {
         if (names.isEmpty() || text.isBlank()) return text
         val sb = StringBuilder()
@@ -49,7 +40,6 @@ object NameFix {
             last = m.range.last + 1
             var out = w
             if (w.length >= 4 && w[0].isUpperCase()) {
-                // mondat eleji szó: nem nyúlunk hozzá
                 var k = m.range.first - 1
                 while (k >= 0 && text[k] == ' ') k--
                 val sentenceStart = k < 0 || text[k] in ".!?…\n\"“”-—"

@@ -1,14 +1,5 @@
 package hu.angolmagyar.fordito
-
-/**
- * Konzervatív, determinisztikus utófeldolgozó az átiratok végső ellenőrzéséhez.
- *
- * Nem talál ki hiányzó tartalmat: csak explicit felhasználói javítólistákat,
- * szótári alakokat és biztonságos formázási szabályokat alkalmaz.
- * A "reviewRecommended" jelzés ellenőrzési javaslat, nem nyelvi modellből származó pontossági mérés.
- */
 object SubtitlePostProcessor {
-
     data class Options(
         val applyEnglishRules: Boolean = true,
         val applyHungarianRules: Boolean = true,
@@ -17,7 +8,6 @@ object SubtitlePostProcessor {
         val normalizePunctuation: Boolean = true,
         val addTerminalPunctuation: Boolean = false
     )
-
     data class Result(
         val text: String,
         val changed: Boolean,
@@ -25,7 +15,6 @@ object SubtitlePostProcessor {
         val appliedRuleCount: Int,
         val notes: List<String>
     )
-
     fun process(
         text: String,
         language: Language,
@@ -37,11 +26,9 @@ object SubtitlePostProcessor {
         if (text.isBlank()) {
             return Result(text, changed = false, reviewRecommended = false, appliedRuleCount = 0, notes = emptyList())
         }
-
         var result = text
         var rulesApplied = 0
         val notes = mutableListOf<String>()
-
         val rules = when (language) {
             Language.ENGLISH -> if (options.applyEnglishRules) englishRules else emptyList()
             Language.HUNGARIAN -> if (options.applyHungarianRules) hungarianRules else emptyList()
@@ -51,7 +38,6 @@ object SubtitlePostProcessor {
             if (updated != result) rulesApplied++
             result = updated
         }
-
         if (options.applyGlossary && glossary.isNotEmpty()) {
             val updated = when (language) {
                 Language.ENGLISH -> TextPolish.polishEnglish(result, glossary, options.removeFillers)
@@ -65,7 +51,6 @@ object SubtitlePostProcessor {
                 Language.HUNGARIAN -> TextPolish.polishHungarian(result, removeFillers = options.removeFillers)
             }
         }
-
         if (options.normalizePunctuation) {
             val normalized = result
                 .replace(Regex("[ \\t]+([,.;:!?…])"), "$1")
@@ -80,17 +65,13 @@ object SubtitlePostProcessor {
                 result = normalized
             }
         }
-
         if (!options.addTerminalPunctuation) {
-            // A felirat lehet szándékos töredék: az automatikus pontozást visszavonjuk,
-            // ha a bemenetnek nem volt lezáró írásjele.
             val originalTrimmed = text.trimEnd()
             val originalHadTerminal = originalTrimmed.lastOrNull() in listOf('.', '!', '?', '…', '”', '"')
             if (!originalHadTerminal && result.endsWith(".") && result.split(Regex("\\s+")).size >= 4) {
                 result = result.dropLast(1)
             }
         }
-
         if (Regex("\\bTODO\\b|\\bFIXME\\b|\\[(?:unclear|inaudible)\\]", RegexOption.IGNORE_CASE).containsMatchIn(result)) {
             notes += "Ellenőrizd a bizonytalan vagy szerkesztői jelöléseket."
         }
@@ -100,7 +81,6 @@ object SubtitlePostProcessor {
         if (Regex("[!?]{2,}").containsMatchIn(text)) {
             notes += "A forrásban ismétlődő írásjelek szerepeltek."
         }
-
         return Result(
             text = result,
             changed = result != text,
@@ -109,6 +89,5 @@ object SubtitlePostProcessor {
             notes = notes.distinct()
         )
     }
-
     enum class Language { ENGLISH, HUNGARIAN }
 }

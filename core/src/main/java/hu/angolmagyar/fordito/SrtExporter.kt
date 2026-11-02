@@ -1,35 +1,23 @@
 package hu.angolmagyar.fordito
-
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-
-/**
- * SRT felirat generálása időbélyeges sorokból.
- * Támogatott módok: csak forrás, csak cél, mindkettő (két sor / blokk).
- */
 object SrtExporter {
-
     data class Cue(
         val startMs: Long,
         val endMs: Long,
         val source: String,
         val target: String,
-        val speaker: String = "", // pl. S1, S2 vagy "Anna"
-        /** A felismerés átlagos naplóvalószínűsége (Whisper); 1 = ismeretlen, kb. -1 alatt bizonytalan. */
+        val speaker: String = "",
         val lp: Float = 1f,
-        /** Szó-szintű Whisper tokenbizonytalanság; hiányozhat nem-Whisper motoroknál. */
         val wordConfidence: List<Float> = emptyList(),
-        /** Whisper no-speech becslése; magas érték csak ellenőrzést indokol, törlést nem. */
         val noSpeechProb: Float = 0f
     )
-
     enum class Mode {
-        SOURCE_ONLY,   // csak angol vagy csak magyar (forrás)
-        TARGET_ONLY,   // csak fordítás
-        BOTH           // forrás + cél egy blokkban
+        SOURCE_ONLY,
+        TARGET_ONLY,
+        BOTH
     }
-
     fun formatTime(ms: Long): String {
         val h = TimeUnit.MILLISECONDS.toHours(ms)
         val m = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
@@ -37,7 +25,6 @@ object SrtExporter {
         val milli = ms % 1000
         return String.format(Locale.US, "%02d:%02d:%02d,%03d", h, m, s, milli)
     }
-
     private fun prefixSpeaker(c: Cue, body: String, colors: Map<String, String>? = null): String {
         if (c.speaker.isBlank() || body.isBlank()) return body
         val lines = body.split("\n").toMutableList()
@@ -48,8 +35,6 @@ object SrtExporter {
         }
         return lines.joinToString("\n")
     }
-
-    /** Max ~42 karakter / sor, szóhatáron törve. */
     fun wrap(text: String, maxLen: Int = 42): List<String> {
         val words = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
         if (words.isEmpty()) return emptyList()
@@ -68,15 +53,12 @@ object SrtExporter {
         if (cur.isNotEmpty()) lines.add(cur.toString())
         return lines
     }
-
-    /** @param colors beszélő → szín (#RRGGBB): ha meg van adva, a beszélőjelölés színes (<font>) */
     fun build(cues: List<Cue>, mode: Mode, colors: Map<String, String>? = null): String {
         val sb = StringBuilder()
         var idx = 1
         var prevSp = ""
         var prevEnd = Long.MIN_VALUE
         for (c0 in cues) {
-            // a beszélő neve csak váltáskor (vagy hosszabb szünet után) jelenik meg, hogy ne zsúfolja a feliratot
             val same = c0.speaker.isNotBlank() && c0.speaker == prevSp && c0.startMs - prevEnd <= 3000
             val c = if (same) c0.copy(speaker = "") else c0
             prevSp = c0.speaker
@@ -102,13 +84,10 @@ object SrtExporter {
         }
         return sb.toString()
     }
-
     fun write(file: File, cues: List<Cue>, mode: Mode) {
         file.parentFile?.mkdirs()
         file.writeText(build(cues, mode), Charsets.UTF_8)
     }
-
-    /** WebVTT időbélyeg (pont a milliszekundumnál). */
     fun formatTimeVtt(ms: Long): String {
         val h = TimeUnit.MILLISECONDS.toHours(ms)
         val m = TimeUnit.MILLISECONDS.toMinutes(ms) % 60
@@ -116,8 +95,6 @@ object SrtExporter {
         val milli = ms % 1000
         return String.format(Locale.US, "%02d:%02d:%02d.%03d", h, m, s, milli)
     }
-
-    /** WebVTT felirat (HTML5 / YouTube / böngésző kompatibilis). */
     fun buildVtt(cues: List<Cue>, mode: Mode): String {
         val sb = StringBuilder()
         sb.append("WEBVTT\n\n")
@@ -144,8 +121,6 @@ object SrtExporter {
         }
         return sb.toString()
     }
-
-    /** ASS (Advanced SubStation Alpha) időbélyeg: H:MM:SS.cc (századmásodperc). */
     fun formatTimeAss(ms: Long): String {
         val cs = (ms.coerceAtLeast(0L) + 5L) / 10L
         val h = cs / 360_000L
@@ -154,8 +129,6 @@ object SrtExporter {
         val c = cs % 100L
         return String.format(Locale.US, "%d:%02d:%02d.%02d", h, m, s, c)
     }
-
-    /** ASS felirat (stílusozható; Aegisub, VLC, mpv). Kétnyelvű módban a forrássor dőlt. */
     fun buildAss(cues: List<Cue>, mode: Mode): String {
         val sb = StringBuilder()
         sb.append("[Script Info]\n")
@@ -182,15 +155,11 @@ object SrtExporter {
         }
         return sb.toString()
     }
-
     private val STAMP_LINE by lazy { Regex("""^\[(\d{2}):(\d{2}):(\d{2})\]\s?(.*)$""") }
     private val SPEAKER_LABEL by lazy { Regex("""^(S\d{1,2}):\s+""") }
     private val SPEAKER_PREFIX by lazy { Regex("""^\{([^\}]*)\}\s*""") }
-
-    /** Átirat szöveg → Cue lista (sor alapú, a {Beszélő} jelölést is érti). */
     fun parseCuesFromTranscript(text: String): List<Cue> {
         data class Raw(val start: Long, val source: String, var target: String, val speaker: String)
-
         val raws = mutableListOf<Raw>()
         var cur: Raw? = null
         for (line in text.lines()) {
@@ -200,7 +169,6 @@ object SrtExporter {
                     m.groupValues[3].toLong()) * 1000
                 var src = m.groupValues[4].trim()
                 var spk = ""
-                // régi jegyzőkönyv-formátum: "—: szöveg" (nincs beszélő) és "S1: szöveg"
                 if (src.startsWith("—:")) src = src.removePrefix("—:").trim()
                 else SPEAKER_LABEL.find(src)?.let { lm ->
                     spk = lm.groupValues[1]
@@ -224,15 +192,12 @@ object SrtExporter {
             }
         }
         return raws.mapIndexed { i, r ->
-            // a napló csak kezdő időt tárol: a vég a következő kezdet, de nem húzódik a szöveghez képest értelmetlenül hosszúra
             val chars = maxOf(r.source.length, r.target.length)
             val own = r.start + minOf(7000L, maxOf(2500L, chars * 80L))
             val end = if (i + 1 < raws.size) minOf(raws[i + 1].start, own) else own
             Cue(r.start, end, r.source, r.target, r.speaker)
         }
     }
-
-    /** Cue lista → átirat szöveg (TranscriptStore formátum). */
     fun toTranscriptText(cues: List<Cue>): String {
         val sb = StringBuilder()
         for (c in cues) {
@@ -247,17 +212,11 @@ object SrtExporter {
         }
         return sb.toString()
     }
-
-    /**
-     * Egyszerű szöveges átiratból (TranscriptStore formátum) SRT-t próbál készíteni.
-     * A [HH:mm:ss] bélyegeket használja; a hossz a következő bejegyzésig, vagy 3 mp.
-     */
     fun fromTranscriptText(text: String, mode: Mode = Mode.BOTH): String {
         val cues = parseCuesFromTranscript(text)
         return if (cues.any { it.target.isNotBlank() }) build(cues, mode)
         else build(cues, Mode.SOURCE_ONLY)
     }
-
     fun vttFromTranscriptText(text: String, mode: Mode = Mode.BOTH): String {
         val cues = parseCuesFromTranscript(text)
         return if (cues.any { it.target.isNotBlank() }) buildVtt(cues, mode)

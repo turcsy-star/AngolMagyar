@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -17,8 +16,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
-
-/** Compact faceted sapphire mark used by the Diamond identity. */
 @Composable
 fun DiamondBrandMark(modifier: Modifier = Modifier, animated: Boolean = true) {
     val transition = rememberInfiniteTransition(label = "diamondBrand")

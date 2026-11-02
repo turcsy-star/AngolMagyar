@@ -1,12 +1,5 @@
 package hu.angolmagyar.fordito
-
-/**
- * Lightweight helper for live / panel UIs (P5).
- * Runs TranslationIntelligence on a finalized source→target pair and returns
- * short, display-ready strings. Never mutates the translation.
- */
 object LiveTranslationHints {
-
     data class Hints(
         val memorySuggestion: String?,
         val qualityLabels: List<String>,
@@ -16,11 +9,6 @@ object LiveTranslationHints {
         val isEmpty: Boolean
             get() = memorySuggestion.isNullOrBlank() && qualityLabels.isEmpty() && contextNote.isNullOrBlank()
     }
-
-    /**
-     * @param memoryStore optional; Keystore failure → no memory suggestion
-     * @param includeContext set false for high-frequency partial lines
-     */
     fun forPair(
         source: String,
         target: String,

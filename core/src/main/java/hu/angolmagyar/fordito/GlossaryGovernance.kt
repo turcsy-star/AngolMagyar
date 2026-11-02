@@ -1,19 +1,9 @@
 package hu.angolmagyar.fordito
-
 import java.text.Normalizer
 import java.time.Instant
-
-/**
- * Platform-independent terminology governance primitives.
- *
- * This module deliberately does not rewrite translations. It validates glossary entries,
- * detects conflicts, computes conservative impact previews and supports reversible snapshots.
- * UI / persistence adapters must explicitly apply an approved change.
- */
 object GlossaryGovernance {
     enum class Scope { GLOBAL, PROJECT }
     enum class Status { PENDING, APPROVED, DISMISSED, RETIRED }
-
     data class Entry(
         val source: String,
         val target: String,
@@ -25,14 +15,11 @@ object GlossaryGovernance {
         val updatedAt: String = createdAt,
         val revision: Int = 1
     )
-
     data class Conflict(val entry: Entry, val reason: String, val conflictingEntries: List<Entry>)
     data class Impact(val entry: Entry, val matchingSegments: List<Int>)
     data class Snapshot(val revision: Int, val entries: List<Entry>, val createdAt: String = Instant.now().toString())
-
     fun normalize(value: String): String =
         Normalizer.normalize(value.trim(), Normalizer.Form.NFC).lowercase()
-
     fun validate(entry: Entry): List<String> = buildList {
         if (entry.source.isBlank()) add("A forráskifejezés nem lehet üres.")
         if (entry.target.isBlank()) add("A célnyelvi megfelelő nem lehet üres.")
@@ -45,8 +32,6 @@ object GlossaryGovernance {
             add("Egy bejegyzésben nem lehet sortörés.")
         }
     }
-
-    /** Same normalized source + same scope/project but different target is a conflict. */
     fun conflicts(candidate: Entry, entries: List<Entry>): List<Conflict> {
         if (validate(candidate).isNotEmpty()) return emptyList()
         val sameContext = entries.filter {
@@ -59,16 +44,12 @@ object GlossaryGovernance {
         if (sameContext.isEmpty()) return emptyList()
         return listOf(Conflict(candidate, "Azonos forráskifejezéshez eltérő fordítás tartozik ugyanebben a hatókörben.", sameContext))
     }
-
-    /** Approved project entries override approved global entries; pending entries never apply. */
     fun resolve(source: String, projectId: String?, entries: List<Entry>): Entry? {
         val key = normalize(source)
         val approved = entries.filter { it.status == Status.APPROVED && normalize(it.source) == key }
         return approved.firstOrNull { it.scope == Scope.PROJECT && it.projectId == projectId }
             ?: approved.firstOrNull { it.scope == Scope.GLOBAL }
     }
-
-    /** Exact normalized phrase matching only; no fuzzy or automatic replacement is performed. */
     fun impact(entry: Entry, segments: List<String>): Impact {
         val needle = normalize(entry.source)
         if (needle.isBlank()) return Impact(entry, emptyList())
@@ -77,18 +58,14 @@ object GlossaryGovernance {
         }
         return Impact(entry, matches)
     }
-
     private fun containsPhrase(text: String, normalizedNeedle: String): Boolean {
         val normalizedText = normalize(text).replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
         val needle = normalizedNeedle.replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
         if (needle.isBlank()) return false
         return " $normalizedText ".contains(" $needle ")
     }
-
     fun snapshot(revision: Int, entries: List<Entry>): Snapshot =
         Snapshot(revision.coerceAtLeast(1), entries.toList())
-
-    /** TSV is intentionally simple; tabs and line breaks are flattened to keep rows intact. */
     fun exportTsv(entries: List<Entry>): String {
         val header = listOf("source", "target", "scope", "projectId", "note", "status", "revision").joinToString("\t")
         val rows = entries.map { e ->
@@ -97,8 +74,6 @@ object GlossaryGovernance {
         }
         return (listOf(header) + rows).joinToString("\n")
     }
-
-    /** Invalid rows are skipped; caller should report them and request confirmation before import. */
     fun importTsv(text: String): List<Entry> {
         val lines = text.lineSequence().filter { it.isNotBlank() }.toList()
         if (lines.isEmpty()) return emptyList()
@@ -118,12 +93,9 @@ object GlossaryGovernance {
             e.takeIf { validate(it).isEmpty() }
         }
     }
-
-    /** Retire rather than delete so callers can preserve audit history. */
     fun retire(entry: Entry): Entry = entry.copy(
         status = Status.RETIRED, updatedAt = Instant.now().toString(), revision = entry.revision + 1
     )
-
     fun approve(entry: Entry): Entry = entry.copy(
         status = Status.APPROVED, updatedAt = Instant.now().toString(), revision = entry.revision + 1
     )

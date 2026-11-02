@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -44,15 +43,8 @@ import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.sqrt
-
 private class AppFailure(val code: String, message: String) : Exception(message)
-
-/**
- * Előtérszolgáltatás: hangot rögzít (belső hang vagy mikrofon), Vosk-kal angolul felismeri,
- * ML Kit-tel magyarra fordítja, és lebegő feliratként megjeleníti. Minden offline.
- */
 class TranslateService : Service(), Overlay.Callbacks {
-
     companion object {
         const val ACTION_START = "hu.angolmagyar.fordito.START"
         const val ACTION_STOP = "hu.angolmagyar.fordito.STOP"
@@ -64,25 +56,21 @@ class TranslateService : Service(), Overlay.Callbacks {
         const val EXTRA_TEST = "test"
         const val MODE_INTERNAL = "internal"
         const val MODE_MIC = "mic"
-        const val MODE_PTT = "ptt"  // push-to-talk mikrofon
+        const val MODE_PTT = "ptt"
         const val ACTION_PTT_DOWN = "hu.angolmagyar.fordito.PTT_DOWN"
         const val ACTION_PTT_UP = "hu.angolmagyar.fordito.PTT_UP"
         const val ACTION_SWITCH_DIR = "hu.angolmagyar.fordito.SWITCH_DIR"
-
         private const val CHANNEL_ID = "translate"
         private const val NOTIFICATION_ID = 1
         private const val CLEAR_AFTER_MS = 8000L
         private const val TEST_DURATION_MS = 10_000L
         private const val SILENCE_WARN_MS = 15_000L
     }
-
     private val main = Handler(Looper.getMainLooper())
     private lateinit var prefs: Prefs
-
     @Volatile private var active = false
     private var cleaned = false
     private var isTest = false
-
     private var worker: Thread? = null
     private var projection: MediaProjection? = null
     private var overlay: Overlay? = null
@@ -92,15 +80,14 @@ class TranslateService : Service(), Overlay.Callbacks {
     private var thermalListener: PowerManager.OnThermalStatusChangedListener? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var tts: TtsHelper? = null
-
     @Volatile private var translatorReady = false
     @Volatile private var paused = false
     @Volatile private var maxLevel = 0f
-    @Volatile private var pttActive = false  // push-to-talk: csak true esetén dolgozunk
-    @Volatile private var conversationHuToEn = false  // beszélgetés módban váltott irány
-    @Volatile private var autoDual = false  // tolmács/auto: mindkét nyelv felismerője hallgat
+    @Volatile private var pttActive = false
+    @Volatile private var conversationHuToEn = false
+    @Volatile private var autoDual = false
     private val asrExec = Executors.newSingleThreadExecutor()
-    private val delayQueue = ArrayDeque<Triple<Long, String, String>>()  // showAt, en, hu
+    private val delayQueue = ArrayDeque<Triple<Long, String, String>>()
     private var sentenceBuf: SentenceBuffer? = null
     private val delayRunnable = object : Runnable {
         override fun run() {
@@ -115,13 +102,10 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
         }
     }
-
     private var enRules: List<Pair<Regex, String>> = emptyList()
     private var huRules: List<Pair<Regex, String>> = emptyList()
     private var vocabExtra: List<Pair<String, String>> = emptyList()
     private var partialIntervalMs = 900L
-
-    // --- Felirat-állapot (csak a főszálon módosítjuk) ---
     private val reqCounter = AtomicInteger(0)
     private var lastFinalId = 0
     private val history = ArrayDeque<String>()
@@ -132,7 +116,6 @@ class TranslateService : Service(), Overlay.Callbacks {
     private val warnings = LinkedHashMap<String, String>()
     private val testEn = ArrayList<String>()
     private val testHu = ArrayList<String>()
-
     private val clearRunnable = Runnable {
         history.clear()
         curEn = ""
@@ -140,22 +123,18 @@ class TranslateService : Service(), Overlay.Callbacks {
         lastEn = ""
         overlay?.setContent("", if (paused) listOf("⏸ Szünet") else emptyList())
     }
-
     private val batteryRunnable = object : Runnable {
         override fun run() {
             checkBattery()
             main.postDelayed(this, 60_000)
         }
     }
-
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
         WearBridge.start(this)
     }
-
     override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -192,13 +171,11 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
         }
         if (active) return START_NOT_STICKY
-
         val mode = intent?.getStringExtra(EXTRA_MODE) ?: MODE_MIC
         val modelPath = intent?.getStringExtra(EXTRA_MODEL_PATH)
         isTest = intent?.getBooleanExtra(EXTRA_TEST, false) ?: false
         AppState.lastError = null
         AppState.testResult = null
-
         createChannel()
         val type = if (mode == MODE_INTERNAL) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
@@ -215,7 +192,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             stopSelf()
             return START_NOT_STICKY
         }
-
         if (!Settings.canDrawOverlays(this)) {
             fail(AppState.ERR_NO_OVERLAY, "Engedélyezd a megjelenítést más appok fölött.")
             return START_NOT_STICKY
@@ -226,7 +202,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             fail(AppState.ERR_NO_MIC, "Hiányzik a mikrofon-engedély.")
             return START_NOT_STICKY
         }
-
         if (mode == MODE_INTERNAL) {
             val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
             val data = intent?.let { IntentCompat.getParcelableExtra(it, EXTRA_DATA, Intent::class.java) }
@@ -256,11 +231,10 @@ class TranslateService : Service(), Overlay.Callbacks {
                 return START_NOT_STICKY
             }
         }
-
         active = true
         paused = false
         val usePtt = mode == MODE_PTT || (mode == MODE_MIC && prefs.pushToTalk)
-        pttActive = !usePtt  // ha PTT, induláskor nem hallgat
+        pttActive = !usePtt
         val sidesNow = Engines.sides(prefs)
         conversationHuToEn = if (prefs.isConversation()) prefs.convStartHu else sidesNow.hu
         autoDual = prefs.isConversation() && prefs.autoLangSwitch
@@ -276,7 +250,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         AppState.notifyListeners()
         AppState.notifyTile(this)
         if (!isTest) prefs.lastMode = mode
-
         prefs.forcedEco = false
         enRules = Fixes.parse(prefs.enFixes)
         huRules = Fixes.parse(prefs.huFixes)
@@ -285,7 +258,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         sentenceBuf = SentenceBuffer(flushMs = if (prefs.eco) 2800L else 2000L) { txt, isFinal ->
             main.post {
                 if (!active || paused) return@post
-                // Beszélgetés mód: ML Kit Language ID + heurisztika (async)
                 if (isFinal && prefs.isConversation() && prefs.autoLangSwitch && !autoDual) {
                     val snapHu = conversationHuToEn
                     val suggest: (String, Boolean, (Boolean?) -> Unit) -> Unit =
@@ -330,13 +302,11 @@ class TranslateService : Service(), Overlay.Callbacks {
         if (!isTest && prefs.saveTranscript) {
             val st = TranscriptStore(this, prefs.resumeLast)
             store = st
-            // Hangmentés (opcionális): folytatott fájlnál nem illeszthető az időbélyegekhez
             if (prefs.saveAudio && !st.isResumed()) {
                 val rec = AudioRecorder(st.audioFile())
                 if (rec.start()) audioRec = rec
             }
         }
-
         overlay = Overlay(this, prefs, this).also { it.add() }
         showMessage(if (isTest) "Teszt: mondj angolul valamit (10 mp)…" else "Betöltés…", 10_000)
         initTranslator()
@@ -345,33 +315,24 @@ class TranslateService : Service(), Overlay.Callbacks {
         startWorker(mode, modelPath)
         return START_NOT_STICKY
     }
-
     override fun onDestroy() {
         cleanup()
         super.onDestroy()
     }
-
-    // ------------------------------------------------------- Overlay.Callbacks
-
     override fun onTogglePause() = togglePause()
-
     override fun onSizeDelta(delta: Int) {
         prefs.textSizeSp = prefs.textSizeSp + delta
         overlay?.applyStyle()
     }
-
     override fun onClose() = shutdown()
-
     override fun onPttDown() {
         pttActive = true
         overlay?.setPttActive(true)
     }
-
     override fun onPttUp() {
         pttActive = false
         overlay?.setPttActive(false)
     }
-
     override fun onSwitchDirection() {
         if (!prefs.isConversation() && !prefs.needsTranslation()) return
         conversationHuToEn = !conversationHuToEn
@@ -382,13 +343,11 @@ class TranslateService : Service(), Overlay.Callbacks {
             2000
         )
     }
-
     override fun onDelayDelta(deltaMs: Int) {
         prefs.delayMs = (prefs.delayMs + deltaMs).coerceIn(0, 3000)
         Haptics.tick(this)
         showMessage("Késleltetés: ${prefs.delayMs} ms", 1500)
     }
-
     override fun onSaveFavorite() {
         val hu = AppState.lastCaptionHu
         val en = AppState.lastCaptionEn
@@ -402,8 +361,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         Haptics.click(this)
         showMessage(getString(R.string.svc_favorite_saved), 1500)
     }
-
-    /** Értesítés a munkamenet végén: az átirat mentve, koppintásra megnyílik. */
     private fun notifySaved(minutes: Int) {
         try {
             val pi = PendingIntent.getActivity(
@@ -422,14 +379,12 @@ class TranslateService : Service(), Overlay.Callbacks {
         } catch (_: Exception) {
         }
     }
-
     override fun onToggleEnglish() {
         prefs.showEnglish = !prefs.showEnglish
         Haptics.tick(this)
         showMessage(if (prefs.showEnglish) "Angol sor: be" else "Angol sor: ki", 1500)
         render()
     }
-
     private fun togglePause() {
         if (!active) return
         paused = !paused
@@ -449,9 +404,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
             .notify(NOTIFICATION_ID, buildNotification())
     }
-
-    // ------------------------------------------------------------------ fordító
-
     private fun initTranslator() {
         if (prefs.polyMode || !prefs.needsTranslation()) {
             translatorReady = true
@@ -480,12 +432,9 @@ class TranslateService : Service(), Overlay.Callbacks {
                 setWarning("translator", "A fordítómodell hiányzik – csak forrásszöveg látszik.")
             }
     }
-
-    /** en: a (javított) angol szöveg. */
     private fun translate(en: String, isFinal: Boolean) {
         val id = reqCounter.incrementAndGet()
         if (isFinal) lastFinalId = id
-
         val t = translator
         if (!translatorReady || t == null) {
             if (isFinal) pushFinal(en, en)
@@ -499,25 +448,19 @@ class TranslateService : Service(), Overlay.Callbacks {
                 hu = if (conversationHuToEn) TextPolish.polishEnglish(hu, vocabExtra)
                 else TextPolish.polishHungarian(hu, vocabExtra)
                 if (isFinal) {
-                    // locked terms a forráson már lefutott; céloldalon is
                     pushFinal(en, hu)
                 } else if (id > lastFinalId) {
                     curHu = hu
                     render()
                 }
             }
-            .addOnFailureListener { /* egy elmaradt rész nem kritikus */ }
+            .addOnFailureListener {   }
     }
-
-    // ------------------------------------------------------------- felirat-állapot
-
-    /** Egy felismerő végleges szövege. isHu: melyik nyelvi oldal felismerőjétől jött. */
     private fun asrFinal(isHu: Boolean, text: String) {
         if (!autoDual) {
             onFinal(text)
             return
         }
-        // Tolmács/auto: mindkét felismerő hallgat; a szöveg nyelve dönti el, melyik számít.
         try { asrExec.execute {
             val l = if (prefs.useMlLangId) LanguageIdHelper.identifyBlocking(text) else null
             val huText: Boolean? = when {
@@ -543,19 +486,16 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
         } } catch (_: Exception) {}
     }
-
     private fun asrPartial(isHu: Boolean, text: String) {
         if (autoDual && isHu != conversationHuToEn) return
         onPartial(text)
     }
-
     private fun onPartial(raw: String) {
         main.post {
             if (!active || paused) return@post
             val now = SystemClock.uptimeMillis()
             sentenceBuf?.onPartial(raw, now)
             sentenceBuf?.tick(now)
-            // gyors vizuális partial (javítva)
             val srcRules = if (conversationHuToEn) huRules else enRules
             var text = Fixes.apply(raw, srcRules)
             text = if (conversationHuToEn) TextPolish.polishHungarian(text, vocabExtra)
@@ -567,7 +507,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
         }
     }
-
     private fun onFinal(raw: String) {
         main.post {
             if (!active || paused) return@post
@@ -576,7 +515,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             sentenceBuf?.onFinal(raw, now)
         }
     }
-
     private fun pushFinal(en: String, hu: String) {
         val delay = prefs.delayMs
         if (delay <= 0 || isTest) {
@@ -588,7 +526,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             main.postDelayed(delayRunnable, delay.toLong())
         }
     }
-
     private fun commitFinalNow(en: String, hu: String) {
         history.addLast(hu)
         while (history.size > 3) history.removeFirst()
@@ -608,7 +545,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             tts?.speak(hu)
         }
     }
-
     private fun reinitTranslatorForConversation() {
         try { translator?.close() } catch (_: Exception) {}
         translator = null
@@ -633,7 +569,6 @@ class TranslateService : Service(), Overlay.Callbacks {
                 setWarning("translator", "Fordítómodell hiba a váltáskor.")
             }
     }
-
     private fun render() {
         val lines = (history + curHu).filter { it.isNotBlank() }
         overlay?.setContent(curEn.ifBlank { lastEn }, lines)
@@ -644,13 +579,11 @@ class TranslateService : Service(), Overlay.Callbacks {
         AppState.notifyListeners()
         WearBridge.pushStatus(this, AppState.lastCaptionHu, AppState.lastCaptionEn)
     }
-
     private fun showMessage(msg: String, ms: Long = 4000) {
         overlay?.setContent("", listOf(msg))
         main.removeCallbacks(clearRunnable)
         main.postDelayed(clearRunnable, ms)
     }
-
     private fun setWarning(key: String, msg: String?) {
         if (msg == null) {
             warnings.remove(key)
@@ -663,9 +596,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         overlay?.setWarning(text.ifBlank { null })
         WearBridge.pushStatus(this, AppState.lastCaptionHu, AppState.lastCaptionEn)
     }
-
-    // ------------------------------------------------------- melegedés, akkumulátor
-
     private fun registerThermal() {
         try {
             val pm = getSystemService(POWER_SERVICE) as PowerManager
@@ -676,7 +606,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         } catch (_: Exception) {
         }
     }
-
     private fun onThermal(status: Int) {
         val severe = status >= PowerManager.THERMAL_STATUS_SEVERE
         val moderate = status >= PowerManager.THERMAL_STATUS_MODERATE
@@ -699,7 +628,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
         }
     }
-
     private fun checkBattery() {
         val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
         val lvl = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
@@ -719,12 +647,8 @@ class TranslateService : Service(), Overlay.Callbacks {
             toast("Takarékos mód: alacsony akkumulátor")
         }
         if (prefs.adaptiveEco && !low && pct > 25 && charging && prefs.forcedEco) {
-            // thermal felülírhatja; csak battery miatt volt-e, nem tudjuk biztosan – ne kapcsoljuk vissza automatikusan
         }
     }
-
-    // ------------------------------------------------------------ felismerő szál
-
     private fun startWorker(mode: String, modelPath: String?) {
         worker = Thread({
             var modelOther: Model? = null
@@ -738,7 +662,6 @@ class TranslateService : Service(), Overlay.Callbacks {
             try {
                 LibVosk.setLogLevel(LogLevel.WARNINGS)
                 val sides0 = Engines.sides(prefs)
-                // többnyelvű módban a PolyEngine (Whisper auto) dolgozik, a Vosk/rendszer ASR ágak ki vannak kapcsolva
                 val polyOn = prefs.polyMode
                 val sides = if (polyOn) Engines.Sides(hu = false, other = false, otherLang = sides0.otherLang) else sides0
                 if (polyOn) {
@@ -776,7 +699,6 @@ class TranslateService : Service(), Overlay.Callbacks {
                             recHu = Recognizer(mdl, 16000f)
                         }
                         Engines.K_WHISPER -> {
-                            // Whisper élő mód – elkerüli a rendszer ASR „kliens hiba” hibáját
                             val lw = LiveWhisperAsr(
                                 this@TranslateService, "hu",
                                 object : LiveWhisperAsr.Callback {
@@ -810,12 +732,10 @@ class TranslateService : Service(), Overlay.Callbacks {
                 audio = aud
                 aud.startRecording()
                 store?.markStart()
-
                 main.post {
                     if (!isTest) showMessage("Hallgatom…", 3000)
                     if (isTest) main.postDelayed({ finishTest() }, TEST_DURATION_MS)
                 }
-
                 val internal = mode == MODE_INTERNAL
                 val buf = ShortArray(if (internal) 4800 else 1600)
                 val out = ShortArray(1700)
@@ -830,16 +750,13 @@ class TranslateService : Service(), Overlay.Callbacks {
                 var silentSince = 0L
                 var silentWarned = false
                 var wasPaused = false
-
                 while (active) {
                     val n = aud.read(buf, 0, buf.size)
                     if (n < 0) throw AppFailure(AppState.ERR_AUDIO, "Hangolvasási hiba ($n)")
                     if (n == 0) continue
-
                     val data: ShortArray
                     val len: Int
                     if (internal) {
-                        // 48 kHz -> 16 kHz: 3 minta átlagolása (az állapotot megtartjuk a hívások között)
                         var o = 0
                         for (k in 0 until n) {
                             sum += buf[k]
@@ -858,8 +775,6 @@ class TranslateService : Service(), Overlay.Callbacks {
                     }
                     if (len == 0) continue
                     audioRec?.write(data, len)
-
-                    // --- hangszint ---
                     var sq = 0.0
                     for (k in 0 until len) {
                         val s = data[k].toDouble()
@@ -872,10 +787,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                     if (smooth > maxLevel) maxLevel = smooth
                     val lvl = smooth
                     main.post { overlay?.setLevel(lvl) }
-
                     val now = SystemClock.elapsedRealtime()
-
-                    // --- nincs hang figyelés ---
                     if (rms < 20) {
                         if (silentSince == 0L) silentSince = now
                         if (!silentWarned && now - silentSince > SILENCE_WARN_MS) {
@@ -893,17 +805,12 @@ class TranslateService : Service(), Overlay.Callbacks {
                             main.post { setWarning("silence", null) }
                         }
                     }
-
-                    // --- VAD: nagyon halk chunk ne menjen a recognizerbe ---
                     val voiceLikely = rms >= 35
-
-                    // --- szünet / push-to-talk ---
                     val listening = !paused && pttActive
                     if (!listening) {
                         wasPaused = true
                         continue
                     }
-                    // a rendszer-felismerőnek a csendet is átadjuk (mondathatár-érzékelés)
                     poly?.feed(data, len)
                     val huNow = conversationHuToEn
                     val feedHu = sides.hu && (huNow || autoDual)
@@ -913,8 +820,6 @@ class TranslateService : Service(), Overlay.Callbacks {
                         liveWhisper?.feed(data, len)
                     }
                     if (!voiceLikely) {
-                        // hangszint frissült, de nincs beszéd – ne rontsa a partialt
-                        // (a Whisper VAD saját maga is figyeli a csendet)
                         continue
                     }
                     if (wasPaused) {
@@ -924,8 +829,6 @@ class TranslateService : Service(), Overlay.Callbacks {
                         lastPartialH = ""
                         wasPaused = false
                     }
-
-                    // --- felismerés ---
                     val t0 = System.nanoTime()
                     val ro = recOther
                     if (feedOther && ro != null) {
@@ -963,8 +866,6 @@ class TranslateService : Service(), Overlay.Callbacks {
                             }
                         }
                     }
-
-                    // --- lemaradás figyelés ---
                     val procMs = (System.nanoTime() - t0) / 1_000_000f
                     val chunkMs = len * 1000f / 16000f
                     ema = ema * 0.9f + 0.1f * (procMs / chunkMs)
@@ -1010,7 +911,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         }, "recognizer")
         worker?.start()
     }
-
     @SuppressLint("MissingPermission")
     private fun createAudioRecord(mode: String): AudioRecord {
         val record: AudioRecord
@@ -1055,9 +955,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
         return record
     }
-
-    // ----------------------------------------------------------------------- teszt
-
     private fun finishTest() {
         if (!active) return
         val sb = StringBuilder()
@@ -1075,21 +972,15 @@ class TranslateService : Service(), Overlay.Callbacks {
         AppState.testResult = sb.toString().trim()
         shutdown()
     }
-
-    // ------------------------------------------------------------------- leállítás
-
     private fun fail(code: String, msg: String) {
         AppState.lastError = AppError(code, msg)
-        // A cleanup törli a függő főszálas üzeneteket, ezért a toastot közvetlenül jelenítjük meg.
         Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG).show()
         shutdown()
     }
-
     private fun cleanup() {
         if (cleaned) return
         cleaned = true
         active = false
-        // Folyamatban lévő / késleltetett sorok mentése, hogy ne vesszenek el leálláskor
         val elapsedSec = if (AppState.sessionStartedAt > 0)
             (SystemClock.elapsedRealtime() - AppState.sessionStartedAt) / 1000 else 0L
         store?.let { st ->
@@ -1137,32 +1028,25 @@ class TranslateService : Service(), Overlay.Callbacks {
         AppState.sessionStartedAt = 0L
         AppState.notifyTile(applicationContext)
     }
-
     private fun shutdown() {
         cleanup()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
-
-    // ------------------------------------------------------------------ értesítés
-
-
     private fun mlKitLang(code: String): String = when (code) {
         Prefs.LANG_HU -> TranslateLanguage.HUNGARIAN
         Prefs.LANG_DE -> TranslateLanguage.GERMAN
         Prefs.LANG_FR -> TranslateLanguage.FRENCH
         Prefs.LANG_ES -> TranslateLanguage.SPANISH
         Prefs.LANG_IT -> TranslateLanguage.ITALIAN
-        Prefs.LANG_UK -> "uk" // ML Kit BCP-47
+        Prefs.LANG_UK -> "uk"
         else -> TranslateLanguage.ENGLISH
     }
-
     @Suppress("DEPRECATION")
     private fun acquireWakeLock() {
         try {
             releaseWakeLock()
             val pm = getSystemService(POWER_SERVICE) as PowerManager
-            // PARTIAL: CPU él; keepScreenOn esetén képernyő is
             val flags = if (prefs.keepScreenOn) {
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP
             } else {
@@ -1170,12 +1054,11 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
             val wl = pm.newWakeLock(flags, "angolmagyar:translate")
             wl.setReferenceCounted(false)
-            wl.acquire(6 * 60 * 60 * 1000L) // max 6 óra biztonsági limit
+            wl.acquire(6 * 60 * 60 * 1000L)
             wakeLock = wl
         } catch (_: Exception) {
         }
     }
-
     private fun releaseWakeLock() {
         try {
             wakeLock?.let { if (it.isHeld) it.release() }
@@ -1183,14 +1066,12 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
         wakeLock = null
     }
-
     private fun createChannel() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Élő fordítás", NotificationManager.IMPORTANCE_LOW)
         )
     }
-
     private fun buildNotification(): Notification {
         val stopPi = PendingIntent.getService(
             this, 0,
@@ -1241,7 +1122,6 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
         return builder.build()
     }
-
     private fun toast(msg: String) {
         main.post { Toast.makeText(applicationContext, msg, Toast.LENGTH_LONG).show() }
     }

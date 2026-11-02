@@ -1,6 +1,4 @@
 package hu.angolmagyar.fordito.intelligence
-
-/** Offline, curated English synonym hints. Suggestions are context-sensitive prompts, not replacements. */
 object SynonymEngine {
     private val entries = mapOf(
         "good" to listOf("excellent" to "kiemelkedő", "useful" to "hasznos", "reliable" to "megbízható", "pleasant" to "kellemes"),

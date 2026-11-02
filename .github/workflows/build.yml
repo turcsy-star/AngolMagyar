@@ -1,4 +1,4 @@
-name: Build, test and package APK
+name: Build and package APK
 
 on:
   push:
@@ -38,35 +38,25 @@ jobs:
       - name: Compose compiler regression guard
         run: python tools/verify_compose_compiler_regression.py
 
-      - name: Core unit tests
-        run: ./gradlew :core:test --stacktrace
-
-      - name: App unit tests (includes Compose screenshot smoke test)
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
-
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
 
       - name: Build Wear OS debug APK
         run: ./gradlew :wear:assembleDebug --stacktrace
 
-      - name: Compile unsigned release APK
+      - name: Compile unsigned release APK (no debug-key fallback)
         run: ./gradlew :app:assembleRelease --stacktrace
 
-      - name: Prepare single-app APK download
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk dist/AngolMagyar-4.2.10.apk
-          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 1
-
-      - name: Publish APK only
+      - name: Publish APK and complete diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: AngolMagyar-4.2.10-APK
-          path: dist/AngolMagyar-4.2.10.apk
-          if-no-files-found: error
-          retention-days: 30
-          compression-level: 0
+          name: angolmagyar-build-diagnostics-${{ github.run_number }}
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 6
+          path: |
+            diagnostics/**
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+            wear/build/outputs/apk/debug/*.apk

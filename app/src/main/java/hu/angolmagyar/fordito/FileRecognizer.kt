@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.translate.TranslateLanguage
@@ -14,47 +13,27 @@ import org.vosk.Recognizer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-
-/**
- * Fájl-átirat: PCM → időzített feliratblokkok (+ javítás, fordítás, beszélő).
- *
- * Az időzítés a hang valós pozíciójából jön:
- *  - Vosk: szó-időbélyegek (setWords), szünetnél / hosszú sornál új blokk
- *  - rendszer-felismerő (magyar): csendeknél vágott szeletek, a szelet eleje/vége az idő
- */
 class FileRecognizer(
     private val ctx: Context,
     private val prefs: Prefs,
     private val cancel: AtomicBoolean
 ) {
     private data class Raw(val startMs: Long, val endMs: Long, val text: String, val lp: Float = 1f, val wordConfidence: List<Float> = emptyList(), val noSpeechProb: Float = 0f)
-
-    /** Állapotüzenetek a hívónak (pl. fordítómodell letöltése közben). */
     var onStatus: ((String) -> Unit)? = null
-
-    /** Tájékoztató megjegyzés a fordításról (pl. online hiba, tartalék használata) – nem módosítja a haladást. */
     var onNote: ((String) -> Unit)? = null
-
     private var translator: Translator? = null
     private var translatorKey = ""
     private var translatorOk = false
     private var blocking: BlockingAsr? = null
-
-    // közös modellek: a chunkok nem töltik újra (a Vosk Model több szálból is használható)
     private var voskModel: Model? = null
     private var voskModelKey = ""
     private var whisper: WhisperNative? = null
     private var whisperKey = ""
     private val whisperLock = Any()
-
-    /** Azonnal, a befejező szálon fut: így a fordítás nem függ a főszáltól (háttérben sem akad meg). */
     private val direct = java.util.concurrent.Executor { it.run() }
-
     private val enRules by lazy { Fixes.parse(prefs.enFixes + "\n" + (prefs.raw().getString("autoRulesEn", "") ?: "")) }
     private val huRules by lazy { Fixes.parse(Projects.huRules(ctx)) }
-    /** A projekt szereplői / nevei: a felismerés kezdőszövege és a névjavítás alapja. */
     private val castNames by lazy { Projects.names(ctx) }
-
     fun close() {
         try { translator?.close() } catch (e: Exception) { DiagLog.swallow("FileRecognizer", e) }
         translator = null
@@ -63,13 +42,9 @@ class FileRecognizer(
         try { synchronized(this) { voskModel?.close(); voskModel = null } } catch (e: Exception) { DiagLog.swallow("FileRecognizer", e) }
         try { synchronized(whisperLock) { whisper?.close(); whisper = null } } catch (e: Exception) { DiagLog.swallow("FileRecognizer", e) }
     }
-
-    /** Azonnali leállítás (Whisper közben is). */
     fun abort() {
         try { whisper?.abort(true) } catch (e: Exception) { DiagLog.swallow("FileRecognizer", e) }
     }
-
-    /** Modellek betöltése a feldolgozás elején, hogy a chunkok már ne várjanak rá. */
     fun prepare(asr: Engines.Asr, needTranslate: Boolean, dir: String) {
         when (asr.kind) {
             Engines.K_VOSK -> voskModel(asr.vosk!!)
@@ -77,7 +52,6 @@ class FileRecognizer(
             else -> {}
         }
         if (needTranslate) {
-            // csak online módban nem kell az offline modell; "auto" módban nem végzetes, ha nincs meg
             val mode = if (OnlinePrefs.usable(ctx)) OnlinePrefs.mode(ctx) else OnlinePrefs.OFF
             when (mode) {
                 OnlinePrefs.ONLINE -> {}
@@ -86,12 +60,6 @@ class FileRecognizer(
             }
         }
     }
-
-    /**
-     * @param asr a felismerő (Whisper / Vosk / rendszer)
-     * @param srcLang a forrásnyelv kódja ("hu", "en", …)
-     * @param onProgress (0–100, állapotüzenet): a felismerés, majd a fordítás, majd az utómunka
-     */
     fun recognize(
         pcm: ShortArray,
         srcLang: String,
@@ -137,9 +105,6 @@ class FileRecognizer(
         onProgress?.invoke(100, "Kész (${out.size} blokk)")
         return out
     }
-
-    // ---------------------------------------------------------------- Whisper
-
     private fun whisperCtx(spec: ModelManager.Spec): WhisperNative {
         synchronized(whisperLock) {
             val key = spec.id
@@ -156,7 +121,6 @@ class FileRecognizer(
             return w
         }
     }
-
     private fun rawWhisper(
         pcm: ShortArray, spec: ModelManager.Spec, lang: String, offsetMs: Long,
         onProgress: ((Int, String) -> Unit)?, timeMap: TimeMap? = null, beamOverride: Int = 0
@@ -165,11 +129,9 @@ class FileRecognizer(
         val audio = FloatArray(pcm.size) { pcm[it] / 32768f }
         if (Prefs(ctx).raw().getBoolean("audioPrep", true)) try { AudioPrep.prepare(audio) } catch (_: Throwable) {}
         val out = ArrayList<Raw>()
-        // v2.21.1 – központi kontextuális prompt (nevek + stílus + előző mondatok)
         val prompt = WhisperPrompt.build(
             lang = lang,
             castNames = castNames,
-            // ismétlési hurokra utaló előző szöveget nem adunk tovább kontextusnak (a hurkot folytatná)
             prevTail = if (Hallucination.looksLooped(prevTail)) "" else prevTail,
             domain = "subtitle",
             terms = TextPolish.parseVocab(Prefs(ctx).customVocab).map { it.second }
@@ -178,8 +140,7 @@ class FileRecognizer(
         cb?.invoke(0, "Whisper: felismerés indul…")
         if (cancel.get()) return emptyList()
         var lastPct = -1
-        Perf.applyPriority() // a ggml munkaszálak a hívó szál prioritását öröklik
-        // ha a darab már csak beszédet tartalmaz (összefűzve), a Whisper belső VAD-ja fölösleges
+        Perf.applyPriority()
         val vadPath = if (timeMap != null) null
             else VadModel.file(ctx).takeIf { it.exists() && it.length() > 300_000L }?.absolutePath
         val rc = synchronized(whisperLock) {
@@ -193,7 +154,6 @@ class FileRecognizer(
                         }
                     }
                     override fun onSegment(t0: Long, t1: Long, text: ByteArray) {
-                        // élő kijelzés: az éppen felismert mondat és a videó-időpontja (t0/t1: 10 ms-os egység a darab elejétől)
                         val s = String(text, Charsets.UTF_8).trim()
                         if (s.isBlank() || cancel.get()) return
                         val a = t0 * 10L
@@ -211,25 +171,19 @@ class FileRecognizer(
         var prev1Lp = 1f
         var prev2Lp = 1f
         for (sg in w.segments()) {
-            // A no-speech pontszám önmagában nem elég a törléshez: halk beszédnél is magas lehet.
             val t = sg.text.trim()
             if (t.isBlank()) continue
-            // Három egymást követő azonos szegmens csak akkor dobható el, ha mindegyik gyenge
-            // felismerési pontszámú; a valódi ismétlést egyébként megőrizzük.
             val weakRepeat = t == prev1 && t == prev2 && sg.avgLogProb < -1.0f &&
                 prev1Lp < -1.0f && prev2Lp < -1.0f
             if (weakRepeat) continue
             prev2 = prev1; prev1 = t
             prev2Lp = prev1Lp; prev1Lp = sg.avgLogProb
-            // szóidők alapján szűkített határok (csak ha a tokenidők megbízhatók; egyébként az eredeti marad)
             val tight = WordTiming.tighten(
                 sg.startMs, sg.endMs,
                 sg.tokens.filter { it.text.isNotBlank() && !it.text.trim().startsWith("<|") }.map { WordTiming.Span(it.startMs, it.endMs) }
             )
             val t0 = if (timeMap != null) timeMap.toOrig(tight.first) else offsetMs + tight.first
             val t1 = if (timeMap != null) maxOf(timeMap.toOrig(tight.second), t0 + 200) else offsetMs + tight.second
-            // A szegmens- és szóminőséget külön kezeljük: az avgLogProb a teljes szegmensé,
-            // az egyes szavak kiemelését a TokenScore alapú wordConfidence végzi.
             out.addAll(splitLong(Raw(t0, t1, t, sg.avgLogProb, sg.wordConfidence, sg.noSpeech)))
         }
         if (out.isNotEmpty()) {
@@ -237,12 +191,7 @@ class FileRecognizer(
         }
         return finishTiming(out)
     }
-
-    /** Az előző felismert darab szövegének vége (Whisper kontextus a következő darabhoz). */
     private var prevTail = ""
-
-    // ------------------------------------------------------------------- Vosk
-
     private fun rawVosk(
         pcm: ShortArray, spec: ModelManager.Spec, offsetMs: Long,
         onProgress: ((Int, String) -> Unit)?
@@ -252,7 +201,7 @@ class FileRecognizer(
         rec.setWords(true)
         val out = ArrayList<Raw>()
         try {
-            val step = 8000 // 0,5 mp
+            val step = 8000
             var o = 0
             var lastEnd = 0L
             var lastPct = -1
@@ -274,7 +223,6 @@ class FileRecognizer(
         }
         return finishTiming(out)
     }
-
     @Synchronized
     private fun voskModel(spec: ModelManager.Spec): Model {
         voskModel?.let { if (voskModelKey == spec.id) return it }
@@ -285,14 +233,12 @@ class FileRecognizer(
         voskModelKey = spec.id
         return m
     }
-
     private fun addVoskResult(json: String, offsetMs: Long, lastEndMs: Long, out: MutableList<Raw>): Long {
         val obj = try { JSONObject(json) } catch (_: Exception) { return lastEndMs }
         val text = obj.optString("text", "").trim()
         if (text.isBlank()) return lastEndMs
         val arr = obj.optJSONArray("result")
         if (arr == null || arr.length() == 0) {
-            // szó-idők nélkül: az előző blokk vége után 2 mp
             val s = offsetMs + lastEndMs
             out.add(Raw(s, s + 2000, text))
             return lastEndMs + 2000
@@ -324,10 +270,6 @@ class FileRecognizer(
         if (cs >= 0 && cur.isNotBlank()) out.add(Raw(offsetMs + cs, offsetMs + ce, cur.toString().trim()))
         return endOfLast
     }
-
-    // ------------------------------------------------------ rendszer-felismerő
-
-    /** A rendszer-felismerő nyelve a forrásnyelvből (korábban fixen hu-HU volt, ami angol videónál téves volt). */
     private fun systemLocale(lang: String): String = when (lang) {
         "hu" -> "hu-HU"
         "de" -> "de-DE"
@@ -337,7 +279,6 @@ class FileRecognizer(
         "uk" -> "uk-UA"
         else -> "en-US"
     }
-
     private fun rawSystem(
         pcm: ShortArray, lang: String, offsetMs: Long, onProgress: ((Int, String) -> Unit)?
     ): List<Raw> {
@@ -366,8 +307,6 @@ class FileRecognizer(
         }
         return finishTiming(out)
     }
-
-    /** Hosszú blokk szétvágása szóhatárokon, az idő arányosan osztva. */
     private fun splitLong(r: Raw): List<Raw> {
         val words = r.text.split(Regex("\\s+")).filter { it.isNotBlank() }
         val total = r.text.length
@@ -396,8 +335,6 @@ class FileRecognizer(
         }
         return res
     }
-
-    /** Olvashatóság: legalább 1 mp, legfeljebb a következő blokk kezdetéig. */
     private fun finishTiming(list: List<Raw>): List<Raw> {
         val out = ArrayList<Raw>(list.size)
         for ((i, r) in list.withIndex()) {
@@ -407,19 +344,15 @@ class FileRecognizer(
         }
         return out
     }
-
-    // ----------------------------------------------------------------- fordítás
-
     private fun mlKitLang(code: String): String = when (code) {
         "hu" -> TranslateLanguage.HUNGARIAN
         "de" -> TranslateLanguage.GERMAN
         "fr" -> TranslateLanguage.FRENCH
         "es" -> TranslateLanguage.SPANISH
         "it" -> TranslateLanguage.ITALIAN
-        "uk" -> "uk" // ML Kit BCP-47
+        "uk" -> "uk"
         else -> TranslateLanguage.ENGLISH
     }
-
     @Synchronized
     private fun prepareTranslator(dir: String) {
         val key = dir
@@ -427,7 +360,6 @@ class FileRecognizer(
         try { translator?.close() } catch (e: Exception) { DiagLog.swallow("FileRecognizer", e) }
         translator = null
         translatorOk = false
-        // dir: "hu_en" | "en_hu" | "de_hu" | "fr_hu" | …
         val (src, tgt) = when {
             dir == Prefs.DIR_HU_EN || dir.startsWith("hu_") ->
                 TranslateLanguage.HUNGARIAN to TranslateLanguage.ENGLISH
@@ -454,11 +386,6 @@ class FileRecognizer(
         translator = t
         translatorOk = true
     }
-
-    /**
-     * Kontextusos fordítás: a mondat közepén vágott blokkokat mondatokká fogjuk, így fordít jól a gépi fordító;
-     * a lefordított mondatot arányosan visszaosztjuk az eredeti időzített blokkokra.
-     */
     private fun translateGrouped(items: List<SentenceGroups.Item>, dir: String, onDone: (Int, Int) -> Unit): List<String> {
         val groups = SentenceGroups.group(items)
         val texts = groups.map { g -> g.joinToString(" ") { idx -> items[idx].text.trim() } }
@@ -470,26 +397,13 @@ class FileRecognizer(
         }
         return out
     }
-
-    /** A fordított szöveg utómunkája: szótár-javítások, központozás, (magyarnál) tegezés. */
     private fun postTarget(res: String, toHu: Boolean): String =
         if (toHu) {
             val hu = TextPolish.polishHungarian(Fixes.apply(BuiltinFixes.target(res), huRules))
             if (SubPrefs.informalHu(ctx)) TextPolish.informalHungarian(hu) else hu
         } else TextPolish.polishEnglish(Fixes.apply(res, enRules))
-
     private fun isToHu(dir: String) = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
-
-    /**
-     * A blokkok fordítása a beállított móddal (offline ML Kit / online LLM / online + offline tartalék).
-     * @param huInit meglévő fordítások (kontextus és a nem érintett sorok); null = üres
-     * @param indices a lefordítandó sorok; null = mind
-     * @param modeOverride [OnlinePrefs] mód felülbírálása (pl. az ellenőrző nézet gombjai); null = beállítás szerint
-     * @return minden sor célszövege (az érintetlen sorok a [huInit] értékével)
-     */
-    /** True: a részhalmaz (pl. egy szakasz) újrafordítása is mondatokba fogva, a környező sorok nélkül is egységként. */
     @Volatile var groupSubset = false
-
     private fun translateCore(
         en: List<String>, times: List<Pair<Long, Long>>, huInit: List<String>?, indices: List<Int>?,
         dir: String, modeOverride: Int?, prog: (done: Int, total: Int, label: String) -> Unit
@@ -498,7 +412,6 @@ class FileRecognizer(
         val hu = (huInit ?: List(n) { "" }).toMutableList()
         var idx = indices ?: (0 until n).toList()
         if (indices == null && modeOverride == null && TranslationMemoryStore.enabled(ctx)) {
-            // ugyanaz az angol mondat mindig ugyanúgy forduljon (fordítási memória)
             val tm = TranslationMemoryStore.get(ctx)
             idx = idx.filter { i ->
                 val h = tm.lookup(en[i])
@@ -513,7 +426,6 @@ class FileRecognizer(
             val cfg0 = OnlinePrefs.config(
                 ctx, SrtJobService.langName(dir.substringBefore("_", "en")), SrtJobService.langName(dir.substringAfter("_", "hu"))
             )
-            // a szereplők nevei (a gyakran visszatérő nagybetűs szavak) háttérként a fordítónak
             val found = try { NameExtractor.extract(en) } catch (_: Exception) { emptyList() }
             if (found.isNotEmpty()) SrtJob.names = found
             val cfg = if (cfg0 != null && found.isNotEmpty())
@@ -523,7 +435,6 @@ class FileRecognizer(
                 val ot = OnlineTranslator(cfg)
                 val failed: List<Int>
                 if ((indices == null || groupSubset) && SubPrefs.contextTranslate(ctx)) {
-                    // mondatokba fogott fordítás: a félbevágott blokkokat egyben kapja a fordító, utána visszaosztjuk
                     val items = idx.map { SentenceGroups.Item(times[it].first, times[it].second, en[it]) }
                     val groups = SentenceGroups.group(items)
                     val gEn = groups.map { g -> g.joinToString(" ") { items[it].text.trim() } }
@@ -555,7 +466,6 @@ class FileRecognizer(
                         (if (ot.lastError.isNotBlank()) " – ${ot.lastError}" else ""))
                 }
                 if (mode == OnlinePrefs.ONLINE) {
-                    // nincs offline tartalék: a sikertelen sor forrásszövege marad, az ellenőrző nézet jelöli
                     for (i in failed) if (hu[i].isBlank()) hu[i] = en[i]
                     return hu
                 }
@@ -582,11 +492,6 @@ class FileRecognizer(
         }
         return hu
     }
-
-    /**
-     * Bizonytalan szakaszok második menete: a megadott időtartományokat nagyobb nyalábbal újra felismeri.
-     * @return szakaszonként a talált blokkok (csak forrásszöveg, megbízhatósággal); null = nem sikerült
-     */
     fun refine(
         pcmFile: java.io.File, spans: List<Pair<Long, Long>>, spec: ModelManager.Spec, lang: String, beam: Int,
         prog: (done: Int, total: Int) -> Unit
@@ -624,12 +529,6 @@ class FileRecognizer(
         }
         return out
     }
-
-    /**
-     * Meglévő blokkok (újra)fordítása – az ellenőrző nézetből.
-     * @param indices a lefordítandó blokkok indexei; null = mind
-     * @param modeOverride [OnlinePrefs.OFF] / [OnlinePrefs.ONLINE] / [OnlinePrefs.AUTO]; null = a beállítás
-     */
     fun retranslate(
         cues: List<SrtExporter.Cue>, indices: List<Int>?, dir: String, modeOverride: Int?,
         prog: (done: Int, total: Int, label: String) -> Unit
@@ -639,8 +538,6 @@ class FileRecognizer(
         )
         return cues.mapIndexed { i, c -> if (indices == null || i in indices) c.copy(target = hu[i]) else c }
     }
-
-    /** Az összes blokk fordítása egyszerre beadva; az előrehaladást a kész darabok számából mutatjuk. */
     private fun translateAll(srcs: List<String>, dir: String, onDone: (Int, Int) -> Unit): List<String> {
         val t = translator ?: return srcs.map { "" }
         val toHu = dir == Prefs.DIR_EN_HU || dir.endsWith("_hu")
@@ -648,7 +545,6 @@ class FileRecognizer(
         val done = java.util.concurrent.atomic.AtomicInteger(0)
         for ((ti, k) in tasks.withIndex()) k.addOnCompleteListener(direct) {
             done.incrementAndGet()
-            // élő kijelzés: a legutóbb elkészült fordítás a forrásmondatával
             if (k.isSuccessful) {
                 val r = k.result
                 if (!r.isNullOrBlank()) SrtJob.setLiveTranslated(srcs[ti], postTarget(r, toHu))
@@ -662,7 +558,7 @@ class FileRecognizer(
             try { Thread.sleep(150) } catch (_: InterruptedException) { break }
             val d = done.get()
             if (d != last) { last = d; lastChange = System.currentTimeMillis(); onDone(d, n) }
-            else if (System.currentTimeMillis() - lastChange > 120_000) break // beragadt: ami kész, azt használjuk
+            else if (System.currentTimeMillis() - lastChange > 120_000) break
         }
         return tasks.map { k ->
             if (k.isComplete && k.isSuccessful) {
@@ -670,7 +566,6 @@ class FileRecognizer(
             } else ""
         }
     }
-
     companion object {
         private const val MAX_CHARS = 84
         private const val MAX_CUE_MS = 6500L

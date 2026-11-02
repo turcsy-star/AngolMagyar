@@ -1,11 +1,9 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-
 object Haptics {
     fun tick(ctx: Context) {
         if (!Prefs(ctx).haptics) return
@@ -22,7 +20,6 @@ object Haptics {
         } catch (_: Exception) {
         }
     }
-
     fun click(ctx: Context) {
         if (!Prefs(ctx).haptics) return
         try {
@@ -38,7 +35,6 @@ object Haptics {
         } catch (_: Exception) {
         }
     }
-
     private fun vibrator(ctx: Context): Vibrator? {
         return if (Build.VERSION.SDK_INT >= 31) {
             val vm = ctx.getSystemService(VibratorManager::class.java)

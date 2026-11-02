@@ -1,22 +1,14 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
-
-/**
- * Gyorsprofilok: irány + nyelvek + stílus + eco + késleltetés + indítási mód egy névvel.
- * Beépített profilok (nem törölhetők) + a felhasználó saját mentései.
- */
 object Profiles {
-
     data class Profile(
         val name: String,
         val mode: String,
         val values: JSONObject,
         val builtIn: Boolean
     )
-
     private fun built(ctx: Context): List<Profile> {
         fun p(nameRes: Int, mode: String, build: JSONObject.() -> Unit) =
             Profile(ctx.getString(nameRes), mode, JSONObject().apply(build), true)
@@ -39,7 +31,6 @@ object Profiles {
             }
         )
     }
-
     private fun custom(prefs: Prefs): List<Profile> {
         val raw = prefs.profilesJson
         if (raw.isBlank()) return emptyList()
@@ -55,13 +46,9 @@ object Profiles {
             emptyList()
         }
     }
-
     fun all(ctx: Context, prefs: Prefs): List<Profile> = built(ctx) + custom(prefs)
-
     fun find(ctx: Context, prefs: Prefs, name: String): Profile? =
         all(ctx, prefs).firstOrNull { it.name == name }
-
-    /** Az aktuális beállítások mentése megadott néven (azonos nevűt felülír). */
     fun saveCurrent(prefs: Prefs, name: String, mode: String) {
         val v = JSONObject()
         v.put("dir", prefs.translateDir)
@@ -81,11 +68,9 @@ object Profiles {
         list.add(Profile(name, mode, v, false))
         write(prefs, list)
     }
-
     fun delete(prefs: Prefs, name: String) {
         write(prefs, custom(prefs).filter { it.name != name })
     }
-
     private fun write(prefs: Prefs, list: List<Profile>) {
         val arr = JSONArray()
         for (p in list) {
@@ -93,8 +78,6 @@ object Profiles {
         }
         prefs.profilesJson = arr.toString()
     }
-
-    /** Profil alkalmazása; a visszatérési érték az indítási mód. */
     fun apply(prefs: Prefs, p: Profile): String {
         if (prefs.meetingMode) MeetingMode.clear(prefs)
         val v = p.values

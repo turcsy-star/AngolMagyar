@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.os.BatteryManager
 import android.os.PowerManager
@@ -8,28 +7,15 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
-
-/**
- * Hosszú felvétel darabokban (chunk) történő feldolgozása.
- *  - a párhuzamos chunkok száma és a pihenők a [Perf] szintből jönnek, FUTÁS KÖZBEN is változtathatók
- *  - melegedés / alacsony akku esetén a következő chunk várakozik (a már futók befejezik)
- *  - az átfedő határokat a felezőpontnál vágja, így nincs duplikált / elveszett mondat
- *  - támogatja az előre meghatározott tartományokat is (VAD-alapú intelligens darabolás)
- */
 class ParallelChunker(private val ctx: Context, private val strictThermal: Boolean) {
-
     interface Events {
         fun onChunkStart(idx: Int, total: Int)
         fun onChunkDone(idx: Int, total: Int, cues: List<SrtExporter.Cue>, audioMs: Long)
-        /** Várakozás (hűtés, akku) – cooling=false: a várakozás véget ért. */
         fun onWait(reason: String, cooling: Boolean)
     }
-
     data class Result(val cues: List<SrtExporter.Cue>, val chunksDone: Int, val total: Int, val stoppedEarly: Boolean)
-
     private val cancel = AtomicBoolean(false)
     fun cancel() = cancel.set(true)
-
     private lateinit var starts: IntArray
     private lateinit var ends: IntArray
     private var samplesPerChunk = 0
@@ -40,13 +26,7 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
     private var active = 0
     private var results: Array<List<SrtExporter.Cue>?> = emptyArray()
     private var failure: Throwable? = null
-
     fun chunkCount(): Int = total
-
-    /**
-     * @param sequentialOnly true = mindig egy chunk egyszerre (Whisper: a szálak a modellen belül osztoznak)
-     * @param process egy chunk feldolgozása → cue-k (a chunk eleje a [offsetMs])
-     */
     fun run(
         pcm: ShortArray, chunkMs: Int, overlapMs: Int, sequentialOnly: Boolean,
         sampleRate: Int = 16000, events: Events,
@@ -60,11 +40,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         ends = IntArray(total) { minOf(starts[it] + samplesPerChunk, pcm.size) }
         return runInternal(null, pcm, sampleRate, sequentialOnly, events, process)
     }
-
-    /**
-     * Előre meghatározott tartományokkal (pl. VAD-alapú intelligens darabolás után).
-     * A [ranges] elemei: (startSample, endSample) – end exkluzív.
-     */
     fun runRanges(
         pcm: ShortArray,
         ranges: List<Vad.Seg>,
@@ -83,11 +58,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         overlapSamples = 0
         return runInternal(null, pcm, sampleRate, sequentialOnly, events, process)
     }
-
-    /**
-     * Hosszú felvétel: a PCM a lemezen marad, csak az aktuális darab (~néhány MB) kerül memóriába.
-     * Így elkerülhető az OutOfMemoryError hosszú filmeknél.
-     */
     fun runFromFile(
         pcmFile: File,
         totalSamples: Int,
@@ -115,7 +85,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         }
         return runInternal(pcmFile, null, sampleRate, sequentialOnly, events, process)
     }
-
     private fun runInternal(
         pcmFile: File?,
         pcm: ShortArray?,
@@ -126,7 +95,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
     ): Result {
         results = arrayOfNulls(total)
         next = 0; active = 0; failure = null
-
         val n = if (sequentialOnly) 1 else Perf.maxWorkers()
         val threads = (0 until n).map { w ->
             Thread({
@@ -141,9 +109,7 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         val done = results.count { it != null }
         return Result(merged(), done, total, cancel.get() && done < total)
     }
-
     companion object {
-        /** Egy sample-tartomány beolvasása a nyers 16-bit LE PCM fájlból. */
         fun readPcmRange(file: File, startSample: Int, endSample: Int): ShortArray {
             val n = (endSample - startSample).coerceAtLeast(0)
             if (n == 0) return ShortArray(0)
@@ -171,7 +137,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
             return out
         }
     }
-
     private fun worker(
         pcmFile: File?,
         pcm: ShortArray?,
@@ -207,7 +172,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
             } finally {
                 synchronized(lock) { active-- }
             }
-            // pihenő a chunkok között (a csúszka élőben állítható: ezredmásodpercenként újraolvassuk)
             var waited = 0L
             while (!cancel.get() && waited < Perf.pauseMs()) {
                 try { Thread.sleep(250) } catch (_: InterruptedException) { return }
@@ -215,8 +179,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
             }
         }
     }
-
-    /** Következő chunk sorszáma, vagy -1, ha nincs több / leállítás. Itt várunk a kapura és a szálkorlátra. */
     private fun claim(sequentialOnly: Boolean, events: Events): Int {
         var waiting = false
         while (!cancel.get()) {
@@ -239,8 +201,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         }
         return -1
     }
-
-    /** Az eddig kész chunkok egyesítése (részleges mentéshez is jó). */
     fun merged(): List<SrtExporter.Cue> {
         val res = synchronized(lock) { results.copyOf() }
         val out = ArrayList<SrtExporter.Cue>()
@@ -248,7 +208,6 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
         for (i in res.indices) {
             val cues = res[i] ?: continue
             if (overlapSamples <= 0) {
-                // intelligens (VAD) darabolás: nincs átfedés, minden cue bent marad
                 out.addAll(cues)
             } else {
                 val half = overlapSamples * 1000L / sr / 2
@@ -258,13 +217,10 @@ class ParallelChunker(private val ctx: Context, private val strictThermal: Boole
                 for (c in cues) if (c.startMs >= lo && c.startMs < hi) out.add(c)
             }
         }
-        // időrendbe
         out.sortBy { it.startMs }
         return out
     }
-
     private data class Gate(val block: Boolean, val reason: String)
-
     private fun gate(): Gate {
         val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
         val thermal = try { pm.currentThermalStatus } catch (_: Exception) { PowerManager.THERMAL_STATUS_NONE }

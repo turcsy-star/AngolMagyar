@@ -1,8 +1,5 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.ui.graphics.Color
-
-/** Diamond Blue palette: deep sapphire surfaces, icy facets and restrained cyan brilliance. */
 object PremiumColors {
     val DeepNavy = Color(0xFF050A18)
     val NavySurface = Color(0xFF0C1830)

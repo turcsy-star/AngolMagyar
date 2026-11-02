@@ -1,22 +1,9 @@
 package hu.angolmagyar.fordito
-
-/**
- * Szöveg-utófeldolgozás (angol és magyar): hallucináció- és töltelékszó-szűrés, nagybetűzés, írásjelek,
- * egyéni szótár, valamint a magázó → tegező átalakítás a magyar feliratokhoz.
- *
- * v2.22.3: a v2.22.0-ban egy csonk felülírta a fájlt, ezért a függvények újraírva, tesztekkel.
- */
 object TextPolish {
-
-    // ------------------------------------------------------------------ hallucináció, zaj
-
-    /** Önmagukban zajnak számító töltelékhangok. */
     private val NOISE_WORDS = setOf(
         "uh", "um", "uhm", "er", "erm", "ööö", "öö", "őő", "ehm", "öhm"
     )
-
     private const val L = "\\p{L}\\p{N}"
-
     private val FILLERS_HU = Regex(
         "(?<![$L])(?:[öÖőŐ]{2,}|[eE]hm+|[öÖ]hm+|hmm+|mhm+|izé|hát|na hát)(?![$L])\\s*,?",
         RegexOption.IGNORE_CASE
@@ -25,7 +12,6 @@ object TextPolish {
         "(?<![$L])(?:u+h+m*|u+m+|e+rm?|h+m+|m+h+m+)(?![$L])\\s*,?",
         RegexOption.IGNORE_CASE
     )
-
     fun isNoise(text: String): Boolean {
         val t = text.trim()
         if (t.isEmpty()) return true
@@ -33,40 +19,24 @@ object TextPolish {
         val words = t.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
         if (words.isEmpty()) return true
         if (words.all { it in NOISE_WORDS }) return true
-        // kizárólag hallucinált sor (pl. "Thanks for watching!")
         val rest = stripHallucinations(t)
         return rest.none { it.isLetterOrDigit() }
     }
-
-    // ------------------------------------------------------------------ alap tisztítás
-
     private fun collapse(s: String): String = s
         .replace(Regex("\\s+"), " ")
         .replace(Regex("\\s+([,.;:!?…])"), "$1")
         .replace(Regex("^[,;:\\s]+"), "")
         .replace(Regex(",\\s*([.!?…])"), "$1")
         .trim()
-
-    /**
-     * Csak az önálló, tipikus feliratvégi zajsorokat távolítjuk el. Egy ilyen kifejezés
-     * valódi mondat része is lehet, ezért a szöveg közepén soha nem töröljük.
-     */
     private val STANDALONE_HALLUCINATION = Regex(
         "(?i)^\\s*(?:subtitles? by(?: [\\p{L}\\p{N}_ .'-]{1,80})?|thanks(?: you)? for watching|please like and subscribe|köszönöm a figyelmet|köszönjük a figyelmet|feliratot? készítette(?: [\\p{L}\\p{N}_ .'-]{1,80})?|feliratok? [\\p{L}\\p{N}_ .'-]{1,80} készítette|amara\\.org|\\[(?:music|zene|applause|taps|laughter|nevetés)\\]|\\((?:music|zene|applause|laughter|nevetés)\\)|♪+)[.!?…\\s]*$"
     )
-
     private fun stripHallucinations(text: String): String = text
         .lines()
         .filterNot { line -> STANDALONE_HALLUCINATION.matches(line.trim()) }
         .joinToString("\n")
-
-    /**
-     * Biztonságos tisztítás. Alapértelmezésben megőrzi a hezitálásnak tűnő szavakat is,
-     * mert a „hát”, „na”, „izé” valódi tartalmat hordozhat. Eltávolítás csak explicit kérésre.
-     */
     fun cleanWhisperOutput(raw: String, removeFillers: Boolean = false): String =
         clean(raw, hu = true, en = true, removeFillers = removeFillers)
-
     private fun clean(raw: String, hu: Boolean, en: Boolean, removeFillers: Boolean = false): String {
         var t = stripHallucinations(raw.trim())
         if (removeFillers && hu) t = FILLERS_HU.replace(t, " ")
@@ -74,15 +44,12 @@ object TextPolish {
         t = collapse(t)
         return capitalizeFirst(t)
     }
-
     private fun capitalizeFirst(s: String): String {
         if (s.isEmpty()) return s
         val i = s.indexOfFirst { it.isLetter() }
         if (i < 0) return s
         return s.substring(0, i) + s[i].uppercaseChar() + s.substring(i + 1)
     }
-
-    /** Mondatkezdő nagybetűk: a szöveg elején és a .!?… után. */
     fun capitalizeSentences(s: String): String {
         if (s.isEmpty()) return s
         val sb = StringBuilder(s.length)
@@ -98,8 +65,6 @@ object TextPolish {
         }
         return sb.toString()
     }
-
-    /** Hosszabb (legalább 4 szavas) mondat végére pontot tesz, ha nincs lezáró írásjel. Rövid töredéket nem bánt. */
     fun ensurePeriod(s: String): String {
         val t = s.trim()
         if (t.isEmpty()) return t
@@ -110,12 +75,6 @@ object TextPolish {
         if (last == ',') return t.dropLast(1) + "."
         return "$t."
     }
-
-    // ------------------------------------------------------------------ egyéni szótár
-
-    /**
-     * Soronként "szó" (írásmód rögzítése) vagy "hibás=helyes" (csere). Üres sor és a "pl." súgósor kimarad.
-     */
     fun parseVocab(text: String): List<Pair<String, String>> =
         text.lines().mapNotNull { line ->
             val l = line.trim()
@@ -128,7 +87,6 @@ object TextPolish {
                 if (a.isEmpty() || b.isEmpty()) null else a to b
             }
         }
-
     private fun applyVocab(text: String, vocab: List<Pair<String, String>>): String {
         var r = text
         for ((from, to) in vocab) {
@@ -138,9 +96,6 @@ object TextPolish {
         }
         return r
     }
-
-    // ------------------------------------------------------------------ nyelvenkénti finomítás
-
     fun polishEnglish(
         text: String,
         vocab: List<Pair<String, String>> = emptyList(),
@@ -153,7 +108,6 @@ object TextPolish {
         t = applyVocab(t, vocab)
         return ensurePeriod(capitalizeSentences(t))
     }
-
     fun polishHungarian(
         text: String,
         vocab: List<Pair<String, String>> = emptyList(),
@@ -164,8 +118,6 @@ object TextPolish {
         t = applyVocab(t, vocab)
         return ensurePeriod(capitalizeSentences(t))
     }
-
-    /** Átirat-szöveg (TranscriptStore formátum) tisztítása: javítólisták + nyelvi finomítás + zajsorok törlése. */
     fun cleanTranscript(
         text: String,
         enRules: List<Pair<Regex, String>>,
@@ -183,10 +135,6 @@ object TextPolish {
         }
         return SrtExporter.toTranscriptText(out)
     }
-
-    // ------------------------------------------------------------------ magázás → tegezés
-
-    // felszólító 3. személy (magázó) → 2. személy (tegező), tárgyatlan / határozatlan ragozás
     private val IMP_INDEF = mapOf(
         "segítsen" to "segíts", "hozzon" to "hozz", "mondjon" to "mondj", "írjon" to "írj",
         "jöjjön" to "jöjj", "menjen" to "menj", "üljön" to "ülj", "álljon" to "állj", "várjon" to "várj",
@@ -205,8 +153,6 @@ object TextPolish {
         "kapjon" to "kapj", "fogadjon" to "fogadj", "döntsön" to "dönts", "pihenjen" to "pihenj",
         "siessen" to "siess", "feküdjön" to "feküdj", "induljon" to "indulj", "lazítson" to "lazíts"
     )
-
-    // tárgyas / határozott ragozás
     private val IMP_DEF = mapOf(
         "olvassa" to "olvasd", "zárja" to "zárd", "nyissa" to "nyisd", "tegye" to "tedd",
         "vegye" to "vedd", "hagyja" to "hagyd", "küldje" to "küldd", "tartsa" to "tartsd",
@@ -221,8 +167,6 @@ object TextPolish {
         "hozza" to "hozd", "feledje" to "feledd", "felejtse" to "felejtsd", "gondolja" to "gondold",
         "kapja" to "kapd", "fogja" to "fogd", "érezze" to "érezd", "élvezze" to "élvezd"
     )
-
-    // kérdés eleji ige: 3. sz. → 2. sz. ("Tud …?" → "Tudsz …?"); a 2. elem: tárgyas-e (a/az után is lehet)
     private val Q_INDEF = mapOf(
         "tud" to "tudsz", "akar" to "akarsz", "szeretne" to "szeretnél", "kér" to "kérsz",
         "lát" to "látsz", "hall" to "hallasz", "ért" to "értesz", "segít" to "segítesz",
@@ -230,67 +174,50 @@ object TextPolish {
         "dolgozik" to "dolgozol", "szeret" to "szeretsz", "hisz" to "hiszel", "gondol" to "gondolsz",
         "ismer" to "ismersz", "vár" to "vársz", "csinál" to "csinálsz", "kíván" to "kívánsz"
     )
-
     private val Q_DEF = mapOf(
         "érti" to "érted", "ismeri" to "ismered", "látja" to "látod", "hallja" to "hallod",
         "tudja" to "tudod", "érzi" to "érzed", "szereti" to "szereted", "akarja" to "akarod",
         "kéri" to "kéred", "megérti" to "megérted", "látta" to "láttad", "olvasta" to "olvastad"
     )
-
     private val THIRD_PERSON = Regex(
         "(?<![$L])(?:ő|ők|neki|nekik|ennek|annak|őt|őket|ez a|az a|a fiú|a lány|a férfi|a nő)(?![$L])",
         RegexOption.IGNORE_CASE
     )
-
     private val ART = setOf("a", "az")
-
     private fun matchCase(orig: String, repl: String): String =
         if (orig.isNotEmpty() && orig[0].isUpperCase()) repl.replaceFirstChar { it.uppercaseChar() } else repl
-
     private fun firstWordRegex(words: Collection<String>): Regex =
         Regex("^(\\s*)(" + words.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) } + ")(?![$L])",
             RegexOption.IGNORE_CASE)
-
     private val RE_IMP_INDEF = firstWordRegex(IMP_INDEF.keys)
     private val RE_IMP_DEF = firstWordRegex(IMP_DEF.keys)
     private val RE_Q_INDEF = firstWordRegex(Q_INDEF.keys)
     private val RE_Q_DEF = firstWordRegex(Q_DEF.keys)
-
     private val RE_KEREM = Regex(
         "^(\\s*)(Kérem)(,?\\s+)(" + (IMP_INDEF.keys + IMP_DEF.keys).joinToString("|") + ")(?![$L])",
         RegexOption.IGNORE_CASE
     )
-
-    // "Ne feledje …", "Csak jöjjön ide." – a felszólító nem a mondat első szava
     private val RE_LEAD_IMP = Regex(
         "^(\\s*)(ne|csak|inkább|most|na)(\\s+)(" + (IMP_INDEF.keys + IMP_DEF.keys).sortedByDescending { it.length }.joinToString("|") + ")(?![$L])",
         RegexOption.IGNORE_CASE
     )
-
-    // ", siessen." – vessző után, a mondat végén álló felszólító
     private val RE_TAIL_IMP = Regex(
         "(,\\s+)(" + (IMP_INDEF.keys + IMP_DEF.keys).sortedByDescending { it.length }.joinToString("|") + ")([.!…]*)$",
         RegexOption.IGNORE_CASE
     )
-
     private val RE_SENT = Regex("[^.!?…]+[.!?…]*\\s*|[.!?…]+\\s*")
-
-    /** Magázó mondatok tegezővé alakítása. Óvatos: csak a biztos mintákat bántja, a többit érintetlenül hagyja. */
     fun informalHungarian(text: String): String {
         if (text.isBlank()) return text
         val sb = StringBuilder()
         for (m in RE_SENT.findAll(text)) sb.append(informalSentence(m.value))
         return sb.toString()
     }
-
     private fun informalSentence(sent: String): String {
         val core = sent.trimEnd()
         val trail = sent.substring(core.length)
         var s = core
         val question = s.endsWith("?")
         val third = THIRD_PERSON.containsMatchIn(s)
-
-        // névmások
         s = Regex("(?<![$L])az Ön számára(?![$L])", RegexOption.IGNORE_CASE).replace(s) { matchCase(it.value, "neked") }
         s = Regex("(?<![$L])Ön számára(?![$L])", RegexOption.IGNORE_CASE).replace(s) { matchCase(it.value, "neked") }
         val pron = linkedMapOf(
@@ -301,30 +228,23 @@ object TextPolish {
         for ((from, to) in pron) {
             s = Regex("(?<![$L])" + from + "(?![$L])", RegexOption.IGNORE_CASE).replace(s) { matchCase(it.value, to) }
         }
-        // "Ön tud …?" → "Te tudsz …?"
         s = Regex("(?<![$L])Ön\\s+(" + (Q_INDEF.keys + Q_DEF.keys).joinToString("|") + ")(?![$L])", RegexOption.IGNORE_CASE)
             .replace(s) { r ->
                 val v = r.groupValues[1].lowercase()
                 matchCase(r.value, "te " + (Q_INDEF[v] ?: Q_DEF[v] ?: v))
             }
-
-        // "Kérem, segítsen." → "Kérlek, segíts."
         RE_KEREM.find(s)?.let { m ->
             val verb = m.groupValues[4].lowercase()
             val inf = IMP_INDEF[verb] ?: IMP_DEF[verb] ?: verb
             s = m.groupValues[1] + matchCase(m.groupValues[2], "kérlek") + m.groupValues[3] + inf + s.substring(m.value.length)
         }
-
-        // mondatkezdő felszólító
         s = replaceFirstWord(s, RE_IMP_INDEF, IMP_INDEF)
         s = replaceFirstWord(s, RE_IMP_DEF, IMP_DEF)
-        // "Ne feledje" / "Csak jöjjön ide"
         RE_LEAD_IMP.find(s)?.let { m ->
             val v = m.groupValues[4].lowercase()
             val r = IMP_INDEF[v] ?: IMP_DEF[v]
             if (r != null) s = m.groupValues[1] + m.groupValues[2] + m.groupValues[3] + matchCase(m.groupValues[4], r) + s.substring(m.value.length)
         }
-        // "Gyerünk, siessen."
         if (!question && !third) {
             RE_TAIL_IMP.find(s)?.let { m ->
                 val v = m.groupValues[2].lowercase()
@@ -332,8 +252,6 @@ object TextPolish {
                 if (r != null) s = s.substring(0, m.range.first) + m.groupValues[1] + r + m.groupValues[3]
             }
         }
-
-        // kérdés eleji igék
         if (question && !third) {
             val nextWord = Regex("^\\s*\\p{L}+\\s+(\\p{L}+)").find(s)?.groupValues?.get(1)?.lowercase()
             if (nextWord == null || nextWord !in ART) s = replaceFirstWord(s, RE_Q_INDEF, Q_INDEF)
@@ -344,19 +262,14 @@ object TextPolish {
         if (question && !third) {
             s = Regex("(?<![$L])érzi magát(?![$L])", RegexOption.IGNORE_CASE).replace(s) { matchCase(it.value, "érzed magad") }
         }
-        // "Remélem, jobban érzi magát."
         s = Regex("(?i)(remélem,?\\s+(?:hogy\\s+)?[^.!?…]*?)érzi magát").replace(s) { "${it.groupValues[1]}érzed magad" }
-
         return s + trail
     }
-
     private fun replaceFirstWord(s: String, re: Regex, map: Map<String, String>): String {
         val m = re.find(s) ?: return s
         val w = m.groupValues[2]
         val repl = map[w.lowercase()] ?: return s
         return m.groupValues[1] + matchCase(w, repl) + s.substring(m.value.length)
     }
-
-    /** Igaz, ha a mondat a tegező átalakítás szerint még magázó alakot tartalmaz. */
     fun looksFormal(hu: String): Boolean = informalHungarian(hu) != hu
 }

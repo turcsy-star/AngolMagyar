@@ -1,15 +1,6 @@
 package hu.angolmagyar.fordito
-
-/**
- * Online (nagy nyelvi modellel végzett) felirat-fordítás. A blokkokat kötegekben küldi, a környező
- * sorokat csak kontextusként adja mellé, így a mondat közepén vágott blokkok is természetesen fordulnak.
- * Két szolgáltatói forma: Anthropic Messages API és OpenAI-kompatibilis (felhő vagy saját / helyi szerver).
- * Hibánál nem dob kivételt: a sikertelen sorok indexét adja vissza, a hívó (offline) tartalékra válthat.
- */
 class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp) {
-
     enum class Provider { ANTHROPIC, OPENAI, DEEPL }
-
     data class Config(
         val provider: Provider,
         val apiKey: String,
@@ -18,34 +9,24 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         val srcLang: String = "angol",
         val tgtLang: String = "magyar",
         val informal: Boolean = true,
-        /** forrásszó → kötelező fordítás */
         val glossary: List<Pair<String, String>> = emptyList(),
-        /** szabad szöveges háttér: téma, szereplők nevei stb. */
         val hint: String = "",
         val style: TranslationStyle = TranslationStyle.NATURAL,
         val batchSize: Int = 30,
         val timeoutMs: Int = 90_000
     )
-
     interface Http {
-        /** @return (HTTP-állapotkód, válasz-törzs); hálózati hibánál kivételt dob */
         fun post(url: String, headers: Map<String, String>, body: String, timeoutMs: Int): Pair<Int, String>
     }
-
-    /** Az utolsó hiba (felhasználónak mutatható), üres, ha nem volt. */
     @Volatile var lastError: String = ""
         private set
-
-    /** Végzetes hiba (pl. rossz kulcs): nincs értelme tovább próbálkozni. */
     @Volatile var fatal: Boolean = false
         private set
-
     companion object {
         const val DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5"
         const val DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
         private const val CTX_BEFORE = 4
         private const val CTX_AFTER = 3
-
         fun systemPrompt(cfg: Config): String {
             val sb = StringBuilder()
             sb.append("You are a professional subtitle translator. Translate subtitle blocks from ${cfg.srcLang} to ${cfg.tgtLang}.\n")
@@ -65,7 +46,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             sb.append("Output ONLY a JSON array of strings: the translations of the \"translate\" blocks, same count and same order. No other text.")
             return sb.toString()
         }
-
         fun userPayload(en: List<String>, hu: List<String>, batch: List<Int>): String {
             val first = batch.first()
             val last = batch.last()
@@ -91,8 +71,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             sb.append("]}")
             return sb.toString()
         }
-
-        /** A modell szövegéből a fordítások listája; null, ha nem értelmezhető vagy a darabszám nem stimmel. */
         fun parseTranslations(text: String, expected: Int): List<String>? {
             val arrText = MiniJson.extractArray(text) ?: return null
             val v = try { MiniJson.parse(arrText) } catch (_: Exception) { return null }
@@ -108,8 +86,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             }
             return out
         }
-
-        /** Válasz-törzsből a modell szövege (provider szerint). */
         fun extractText(provider: Provider, body: String): String? {
             val root = try { MiniJson.parse(body) } catch (_: Exception) { return null } as? Map<*, *> ?: return null
             return when (provider) {
@@ -125,15 +101,10 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                 }
             }
         }
-
-        // ---------------------------------------------------------------- DeepL
-
         private val DEEPL_SOURCE = setOf(
             "AR", "BG", "CS", "DA", "DE", "EL", "EN", "ES", "ET", "FI", "FR", "HU", "ID", "IT", "JA", "KO", "LT",
             "LV", "NB", "NL", "PL", "PT", "RO", "RU", "SK", "SL", "SV", "TR", "UK", "ZH"
         )
-
-        /** Nyelvnév (magyar név vagy kód) → DeepL nyelvkód; null, ha a DeepL nem támogatja. */
         fun deeplCode(name: String, target: Boolean): String? {
             val n = name.trim().lowercase()
             val code = LangCatalog.ALL.firstOrNull { it.second == n || it.first == n }?.first
@@ -143,12 +114,9 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             if (!target) return up
             return when (up) { "EN" -> "EN-GB"; "PT" -> "PT-PT"; "ZH" -> "ZH-HANS"; else -> up }
         }
-
-        /** A :fx végű kulcs az ingyenes végpontot használja. */
         fun deeplEndpoint(apiKey: String, baseUrl: String): String =
             (baseUrl.ifBlank { if (apiKey.trim().endsWith(":fx")) "https://api-free.deepl.com" else "https://api.deepl.com" })
                 .trimEnd('/') + "/v2/translate"
-
         fun deeplRequest(texts: List<String>, srcCode: String?, tgtCode: String, context: String, informal: Boolean): String {
             val sb = StringBuilder("{\"text\":[")
             for ((i, t) in texts.withIndex()) { if (i > 0) sb.append(','); sb.append(MiniJson.quote(t)) }
@@ -159,8 +127,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             sb.append(",\"split_sentences\":\"nonumerics\"}")
             return sb.toString()
         }
-
-        /** A DeepL válaszából a fordítások; null, ha nem értelmezhető vagy a darabszám nem stimmel. */
         fun parseDeepL(body: String, expected: Int): List<String>? {
             val root = try { MiniJson.parse(body) } catch (_: Exception) { return null } as? Map<*, *> ?: return null
             val list = root["translations"] as? List<*> ?: return null
@@ -169,8 +135,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             for (x in list) out.add(((x as? Map<*, *>)?.get("text") as? String)?.trim() ?: return null)
             return out
         }
-
-        /** A kötegekhez adott szöveges kontextus: háttér + az előző és következő sorok forrásszövege. */
         fun deeplContext(hint: String, en: List<String>, first: Int, last: Int): String {
             val sb = StringBuilder()
             if (hint.isNotBlank()) sb.append(hint.trim()).append('\n')
@@ -182,7 +146,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             if (after.isNotEmpty()) sb.append(" … ").append(after.joinToString(" "))
             return sb.toString().trim()
         }
-
         fun errorMessage(body: String): String {
             val root = try { MiniJson.parse(body) } catch (_: Exception) { return body.take(160) } as? Map<*, *> ?: return body.take(160)
             (root["message"] as? String)?.let { if (root["error"] == null) return it }
@@ -194,24 +157,21 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             }
         }
     }
-
     private fun endpoint(): String = when (cfg.provider) {
         Provider.ANTHROPIC -> (cfg.baseUrl.ifBlank { "https://api.anthropic.com" }).trimEnd('/') + "/v1/messages"
         Provider.OPENAI -> (cfg.baseUrl.ifBlank { DEFAULT_OPENAI_BASE }).trimEnd('/') + "/chat/completions"
         Provider.DEEPL -> deeplEndpoint(cfg.apiKey, cfg.baseUrl)
     }
-
     private fun requestBody(system: String, user: String): String = when (cfg.provider) {
         Provider.ANTHROPIC ->
             "{\"model\":${MiniJson.quote(cfg.model)},\"max_tokens\":4096,\"system\":${MiniJson.quote(system)}," +
                 "\"messages\":[{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
-        Provider.DEEPL -> user // a kész DeepL kérés-törzs
+        Provider.DEEPL -> user
         Provider.OPENAI ->
             "{\"model\":${MiniJson.quote(cfg.model)},\"temperature\":0.2,\"messages\":[" +
                 "{\"role\":\"system\",\"content\":${MiniJson.quote(system)}}," +
                 "{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
     }
-
     private fun headers(): Map<String, String> = when (cfg.provider) {
         Provider.ANTHROPIC -> mapOf(
             "content-type" to "application/json", "x-api-key" to cfg.apiKey, "anthropic-version" to "2023-06-01"
@@ -226,8 +186,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             h
         }
     }
-
-    /** Egy kérés (újrapróbálkozással). @return a modell szövege, vagy null (lastError / fatal beállítva) */
     private fun call(system: String, user: String, cancel: () -> Boolean): String? {
         var attempt = 0
         while (attempt < 3 && !cancel()) {
@@ -269,11 +227,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         }
         return null
     }
-
-    /**
-     * A [indices] sorok fordítása; a siker a [hu] listában jelenik meg (a környező sorok fordítása kontextus).
-     * @return a sikertelen sorok indexei (üres = minden rendben)
-     */
     fun translate(
         en: List<String>, hu: MutableList<String>, indices: List<Int>,
         onDone: (done: Int, total: Int) -> Unit = { _, _ -> },
@@ -290,7 +243,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         for ((bi, batch) in batches.withIndex()) {
             if (cancel()) { failed.addAll(batches.drop(bi).flatten()); break }
             if (fatal) { failed.addAll(batch); continue }
-            // az üres forrássort nem küldjük
             val real = batch.filter { en[it].isNotBlank() }
             if (real.isEmpty()) { done += batch.size; onDone(done, indices.size); continue }
             var res: List<String>? = null
@@ -311,8 +263,6 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         }
         return failed
     }
-
-    /** DeepL: kis kötegek, mindegyikhez a környező sorok kontextusként (a kontextus nem számít fordítandó karakternek). */
     private fun translateDeepL(
         en: List<String>, hu: MutableList<String>, indices: List<Int>,
         onDone: (done: Int, total: Int) -> Unit, cancel: () -> Boolean
@@ -324,7 +274,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             fatal = true
             return indices
         }
-        val src = deeplCode(cfg.srcLang, false) // null: a DeepL maga ismeri fel
+        val src = deeplCode(cfg.srcLang, false)
         var done = 0
         onDone(0, indices.size)
         val batches = indices.chunked(cfg.batchSize.coerceIn(1, 10))
@@ -348,16 +298,12 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         }
         return failed
     }
-
-    /** Kapcsolat- és kulcsellenőrzés: egy rövid mondat fordítása. @return null = rendben, különben a hiba szövege */
     fun test(): String? {
         val hu = mutableListOf("")
         val failed = translate(listOf("Hello, how are you today?"), hu, listOf(0))
         return if (failed.isEmpty() && hu[0].isNotBlank()) null else lastError.ifBlank { "Nem érkezett fordítás." }
     }
 }
-
-/** Alapértelmezett HTTP: HttpURLConnection (Androidon és JVM-en is elérhető). */
 object UrlHttp : OnlineTranslator.Http {
     override fun post(url: String, headers: Map<String, String>, body: String, timeoutMs: Int): Pair<Int, String> {
         val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection

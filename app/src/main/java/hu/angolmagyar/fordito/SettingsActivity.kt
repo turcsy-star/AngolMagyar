@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -24,17 +23,13 @@ import androidx.appcompat.widget.AppCompatEditText
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-
-/** Beállítások: modell, felirat megjelenése, átirat, javítólisták, rendszerbeállítások. */
 class SettingsActivity : AppCompatActivity() {
-
     private lateinit var prefs: Prefs
     private lateinit var preview: TextView
     private lateinit var enFixes: AppCompatEditText
     private lateinit var huFixes: AppCompatEditText
     private lateinit var vocabEdit: AppCompatEditText
     private lateinit var speakerNamesEdit: AppCompatEditText
-
     private val zipLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@registerForActivityResult
@@ -57,7 +52,6 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
-
     private val onnxLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri == null) return@registerForActivityResult
@@ -83,10 +77,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
-
     private fun dp(v: Int) = Ui.dp(this, v)
-
-    /** OLED fekete háttér azonnali be-/kikapcsolása ezen a képernyőn (v2.22.3: a függvény hiányzott). */
     private fun applyOledBackground() {
         App.oledBlack = prefs.oledBlack
         if (prefs.oledBlack) {
@@ -98,13 +89,11 @@ class SettingsActivity : AppCompatActivity() {
             window.decorView.setBackgroundColor(bg)
         }
     }
-
     private fun downloadHu(spec: ModelManager.Spec) {
         Toast.makeText(this, "Letöltés: ${spec.label}…", Toast.LENGTH_SHORT).show()
         Executors.newSingleThreadExecutor().execute {
             try {
                 ModelManager.download(this, spec) { pct, msg ->
-                    // progress opcionális
                 }
                 runOnUiThread {
                     Toast.makeText(this, "Kész: ${spec.label}", Toast.LENGTH_LONG).show()
@@ -116,16 +105,12 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
     }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-
         val column = Ui.column(this).apply {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
-
-        // --- Megjelenés (OLED + téma) ---
         val appearanceCard = Ui.card(this)
         appearanceCard.addView(Ui.title(this, "Megjelenés", 17f))
         appearanceCard.addView(Ui.button(this, "Compose megjelenés beállítások", false) {
@@ -154,7 +139,6 @@ class SettingsActivity : AppCompatActivity() {
             v.setPadding(b.left, b.top, b.right, b.bottom)
             insets
         }
-
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         column.addView(Ui.title(this, "Beállítások"))
         column.addView(Ui.heroHeader(this, "CONTROL CENTER", "Saját munkakörnyezet", "Finomhangold a felismerést, a fordítást, a megjelenést és az alkalmazás viselkedését."))
@@ -166,8 +150,6 @@ class SettingsActivity : AppCompatActivity() {
             ).apply { topMargin = dp(8) }
         }
         column.addView(tabBar)
-
-        // ---------------------------------------------------------------- modell
         val modelCard = Ui.card(this)
         modelCard.addView(Ui.title(this, "Felismerő modellek", 17f))
         modelCard.addView(Ui.small(this, "Letöltés, választás és törlés egy helyen; készülék szerinti javaslattal."))
@@ -179,8 +161,6 @@ class SettingsActivity : AppCompatActivity() {
         modelCard.addView(switchRow("Automatikus takarékos mód (melegedés / alacsony akku)", prefs.adaptiveEco) { prefs.adaptiveEco = it })
         modelCard.addView(Ui.small(this, "Thermal vagy alacsony akkumulátor esetén automatikusan kis modell és ritkább frissítés."))
         tabGroups[1].add(modelCard)
-
-        // ---------------------------------------------------------------- magyar / tárgyalás modellek
         val huCard = Ui.card(this)
         huCard.addView(Ui.title(this, "Magyar felismerés és tárgyalás", 17f))
         huCard.addView(Ui.small(this, MeetingMode.statusText(this)))
@@ -218,9 +198,6 @@ class SettingsActivity : AppCompatActivity() {
         huCard.addView(Ui.small(this, "ONNX embedding diarization (ha nincs modell → energia S1/S2). ML Kit Language ID beépítve. Wear: :wear modul."))
         huCard.addView(Ui.small(this, "A nagy magyar modellhez Vosk-kompatibilis ZIP kell (am mappa a csomagban)."))
         tabGroups[1].add(huCard)
-
-
-        // ---------------------------------------------------------------- megjelenés (téma)
         val themeCard = Ui.card(this)
         themeCard.addView(Ui.title(this, getString(R.string.s_theme_title), 17f))
         val themeGroup = RadioGroup(this)
@@ -243,8 +220,6 @@ class SettingsActivity : AppCompatActivity() {
         }
         themeCard.addView(themeGroup)
         tabGroups[0].add(themeCard)
-
-        // ---------------------------------------------------------------- fordítás iránya
         val dirCard = Ui.card(this)
         dirCard.addView(Ui.title(this, "Fordítás iránya", 17f))
         val dirRadios = RadioGroup(this)
@@ -333,7 +308,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         dirCard.addView(Ui.small(this, "ML Kit on-device; ki kapcsolva csak heurisztika. Manuális ⇄ továbbra is működik."))
         tabGroups[1].add(dirCard)
-
         val langCard = Ui.card(this)
         langCard.addView(Ui.title(this, "Élő fordítás nyelvei", 17f))
         langCard.addView(Ui.small(this, "Forrás: a kiválasztott nyelv Vosk-modellje ismeri fel a beszédet (angol, magyar, német, francia, spanyol, olasz, ukrán). Cél: ML Kit offline fordítás."))
@@ -377,8 +351,6 @@ class SettingsActivity : AppCompatActivity() {
         langCard.addView(tgtGroup)
         langCard.addView(Ui.small(this, "Natív felismeréshez töltsd le a forrásnyelv Vosk modelljét. Fordítás: ML Kit (első használatkor). WakeLock: lezárt képernyő OK."))
         tabGroups[1].add(langCard)
-
-        // ---------------------------------------------------------------- telepített modellek törlése
         val installedCard = Ui.card(this)
         installedCard.addView(Ui.title(this, "Telepített modellek (törlés)", 17f))
         installedCard.addView(Ui.small(this, "A nem használt nyelvek törlésével helyet szabadíthatsz. Később újra letölthetők."))
@@ -402,7 +374,6 @@ class SettingsActivity : AppCompatActivity() {
                         .setPositiveButton("Törlés") { _, _ ->
                             if (ModelManager.delete(this@SettingsActivity, spec)) {
                                 Toast.makeText(this@SettingsActivity, "Törölve: ${spec.label}", Toast.LENGTH_SHORT).show()
-                                // frissítés: activity újratöltés
                                 recreate()
                             } else {
                                 Toast.makeText(this@SettingsActivity, "Törlés sikertelen", Toast.LENGTH_SHORT).show()
@@ -430,17 +401,12 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
         tabGroups[1].add(installedCard)
-
-
-
-        // ---------------------------------------------------------------- késleltetés, confidence, PTT
         val advCard = Ui.card(this)
         advCard.addView(Ui.title(this, "Felismerés és felirat", 17f))
-
         val delayLabel = Ui.body(this, "Felirat késleltetés: ${prefs.delayMs} ms")
         advCard.addView(delayLabel)
         advCard.addView(SeekBar(this).apply {
-            max = 30  // 0..3000 ms, 100-as lépés
+            max = 30
             progress = prefs.delayMs / 100
             setOnSeekBarChangeListener(simpleSeek { v ->
                 prefs.delayMs = v * 100
@@ -448,7 +414,6 @@ class SettingsActivity : AppCompatActivity() {
             })
         })
         advCard.addView(Ui.small(this, "Filmnézésnél hasznos, ha a felirat kicsit késik vagy siet."))
-
         val confLabel = Ui.body(this, "Confidence küszöb: ${if (prefs.confidenceMin == 0) "ki" else "${prefs.confidenceMin}%"}")
         advCard.addView(confLabel)
         advCard.addView(SeekBar(this).apply {
@@ -460,16 +425,12 @@ class SettingsActivity : AppCompatActivity() {
             })
         })
         advCard.addView(Ui.small(this, "Alacsonyabb confidence-ű szavak elrejtése (kevesebb hibás felirat)."))
-
         advCard.addView(switchRow("Push-to-talk (mikrofon: csak gombnyomásra hallgat)", prefs.pushToTalk) {
             prefs.pushToTalk = it
         })
         advCard.addView(Ui.small(this, "A feliraton a 🎙 gombot tartsd nyomva beszélés közben."))
         tabGroups[2].add(advCard)
-
-        // ---------------------------------------------------------------- felirat
         val styleCard = Ui.card(this)
-        // ---------------------------------------------------------------- stílus presetek
         val presetCard = Ui.card(this)
         presetCard.addView(Ui.title(this, "Felirat stílus", 17f))
         val presets = listOf(
@@ -493,9 +454,7 @@ class SettingsActivity : AppCompatActivity() {
         }
         presetCard.addView(presetGroup)
         tabGroups[0].add(presetCard)
-
         styleCard.addView(Ui.title(this, "Felirat megjelenése", 17f))
-
         preview = TextView(this).apply {
             text = "Helló, hogyan vagy ma?"
             gravity = Gravity.CENTER
@@ -506,7 +465,6 @@ class SettingsActivity : AppCompatActivity() {
             ).apply { topMargin = dp(8); bottomMargin = dp(8) }
         }
         styleCard.addView(preview)
-
         val sizeLabel = Ui.body(this, "Betűméret: ${prefs.textSizeSp} sp")
         styleCard.addView(sizeLabel)
         styleCard.addView(SeekBar(this).apply {
@@ -518,7 +476,6 @@ class SettingsActivity : AppCompatActivity() {
                 applyPreview()
             })
         })
-
         val alphaLabel = Ui.body(this, "Háttér átlátszatlansága: ${prefs.bgAlphaPct}%")
         styleCard.addView(alphaLabel)
         styleCard.addView(SeekBar(this).apply {
@@ -530,7 +487,6 @@ class SettingsActivity : AppCompatActivity() {
                 applyPreview()
             })
         })
-
         styleCard.addView(Ui.body(this, "Szövegszín"))
         val colors = RadioGroup(this)
         Prefs.COLOR_NAMES.forEachIndexed { i, name ->
@@ -545,7 +501,6 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
         styleCard.addView(colors)
-
         styleCard.addView(switchRow("Angol eredeti sor mutatása", prefs.showEnglish) {
             prefs.showEnglish = it
             applyPreview()
@@ -573,11 +528,10 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
         styleCard.addView(alignGroup)
-
         val maxLinesLabel = Ui.body(this, "Max. megjelenő sorok: ${prefs.maxOverlayLines}")
         styleCard.addView(maxLinesLabel)
         styleCard.addView(SeekBar(this).apply {
-            max = 4 // 2..6
+            max = 4
             progress = prefs.maxOverlayLines - 2
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
@@ -590,8 +544,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         styleCard.addView(Ui.small(this, "Dupla koppintás = szünet / folytatás. Egy koppintás = vezérlősáv. Húzás = pozíció. Két ujjal csippentve = betűméret. Hosszú nyomás = mondat mentése a kedvencek közé."))
         tabGroups[0].add(styleCard)
-
-        // ---------------------------------------------------------------- átirat
         val trCard = Ui.card(this)
         trCard.addView(Ui.title(this, "Átirat", 17f))
         trCard.addView(switchRow("Átirat automatikus mentése", prefs.saveTranscript) { prefs.saveTranscript = it })
@@ -602,8 +554,6 @@ class SettingsActivity : AppCompatActivity() {
         trCard.addView(switchRow("Fordított szöveg felolvasása (TTS)", prefs.ttsEnabled) { prefs.ttsEnabled = it })
         trCard.addView(Ui.small(this, "A kész fordítást a rendszer TextToSpeech hangjával felolvassa (offline)."))
         tabGroups[0].add(trCard)
-
-        // ---------------------------------------------------------------- javítások + személyes szótár
         val fixCard = Ui.card(this)
         fixCard.addView(Ui.title(this, "Javítólisták és szótár", 17f))
         fixCard.addView(Ui.small(this, "Soronként egy szabály: régi=új. Kis/nagybetű nem számít, egész szóra illeszt."))
@@ -621,7 +571,6 @@ class SettingsActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 )
                 row.addView(Ui.smallButton(this, getString(R.string.td_learn_add)) {
-                    // az EditText-ekbe is beírjuk, hogy a kilépéskori mentés ne írja felül
                     val line = sg.from.lowercase() + "=" + sg.to
                     val box = if (sg.target) huFixes else enFixes
                     val cur = box.text?.toString() ?: ""
@@ -651,8 +600,6 @@ class SettingsActivity : AppCompatActivity() {
             showGlossaryManager()
         })
         tabGroups[2].add(fixCard)
-
-        // ---------------------------------------------------------------- rendszer
         val sysCard = Ui.card(this)
         sysCard.addView(Ui.title(this, "Rendszer", 17f))
         sysCard.addView(switchRow("Rezgés (haptika)", prefs.haptics) { prefs.haptics = it })
@@ -663,7 +610,6 @@ class SettingsActivity : AppCompatActivity() {
             prefs.preferOnnx = it
         })
         sysCard.addView(Ui.small(this, DiarizerFactory.onnxStatus(this)))
-
         sysCard.addView(Ui.button(this, "Megjelenítés más appok fölött", false) {
             startActivity(
                 Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
@@ -674,8 +620,6 @@ class SettingsActivity : AppCompatActivity() {
         })
         sysCard.addView(Ui.button(this, getString(R.string.log_title), false) { LogDialog.show(this) })
         tabGroups[2].add(sysCard)
-
-        // --- fülek: Megjelenés / Felismerés / Haladó
         val tabNames = listOf("Megjelenés", "Felismerés", "Haladó")
         val tabButtons = ArrayList<android.widget.Button>()
         fun showTab(i: Int) {
@@ -696,13 +640,10 @@ class SettingsActivity : AppCompatActivity() {
             tabButtons.add(b)
             tabBar.addView(b)
         }
-        // a kártyák a fülsor után kerülnek az oszlopba, fülenként egymás után
         for (g in tabGroups) for (v in g) column.addView(v)
         showTab(prefs.settingsTab.coerceIn(0, 2))
-
         applyPreview()
     }
-
     override fun onPause() {
         super.onPause()
         prefs.enFixes = enFixes.text?.toString() ?: ""
@@ -710,7 +651,6 @@ class SettingsActivity : AppCompatActivity() {
         prefs.customVocab = vocabEdit.text?.toString() ?: ""
         prefs.speakerNames = speakerNamesEdit.text?.toString() ?: ""
     }
-
     private fun showGlossaryManager() {
         val store = GlossaryStore(this)
         val current = store.load()
@@ -775,7 +715,6 @@ class SettingsActivity : AppCompatActivity() {
             }
             .show()
     }
-
     private fun applyPreview() {
         val hc = prefs.highContrast
         preview.text = if (prefs.showEnglish) "Hello, how are you today?\nHelló, hogyan vagy ma?"
@@ -784,13 +723,11 @@ class SettingsActivity : AppCompatActivity() {
         preview.setTextColor(if (hc) Color.WHITE else prefs.textColor)
         preview.setTypeface(null, android.graphics.Typeface.BOLD)
         val alpha = if (hc) 245 else prefs.bgAlphaPct * 255 / 100
-        // ugyanaz a kékes-fekete háttér, mint az élő feliraton
         preview.background = GradientDrawable().apply {
             setColor(Color.argb(alpha, 8, 10, 18))
             cornerRadius = dp(18).toFloat()
         }
     }
-
     private fun switchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) =
         SwitchCompat(this).apply {
             text = label
@@ -798,7 +735,6 @@ class SettingsActivity : AppCompatActivity() {
             minHeight = dp(52)
             setOnCheckedChangeListener { _, c -> onChange(c) }
         }
-
     private fun fixEdit(initial: String, hintText: String) = AppCompatEditText(this).apply {
         setText(initial)
         hint = hintText
@@ -806,12 +742,10 @@ class SettingsActivity : AppCompatActivity() {
         gravity = Gravity.TOP or Gravity.START
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
     }
-
     private fun simpleSeek(onChange: (Int) -> Unit) = object : SeekBar.OnSeekBarChangeListener {
         override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
             if (fromUser) onChange(progress)
         }
-
         override fun onStartTrackingTouch(seekBar: SeekBar?) {}
         override fun onStopTrackingTouch(seekBar: SeekBar?) {}
     }

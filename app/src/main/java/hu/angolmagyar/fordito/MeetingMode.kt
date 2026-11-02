@@ -1,18 +1,7 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import org.json.JSONObject
-
-/**
- * Tárgyalás mód: magyar átirat, lazább confidence, hosszabb csend = új blokk,
- * takarékos ki, preferált nagy/egyedi magyar modell.
- *
- * A bekapcsolás előtti beállításokat elmentjük, és a [clear] visszaállítja őket,
- * így a fájl-átirat képernyő nem írja át tartósan az élő fordítás beállításait.
- */
 object MeetingMode {
-
-    /** @param temporary true, ha csak az adott képernyő idejére kell (visszaállítjuk kilépéskor). */
     fun apply(prefs: Prefs, temporary: Boolean = false) {
         if (!prefs.meetingMode) {
             val b = JSONObject()
@@ -40,14 +29,11 @@ object MeetingMode {
         prefs.pushToTalk = false
         prefs.saveTranscript = true
         prefs.showEnglish = false
-        // magyar modell preferencia
-        prefs.modelId = "hu_large" // a magyar felismerőt az Engines választja (saját Vosk ZIP vagy rendszer)
+        prefs.modelId = "hu_large"
         prefs.meetingSafeMode = true
         prefs.meetingChunkMinutes = 12
         prefs.meetingMode = true
     }
-
-    /** Kikapcsolás + a korábbi beállítások visszaállítása. */
     fun clear(prefs: Prefs) {
         val raw = prefs.meetingBackup
         if (raw.isNotBlank()) {
@@ -71,16 +57,12 @@ object MeetingMode {
         prefs.meetingTemporary = false
         prefs.meetingMode = false
     }
-
     fun isReady(ctx: Context): Boolean {
         return ModelManager.isInstalled(ctx, ModelManager.HU_LARGE) ||
             SystemAsrSupport.onDeviceAvailable(ctx)
     }
-
-    /** A saját magyar Vosk modell, ha van; különben null (a rendszer-felismerő dolgozik). */
     fun preferredSpec(ctx: Context): ModelManager.Spec? =
         if (ModelManager.isInstalled(ctx, ModelManager.HU_LARGE)) ModelManager.HU_LARGE else null
-
     fun statusText(ctx: Context): String {
         val large = ModelManager.isInstalled(ctx, ModelManager.HU_LARGE)
         return when {

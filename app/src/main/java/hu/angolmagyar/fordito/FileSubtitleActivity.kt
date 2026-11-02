@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
@@ -23,48 +22,31 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-
-/**
- * Hang- vagy videófájlokból SRT felirat / átirat készítése – varázsló-szerűen:
- *  1) beállítás: fájlok listája (több is lehet, sorban dolgozza fel), mentés helye, teljesítmény;
- *  2) futás: egy összesítő (eltelt / hátra / kész), a lépés-táblázat és a darab-lista, plus a prioritás;
- *  3) kész: összegzés fájlonként.
- * A munkát a SrtJobService végzi a háttérben; ez a képernyő csak megjeleníti.
- *
- * Támogatott: mp3, m4a, wav, ogg, flac, mp4, mkv, webm (MediaExtractor dekódolható formátumok).
- */
 class FileSubtitleActivity : AppCompatActivity() {
-
     companion object {
         const val EXTRA_MEETING = "meeting"
-        /** Varázslóból érkező előbeállítások. */
         const val EXTRA_TITLE = "title"
-        const val EXTRA_SRC = "src"            // "en" | "hu"
-        const val EXTRA_TRANSLATE = "translate" // boolean
-        const val EXTRA_OUTPUT = "output"      // 0 = forrás, 1 = fordítás, 2 = mindkettő
+        const val EXTRA_SRC = "src"
+        const val EXTRA_TRANSLATE = "translate"
+        const val EXTRA_OUTPUT = "output"
         const val EXTRA_DIARIZE = "diarize"
-        const val EXTRA_AUTOSTART = "autostart" // fájlválasztó azonnal
-        const val EXTRA_TGT = "tgt" // célnyelv: hu/en/de/…
-        const val EXTRA_KIND = "kind" // SrtJobService.KIND_TRANSCRIPT / KIND_SUBTITLE
-        /** Kezdőlap JobCard / portal: animált belépés a folyamat panelre. */
+        const val EXTRA_AUTOSTART = "autostart"
+        const val EXTRA_TGT = "tgt"
+        const val EXTRA_KIND = "kind"
         const val EXTRA_FROM_PORTAL = "from_portal"
         const val SHARED_PIPELINE = "diamond_pipeline_portal"
-
         private val PICK_TYPES = arrayOf(
             "audio/*", "video/*",
             "audio/mpeg", "audio/mp4", "audio/x-wav", "audio/ogg",
             "video/mp4", "video/x-matroska", "video/webm"
         )
     }
-
     private var autoStart = false
     private var fromWizard = false
-    /** Varázslóból jövő forrásnyelv (en/de/fr/…); ha üres, a UI választó érvényes. */
     private var wizardSrc: String? = null
     private var wizardTgt: String = "hu"
     private var lastRenderMs = 0L
     private var renderPosted = false
-    /** A haladás-értesítések másodpercenként legfeljebb egyszer rajzolják újra a képernyőt (nyugodt, olvasható számok). */
     private val jobListener: () -> Unit = {
         val now = System.currentTimeMillis()
         val since = now - lastRenderMs
@@ -80,12 +62,10 @@ class FileSubtitleActivity : AppCompatActivity() {
             }, 1000 - since)
         }
     }
-
-    /** Hátralévő idő simítása: a kijelzett érték másodpercenként csökken, a becslés csak lassan húzza el. */
     private val etaMem = HashMap<String, Pair<Long, Long>>()
     private fun smoothRem(key: String, rem: Long, now: Long): Long {
         val prev = etaMem[key]
-        if (prev != null && prev.second == now) return prev.first // ugyanabban a rajzolásban többször kérdezhetjük
+        if (prev != null && prev.second == now) return prev.first
         val out = if (prev == null) rem else {
             val predicted = prev.first - (now - prev.second)
             if (predicted <= 0) rem else (predicted * 0.85 + rem * 0.15).toLong()
@@ -101,36 +81,26 @@ class FileSubtitleActivity : AppCompatActivity() {
             main.postDelayed(this, 1000)
         }
     }
-    /** Ez a képernyő látta futni a feladatot → a végén magától felkínálja a mentést / bezárást. */
     private var watchedRun = false
     private var saveAsked = false
     private var closeScheduled = false
     private var pendingSaveItem: SrtJob.QItem? = null
-
     private lateinit var srcGroup: RadioGroup
     private lateinit var translateSwitch: SwitchCompat
     private lateinit var modeGroup: RadioGroup
-
     private lateinit var prefs: Prefs
-    /** Beszélők megkülönböztetése (S1/S2…); tárgyalás módban mindig be van kapcsolva. */
     private var useDiarization = false
     private val main = Handler(Looper.getMainLooper())
     private var kind = SrtJobService.KIND_SUBTITLE
-
-    // --- képernyők
     private lateinit var setupGroup: LinearLayout
     private lateinit var runGroup: LinearLayout
     private lateinit var progressSection: LinearLayout
     private lateinit var resultSection: LinearLayout
-
-    // --- 1. beállítás
     private lateinit var setupQueueBox: LinearLayout
     private lateinit var pickBtn: android.widget.Button
     private lateinit var saveBox: LinearLayout
     private lateinit var startBtn: android.widget.Button
     private lateinit var engineInfo: TextView
-
-    // --- 2. futás
     private lateinit var fileLabel: TextView
     private lateinit var langLine: TextView
     private lateinit var barTotal: BarRow
@@ -140,7 +110,6 @@ class FileSubtitleActivity : AppCompatActivity() {
     private var glossEn: android.widget.EditText? = null
     private var glossHu: android.widget.EditText? = null
     private var glossAuto: android.widget.EditText? = null
-
     private val exportGlossary = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -156,7 +125,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             Toast.makeText(this, "Az exportálás nem sikerült: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
-
     private val importGlossary = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -204,11 +172,8 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var runQueueBox: LinearLayout
     private lateinit var cancelBtn: android.widget.Button
     private lateinit var perfRunCard: LinearLayout
-
-    // --- 3. kész
     private lateinit var resultTitle: TextView
     private lateinit var resultText: TextView
-
     private val bgHints = ArrayList<LinearLayout>()
     private val perfSeeks = ArrayList<android.widget.SeekBar>()
     private val perfLabels = ArrayList<TextView>()
@@ -216,25 +181,16 @@ class FileSubtitleActivity : AppCompatActivity() {
     private val tRows = ArrayList<TRow>()
     private var setupSig = ""
     private var runSig = ""
-
-    /** A lépés-táblázat egy sora: jelző, név+megjegyzés, idő, hátra, %, és az aktív lépés vékony sávja. */
     private class TRow(
         val root: LinearLayout, val icon: TextView, val name: TextView, val note: TextView,
         val time: TextView, val eta: TextView, val pct: TextView, val bar: ProgressBar
     )
-
-    /** A darab-lista egy sora: jelző, darab, beszédhossz, idő, hátra, %, sáv és megjegyzés. */
     private class CRow(
         val root: LinearLayout, val icon: TextView, val name: TextView, val len: TextView,
         val time: TextView, val eta: TextView, val pct: TextView, val bar: ProgressBar, val note: TextView
     )
-
     private val cRows = ArrayList<CRow>()
-
-    /** Legfeljebb ennyi darab-sor látszik; többnél az aktív darabok körüli ablak (és a darab-térkép). */
     private val CHUNK_ROWS = 8
-
-    /** Egy folyamatsor: cím + százalék, sáv, és egy alsó megjegyzés (eltelt / hátra). */
     private class BarRow(ctx: Context) {
         val root = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -263,7 +219,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             textSize = 12f
             setTextColor(DC.TEXT2)
         }
-
         init {
             val head = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -279,8 +234,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = Ui.dp(ctx, 6) })
         }
-
-        /** @param p 0–100, vagy -1 = nem ismert (pörgő sáv) */
         fun set(t: String, p: Int, s: String) {
             title.text = t.uppercase()
             if (p < 0) {
@@ -295,9 +248,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             sub.visibility = if (s.isEmpty()) View.GONE else View.VISIBLE
         }
     }
-
-    // ------------------------------------------------------------ választók (fájl, mentés)
-
     private val openLauncher =
         registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
             if (!uris.isNullOrEmpty()) {
@@ -310,11 +260,9 @@ class FileSubtitleActivity : AppCompatActivity() {
                     items.add(SrtJob.QItem(uri, name))
                 }
                 SrtJob.addItems(items)
-                // fut a feldolgozás: a szolgáltatás magától veszi a sor következő elemét
             }
             render()
         }
-
     private val saveSrtLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/x-subrip")) { uri ->
             val item = pendingSaveItem
@@ -334,7 +282,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             pendingSaveItem = null
             render()
         }
-
     private fun takeTree(uri: Uri) {
         try {
             contentResolver.takePersistableUriPermission(
@@ -342,7 +289,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             )
         } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
     }
-
     private val pickDefaultTree =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
@@ -352,8 +298,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
             refreshWhere()
         }
-
-    /** A belső tárba mentett korábbi feliratok listája; bármelyik megnyitható szerkesztésre. */
     private fun showHistory() {
         val files = (TranscriptStore.dir(this).listFiles { f -> f.name.startsWith("felirat_") && f.extension == "srt" }
             ?.sortedByDescending { it.lastModified() } ?: emptyList()).take(30)
@@ -372,17 +316,13 @@ class FileSubtitleActivity : AppCompatActivity() {
             .setNegativeButton("Bezár", null)
             .show()
     }
-
     private fun pickFiles() {
         openLauncher.launch(PICK_TYPES)
     }
-
-    /** Mappa kiválasztása: a benne (és almappáiban) lévő, még felirat nélküli videók a sorba kerülnek. */
     private val pickScanTree =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) scanFolder(uri)
         }
-
     private fun scanFolder(tree: Uri) {
         takeTree(tree)
         Toast.makeText(this, "Mappa átvizsgálása…", Toast.LENGTH_SHORT).show()
@@ -402,11 +342,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }.start()
     }
-
     private lateinit var profileBox: LinearLayout
     private lateinit var trModeBox: LinearLayout
-
-    /** Összecsukható szakasz (alapból zárva): ritkán kellő beállítások a kezdőképernyő nyugalmáért. */
     private fun collapsible(title: String, content: View, open: Boolean = false): LinearLayout {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.visibility = if (open) View.VISIBLE else View.GONE
@@ -420,10 +357,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         box.addView(content)
         return box
     }
-
-    /** Projekt (sorozat) + szereplők / téma / beszélők viszonya: a felismerést és a fordítást is pontosítja. */
     private lateinit var projBox: LinearLayout
-
     private fun makeProjectCard(): LinearLayout {
         val card = Ui.card(this)
         card.addView(Ui.title(this, "Projekt és szereplők", 16f))
@@ -433,7 +367,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         refreshProject()
         return card
     }
-
     private fun refreshProject() {
         projBox.removeAllViews()
         val names = listOf("(nincs projekt – általános)") + Projects.list(this)
@@ -482,8 +415,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         field("Téma, műfaj", "topic", "családi vígjáték, iskolai környezet")
         field("Beszélők viszonya, stílus", "style", "Nina és Jake testvérek: tegeződnek; a tanárt magázzák")
     }
-
-    /** Fordítás módja: offline (ML Kit) / online (LLM) / online + offline tartalék. */
     private fun makeTranslateModeCard(): LinearLayout {
         val card = Ui.card(this)
         card.addView(Ui.title(this, "Fordítás módja", 16f))
@@ -495,7 +426,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         refreshTrMode()
         return card
     }
-
     private fun refreshTrMode() {
         if (!::trModeBox.isInitialized) return
         trModeBox.removeAllViews()
@@ -517,8 +447,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         trModeBox.addView(optionRow("Online + offline tartalék", "Online fordít; ami nem sikerül, azt az offline fordító pótolja.", cur == OnlinePrefs.AUTO) { choose(OnlinePrefs.AUTO) })
         if (cur != OnlinePrefs.OFF && !usable) trModeBox.addView(Ui.small(this, "Az online fordítás még nincs beállítva – offline fordítás fut."))
     }
-
-    /** Profilok (gyors vázlat … éjszakai) + formázási kapcsolók + szótár. */
     private fun makeProfileCard(): LinearLayout {
         val card = Ui.card(this)
         card.addView(Ui.title(this, "3. Profil és formázás", 16f))
@@ -572,7 +500,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         refreshProfiles()
         return card
     }
-
     private fun refreshProfiles() {
         if (!::profileBox.isInitialized) return
         profileBox.removeAllViews()
@@ -586,8 +513,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         if (cur == "custom") profileBox.addView(Ui.small(this, "Egyedi beállítás (a prioritást kézzel állítottad)."))
     }
-
-    /** Felhasználói javítólista a felismerés és a fordítás szövegére ("régi=új" soronként). */
     private fun showGlossary() {
         val pad = dp(16)
         val col = LinearLayout(this).apply {
@@ -641,23 +566,15 @@ class FileSubtitleActivity : AppCompatActivity() {
             .setNegativeButton("Mégse", null)
             .show()
     }
-
     private fun dp(v: Int) = Ui.dp(this, v)
-
     override fun onDestroy() {
         try { flow.stop() } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
         try { seekPlayer?.release() } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
-        // Ideiglenes tárgyalás mód: kilépéskor visszaállítjuk az eredeti beállításokat.
         if (isFinishing && ::prefs.isInitialized && prefs.meetingMode && prefs.meetingTemporary) {
             MeetingMode.clear(prefs)
         }
         super.onDestroy()
     }
-
-    // ------------------------------------------------------------------ felépítés
-
-    /** Félbehagyott (pl. az app leállása miatt megszakadt) feldolgozás folytatásának felajánlása. */
-    /** Éjszakai sor indítása, ha van eltett fájl. Igaz, ha megjelent a kérdés. */
     private fun offerNight(): Boolean {
         val items = NightMode.pending(this)
         if (items.isEmpty() || SrtJob.batchRunning) return false
@@ -674,7 +591,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             .show()
         return true
     }
-
     private fun offerResume() {
         try {
             if (offerNight()) return
@@ -695,17 +611,14 @@ class FileSubtitleActivity : AppCompatActivity() {
                 .show()
         } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
     }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         main.post { offerResume() }
         prefs = Prefs(this)
         val meeting = intent.getBooleanExtra(EXTRA_MEETING, false) || prefs.meetingMode
         if (meeting) {
-            // Ha a felhasználó nem kapcsolta be tartósan, csak a képernyő idejére érvényes.
             MeetingMode.apply(prefs, temporary = !prefs.meetingMode || prefs.meetingTemporary)
         }
-
         val column = Ui.column(this).apply {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
@@ -716,7 +629,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             v.setPadding(b.left, b.top, b.right, b.bottom)
             insets
         }
-
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         autoStart = intent.getBooleanExtra(EXTRA_AUTOSTART, false)
         fromWizard = intent.hasExtra(EXTRA_OUTPUT) && intent.hasExtra(EXTRA_SRC)
@@ -731,31 +643,24 @@ class FileSubtitleActivity : AppCompatActivity() {
             column.addView(Ui.small(this, DiarizerFactory.onnxStatus(this)))
             column.addView(Ui.small(this, "Beszélők: S1/S2… az SRT-ben (energia-alapú, ONNX ha telepítve)"))
         }
-
         setupGroup = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         runGroup = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         column.addView(setupGroup)
         column.addView(runGroup)
         buildSetup(meeting)
         buildRun()
-
         handleShare(intent)
         Anim.staggerIn(setupGroup)
-
-        // Ha a varázsló fájlválasztóval nyitotta, azonnal felajánljuk (csak az első létrehozáskor)
         if (autoStart && savedInstanceState == null && !SrtJob.batchRunning && SrtJob.queue.isEmpty()) {
             main.post { pickFiles() }
         }
     }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleShare(intent)
         main.post { offerResume() }
     }
-
-    /** Más appból (Galéria, Fájlok…) a Megosztás menüvel érkező videók / hangok a sorba kerülnek. */
     private fun handleShare(i: Intent?) {
         if (i == null) return
         val uris = ArrayList<Uri>()
@@ -765,7 +670,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             Intent.ACTION_SEND_MULTIPLE -> i.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.let { uris.addAll(it) }
             else -> return
         }
-        // ugyanazt a megosztást ne vegyük fel kétszer (pl. képernyőforgatás után)
         i.action = null
         if (uris.isEmpty()) return
         val items = uris.map { u ->
@@ -780,13 +684,10 @@ class FileSubtitleActivity : AppCompatActivity() {
             render()
         }
     }
-
     private lateinit var quickBtn: android.widget.Button
     private lateinit var estLine: TextView
     private var estKey = ""
     private val durCache = HashMap<String, Long>()
-
-    /** Indítás előtt: becsült futásidő a telepített Whisper-modellenként (a mért sebesség alapján). */
     private fun updateEstimate() {
         val items = SrtJob.queue.filter { it.state == SrtJob.Q_WAIT }
         if (items.isEmpty()) { estKey = ""; estLine.visibility = View.GONE; return }
@@ -825,10 +726,8 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }.start()
     }
-
     private fun buildSetup(meeting: Boolean) {
         val g = setupGroup
-        // egy gombos indítás: fájl(ok) kiválasztása után az utoljára használt beállításokkal rögtön indul
         quickBtn = Ui.button(this, "Fájlok kiválasztása…", true) {
             if (SrtJob.queue.any { it.state == SrtJob.Q_WAIT }) startProcess() else pickFiles()
         }
@@ -845,8 +744,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 setOnCheckedChangeListener { _, checked -> useDiarization = checked }
             })
         }
-
-        // Mód + nyelv: varázslóból jövet összefoglaló, különben teljes választó
         modeGroup = RadioGroup(this)
         val outIdx = if (intent.hasExtra(EXTRA_OUTPUT)) intent.getIntExtra(EXTRA_OUTPUT, 2) else prefs.raw().getInt("lastOut", 2)
         modeGroup.addView(RadioButton(this).apply {
@@ -896,7 +793,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             card.addView(Ui.body(this, summary))
             card.addView(engineInfo)
             g.addView(card)
-            // Rejtett, de a selectedMode/selectedSrc olvassa
             modeGroup.visibility = View.GONE
             if (::srcGroup.isInitialized) srcGroup.visibility = View.GONE
             if (::translateSwitch.isInitialized) translateSwitch.visibility = View.GONE
@@ -916,8 +812,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }
         refreshEngineInfo()
-
-        // 1. Fájlok
         val filesCard = Ui.card(this)
         filesCard.addView(Ui.title(this, "1. Fájlok", 16f))
         setupQueueBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -927,8 +821,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         filesCard.addView(Ui.button(this, "Mappa átvizsgálása (feldolgozatlan videók)…", false) { pickScanTree.launch(null) })
         filesCard.addView(Ui.button(this, "Korábbi feliratok (előzmények)…", false) { showHistory() })
         g.addView(filesCard)
-
-        // 2. Mentés helye
         val whereCard = Ui.card(this)
         whereCard.addView(Ui.title(this, "2. Mentés helye", 16f))
         saveBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -941,12 +833,9 @@ class FileSubtitleActivity : AppCompatActivity() {
         })
         g.addView(whereCard)
         refreshWhere()
-
         g.addView(makeTranslateModeCard())
         val projCard = makeProjectCard()
         val profCard = makeProfileCard()
-
-        // Teljesítmény (a futás közben is ugyanez marad az egyetlen beállítás) – a haladó részben
         Perf.load(this)
         val adv = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         adv.addView(projCard)
@@ -990,7 +879,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         adv.addView(makeBgHint())
         g.addView(collapsible("Haladó beállítások (projekt, profil, teljesítmény, háttérfutás)", adv))
-
         startBtn = Ui.button(this, "SRT készítése", true) { startProcess() }
         g.addView(startBtn)
         g.addView(Ui.button(this, "🌙 Éjszakára ütemezés (töltőn, Wi-Fin)", false) {
@@ -1000,11 +888,8 @@ class FileSubtitleActivity : AppCompatActivity() {
                 else "Nincs várakozó fájl (vagy az ütemezés nem sikerült).", Toast.LENGTH_LONG).show()
         })
     }
-
     private fun buildRun() {
         val g = runGroup
-
-        // ---------- futás: egyetlen Diamond kártya – minden érték pontosan egyszer szerepel
         progressSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val head = DC.card(this)
         val sec = DC.TEXT2
@@ -1032,8 +917,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 } catch (_: Exception) { }
             }
         }
-
-        // összhaladás: egyetlen csík + eltelt / hátra / kész (sehol máshol nem ismétlődik)
         barTotal = BarRow(this)
         head.addView(barTotal.root)
         val tiles = LinearLayout(this).apply {
@@ -1067,8 +950,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(tiles, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(12) })
-
-        // élő sáv: hullám + éppen feldolgozott szakasz + hallott / lefordított mondat
         val live = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(10))
@@ -1107,13 +988,11 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(live, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(14) })
-
         engineLine = TextView(this).apply {
             textSize = 12f; setTextColor(sec); visibility = View.GONE
             setPadding(0, dp(8), 0, 0)
         }
         head.addView(engineLine)
-
         coolBanner = TextView(this).apply {
             textSize = 13f
             setTextColor(DC.WARN)
@@ -1132,8 +1011,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             visibility = View.GONE
         }
         head.addView(stallReport)
-
-        // lépés-táblázat (Diamond): Lépés | Idő | Hátra | % – a darabok a 4. lépés alatt, belső panelben
         stepsBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, dp(18), 0, 0)
@@ -1189,8 +1066,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             tRows.add(TRow(wrap, icon, name, note, time, eta, pct, bar))
         }
         head.addView(stepsBox)
-
-        // darabok: belső panel a 4. lépés alatt (beszédhossz, idő, hátra, haladás, tempó)
         chunkSection = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(6))
@@ -1219,8 +1094,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { marginStart = dp(14); topMargin = dp(2); bottomMargin = dp(4) })
         progressSection.addView(head)
-
-        // élő előnézet: az utoljára felismert sorok – közvetlenül a hullám alatt
         previewBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -1243,8 +1116,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
         g.addView(progressSection)
-
-        // ---------- kész: összegzés
         resultSection = Ui.card(this)
         checkView = CheckView(this)
         resultSection.addView(checkView, LinearLayout.LayoutParams(
@@ -1264,8 +1135,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         resultSection.addView(Ui.smallButton(this, "Hibajelentés / napló küldése…") { DiagLog.share(this) })
         resultSection.addView(Ui.button(this, "Bezárás", false) { finish() })
         g.addView(resultSection)
-
-        // ---------- fájlok állapota (futás közben is bővíthető)
         val qCard = Ui.card(this)
         runQueueTitle = Ui.title(this, "Fájlok", 16f)
         qCard.addView(runQueueTitle)
@@ -1275,21 +1144,15 @@ class FileSubtitleActivity : AppCompatActivity() {
             (layoutParams as? LinearLayout.LayoutParams)?.topMargin = dp(8)
         })
         g.addView(qCard)
-
-        // ---------- az egyetlen futás közbeni beállítás: a prioritás
         perfRunCard = makePerfCard()
         g.addView(perfRunCard)
         g.addView(makeBgHint())
-
         cancelBtn = Ui.button(this, "Megszakítás", false) {
             SrtJobService.cancel(this)
             Toast.makeText(this, "Megszakítás…", Toast.LENGTH_SHORT).show()
         }
         g.addView(cancelBtn)
     }
-
-    // ------------------------------------------------ haladás-táblázatok: közös elemek
-
     private val S_TIME = 48
     private val S_ETA = 52
     private val S_PCT = 36
@@ -1297,8 +1160,6 @@ class FileSubtitleActivity : AppCompatActivity() {
     private val C_TIME = 48
     private val C_ETA = 52
     private val C_PCT = 38
-
-    /** Jobbra igazított, fix szélességű, egysoros számcella. */
     private fun monoCell(w: Int, color: Int) = TextView(this).apply {
         textSize = 12f
         typeface = Typeface.MONOSPACE
@@ -1307,8 +1168,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         setTextColor(color)
         layoutParams = LinearLayout.LayoutParams(dp(w), ViewGroup.LayoutParams.WRAP_CONTENT)
     }
-
-    /** Kerek állapotjelvény: 0 vár, 1 aktív, 2 kész, 3 hiba, 4 megállítva. Csak változáskor rajzol újra. */
     private fun setBadge(icon: TextView, state: Int, color: Int) {
         val key = "$state/$color"
         if (icon.tag == key) return
@@ -1334,23 +1193,17 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         icon.background = d
     }
-
     private fun thinBar() = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
         max = 100
         progressDrawable = DC.bar(this@FileSubtitleActivity, false)
         visibility = View.GONE
     }
-
     private fun tint(bar: ProgressBar, c: Int) {
         val l = android.content.res.ColorStateList.valueOf(c)
         bar.progressTintList = l
         bar.indeterminateTintList = l
     }
-
-    /** Fejlécsor: [lead] üres hely (jelző), a rugalmas első oszlop, majd a fix szélességű oszlopok. */
     private var seekPlayer: android.media.MediaPlayer? = null
-
-    /** A hullámra koppintva a forrásfájl hangja az adott ponttól ~6 másodpercig megszólal. */
     private fun playAudioAt(ms: Long) {
         val q = SrtJob.queue.firstOrNull { it.state == SrtJob.Q_RUN } ?: SrtJob.queue.firstOrNull() ?: return
         try {
@@ -1369,8 +1222,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             Toast.makeText(this, "Nem sikerült lejátszani ezt a pontot.", Toast.LENGTH_SHORT).show()
         }
     }
-
-    /** Melyik hangszakaszt dolgozza fel éppen (pl. "Éppen: 4:45 – 10:46 · Darab 1/2"). */
     private fun positionLabel(job: SrtJob): String {
         val st = job.chunkState
         val r = job.waveRanges
@@ -1386,7 +1237,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             "Éppen: ${fmtDur(cur)} – ${fmtDur(winEnd)}  (szakasz: ${fmtDur(a)} – ${fmtDur(b)} · ${i + 1}/${st.size}. darab)"
         } + if (act.size > 2) " …" else ""
     }
-
     private fun headerRow(lead: Int, first: String, vararg cols: Pair<String, Int>): LinearLayout {
         val cap = DC.CAPTION
         val row = LinearLayout(this).apply {
@@ -1406,7 +1256,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         return row
     }
-
     private fun buildChunkRow(sec: Int): CRow {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -1447,12 +1296,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         root.addView(note)
         return CRow(root, icon, name, len, time, eta, pct, bar, note)
     }
-
-    /** Tempó: hány másodpercnyi munka jut 1 másodpercnyi beszédre (magyar tizedesvesszővel). */
     private fun fmtRatio(tookMs: Long, speechMs: Long): String =
         String.format(java.util.Locale.forLanguageTag("hu-HU"), "%.1f", tookMs.toDouble() / speechMs.coerceAtLeast(1L))
-
-    /** Teljesítmény-csúszka; több példány (beállítás + futás) is szinkronban marad. */
     private fun makePerfCard(): LinearLayout {
         val card = Ui.card(this)
         card.addView(Ui.title(this, "Prioritás (teljesítmény)", 16f))
@@ -1486,13 +1331,11 @@ class FileSubtitleActivity : AppCompatActivity() {
         syncPerf()
         return card
     }
-
     private fun syncPerf() {
         for (s in perfSeeks) if (s.progress != Perf.level - Perf.MIN) s.progress = Perf.level - Perf.MIN
         for (l in perfLabels) l.text = "Szint: ${Perf.level}/5 – ${Perf.name()}"
         for (d in perfDescs) d.text = Perf.describe()
     }
-
     private fun makeBgHint(): LinearLayout {
         val hint = Ui.card(this)
         hint.addView(Ui.title(this, "Háttérben is fusson", 16f))
@@ -1506,10 +1349,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         bgHints.add(hint)
         return hint
     }
-
-    // ------------------------------------------------------------ mentés helye (2 választás)
-
-    /** Választható sor: a kiválasztott kerete színes, jelölője kitöltött – jól látszik, melyik aktív. */
     private fun optionRow(title: String, sub: String, selected: Boolean, onClick: () -> Unit): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1548,7 +1387,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return row
     }
-
     private fun refreshWhere() {
         if (!::saveBox.isInitialized) return
         saveBox.removeAllViews()
@@ -1557,7 +1395,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         val allFiles = OutputWriter.hasAllFiles()
         val canAllFiles = OutputWriter.allFilesDeclared(this)
         val tree = OutputPrefs.defaultTree(this)
-
         saveBox.addView(optionRow(
             "A videó mellé (alapértelmezett)",
             "A program megnézi, honnan töltötted be a videót, és oda menti a feliratot." +
@@ -1580,7 +1417,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 }
             })
         }
-
         saveBox.addView(optionRow(
             "Alapértelmezett mappába",
             if (tree != null) "✓ ${OutputWriter.folderLabel(tree)}" else "✗ még nincs mappa kiválasztva",
@@ -1595,9 +1431,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             })
         }
     }
-
-    // ------------------------------------------------------------------ életciklus
-
     override fun onStart() {
         super.onStart()
         SrtJob.addListener(jobListener)
@@ -1609,17 +1442,12 @@ class FileSubtitleActivity : AppCompatActivity() {
             main.post(tick)
         }
     }
-
     override fun onStop() {
         SrtJob.removeListener(jobListener)
         main.removeCallbacks(tick)
         super.onStop()
     }
-
-    // ------------------------------------------------------------------ megjelenítés
-
     private fun fmtDur(ms: Long) = SrtJob.fmtDur(ms)
-
     private fun refreshEngineInfo() {
         if (!::engineInfo.isInitialized) return
         val src = selectedSrc()
@@ -1633,7 +1461,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             else -> "Felismerő: ${asr.label} · a hang nyelve: $lang"
         }
     }
-
     private fun stateIcon(s: Int) = when (s) {
         SrtJob.Q_RUN -> "▶"
         SrtJob.Q_DONE -> "✓"
@@ -1641,7 +1468,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         SrtJob.Q_STOP -> "⏸"
         else -> "○"
     }
-
     private fun stateColor(s: Int) = Ui.color(
         this, when (s) {
             SrtJob.Q_DONE -> R.color.ok
@@ -1651,8 +1477,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             else -> R.color.textSecondary
         }
     )
-
-    /** A fájllista felépítése. Csak akkor épül újra, ha a tartalma változott (különben a gombok elveszítenék az érintést). */
     private fun renderQueue(box: LinearLayout, canRemove: Boolean, sigOld: String): String {
         val items = SrtJob.queue.toList()
         val sig = items.joinToString("|") { "${System.identityHashCode(it)}:${it.state}:${it.saved}:${it.detail.hashCode()}" } +
@@ -1720,8 +1544,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         return sig
     }
-
-    /** A közös állapot (SrtJob) alapján újrarajzolja a képernyőt. Csak a főszálon hívjuk. */
     private fun render() {
         if (!::runGroup.isInitialized) return
         val job = SrtJob
@@ -1729,7 +1551,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         val results = !running && job.queue.any { it.state != SrtJob.Q_WAIT && it.state != SrtJob.Q_RUN }
         val showRun = running || results
         if (running) watchedRun = true
-
         setupGroup.visibility = if (showRun) View.GONE else View.VISIBLE
         runGroup.visibility = if (showRun) View.VISIBLE else View.GONE
         progressSection.visibility = if (running) View.VISIBLE else View.GONE
@@ -1739,7 +1560,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         val ignoring = BatterySettings.isIgnoring(this)
         for (h in bgHints) h.visibility = if (ignoring || results) View.GONE else View.VISIBLE
         syncPerf()
-
         if (!showRun) {
             val waiting = job.queue.count { it.state == SrtJob.Q_WAIT }
             setupSig = renderQueue(setupQueueBox, true, setupSig)
@@ -1756,7 +1576,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
             return
         }
-
         runSig = renderQueue(runQueueBox, running, runSig)
         val singleRun = running && SrtJob.queue.size <= 1
         runQueueBox.visibility = if (singleRun) View.GONE else View.VISIBLE
@@ -1764,7 +1583,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         if (running) renderProgress()
         if (results) renderResults()
     }
-
     private fun renderProgress() {
         val job = SrtJob
         val now = System.currentTimeMillis()
@@ -1775,7 +1593,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         val warnC = DC.WARN
         val errC = DC.ERR
         val recogC = SrtJob.COLORS[SrtJob.ST_RECOG]
-
         fileLabel.text = when {
             cur == null -> "Indítás…"
             job.fileTotal > 1 -> "Fájl ${job.fileNo}/${job.fileTotal} · ${cur.name}"
@@ -1793,10 +1610,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }
         langLine.visibility = if (langLine.text.isEmpty()) View.GONE else View.VISIBLE
-
-        // --- teljes folyamat: az ETA és a befejezés órája csak itt szerepel
         val elapsedAll = now - job.startMs
-        // hátralévő idő a teljes folyamatra (ms), -1 = még nem becsülhető
         val totRem: Long = when {
             job.etaAtMs > now && job.curStep >= SrtJob.ST_RECOG -> smoothRem("t", job.etaMs, now)
             job.overall >= 1 && elapsedAll >= 2000 -> smoothRem("t", elapsedAll * (100 - job.overall) / job.overall, now)
@@ -1838,8 +1652,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         tileRem.text = if (totRem >= 0) "kb. ${fmtDur(totRem)}" else "számítás…"
         tileFin.text = if (totRem >= 0) SrtJob.fmtClock(now + totRem) else "–"
         val chunksShown = job.chunkState.isNotEmpty()
-
-        // --- lépés-táblázat (lépésenként: idő, hátra, %; a darabok külön listában vannak)
         var unitsRem = 0.0
         for (i in 0 until SrtJob.WEIGHTS.size) {
             val st = job.steps[i]
@@ -1850,7 +1662,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }
         val perUnit = if (totRem >= 0 && unitsRem > 0) totRem / unitsRem else -1.0
-        var finKnown = true      // a sorban álló lépések becslése csak akkor értelmes, ha az aktív lépés ideje ismert
+        var finKnown = true
         for (i in 0 until SrtJob.WEIGHTS.size) {
             val v = tRows[i]
             val st = job.steps[i]
@@ -1864,15 +1676,12 @@ class FileSubtitleActivity : AppCompatActivity() {
                 SrtJob.STOPPED -> { setBadge(v.icon, 4, warnC); v.name.setTextColor(warnC); v.name.setTypeface(null, Typeface.NORMAL) }
                 else -> { setBadge(v.icon, 0, secondary); v.name.setTextColor(secondary); v.name.setTypeface(null, Typeface.NORMAL) }
             }
-            // az aktív sor finoman kiemelve (csak állapotváltáskor állítjuk át)
             if (v.root.tag != st.state) {
                 v.root.tag = st.state
                 v.root.background = if (st.state == SrtJob.ACTIVE) DC.panel(this, 14, DC.ACTIVE_FILL, DC.ACTIVE_EDGE) else null
             }
-            // megjegyzés: a felismerésnél a darab-számlálók (egyetlen helyen), egyébként a lépés saját megjegyzése
             var noteTxt = if (st.state == SrtJob.DONE || st.state == SrtJob.ACTIVE) st.comment else ""
-            if (recogChunks && st.state == SrtJob.ACTIVE) noteTxt = "" // a darab-lista mutatja, egyetlen helyen
-            // ugyanaz a felismerő-név már a fejlécben látszik
+            if (recogChunks && st.state == SrtJob.ACTIVE) noteTxt = ""
             if (noteTxt == job.engineLabel) noteTxt = ""
             v.note.text = noteTxt
             v.note.visibility = if (noteTxt.isBlank()) View.GONE else View.VISIBLE
@@ -1893,7 +1702,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                         perUnit >= 0 -> (SrtJob.WEIGHTS[i] * (100 - p.coerceAtLeast(0)) / 100.0 * perUnit).toLong()
                         else -> -1L
                     }
-                    // a darabos felismerésnél az időt / hátralévőt a darab-sorok mutatják (ne legyen kétszer)
                     v.time.text = if (recogChunks) "" else fmtDur(el)
                     if (own >= 0) v.eta.text = if (recogChunks) "" else fmtDur(own)
                     else { finKnown = false; v.eta.text = if (recogChunks) "" else "…" }
@@ -1907,13 +1715,10 @@ class FileSubtitleActivity : AppCompatActivity() {
                 }
             }
         }
-
-        // --- darabok: részletes lista
         val n = job.chunkState.size
         chunkSection.visibility = if (n > 0) View.VISIBLE else View.GONE
         if (n > 0) {
             val infos = job.chunkInfo
-            // átlagos tempó a kész darabokból (ismételt kijelzés nélkül, csak a címben)
             var sumTook = 0L
             var sumSpeech = 0L
             for (k in 0 until n) {
@@ -1924,8 +1729,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             val cWait = job.chunkState.count { it == 0 }
             chunkTitle.text = "Darabok · kész ${job.chunkDone}/${job.chunkTotal} · dolgozik $cWork · vár $cWait" +
                 (if (sumSpeech > 0) " · tempó ${fmtRatio(sumTook, sumSpeech)}×" else "")
-
-            // melyik darabok látszanak: kevésnél mind, soknál az aktívak + a legutóbbi kész + a következő várakozók
             val picked: List<Int> = if (n <= CHUNK_ROWS) (0 until n).toList() else {
                 val act = (0 until n).filter { job.chunkState[it] == 1 }.take(CHUNK_ROWS)
                 val left = CHUNK_ROWS - act.size
@@ -1967,7 +1770,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                         c.bar.isIndeterminate = false
                         c.bar.progress = pc
                         c.bar.visibility = View.VISIBLE
-                        // mit csinál éppen (felismerés %, fordítás x/y mondat…) – csak itt látszik
                         val what = job.phases[i].orEmpty()
                         c.note.text = what
                         c.note.visibility = if (what.isBlank()) View.GONE else View.VISIBLE
@@ -1983,14 +1785,9 @@ class FileSubtitleActivity : AppCompatActivity() {
             val hidden = n - picked.size
             chunkMore.text = "… még $hidden darab nincs kiírva (kész ${job.chunkDone} · vár ${job.chunkState.count { it == 0 }})"
             chunkMore.visibility = if (hidden > 0) View.VISIBLE else View.GONE
-            // sok darabnál a térkép adja az áttekintést
         }
-
-        // hűtési szünet
         coolBanner.visibility = if (job.cooling) View.VISIBLE else View.GONE
         if (job.cooling) coolBanner.text = job.waitReason.ifBlank { "Szünet (hűtés)" }
-
-        // "megállt a háttérben?" jelzés
         val stalled = !job.cooling && job.running && now - job.lastProgressMs > SrtJob.stallLimitMs()
         stallBanner.visibility = if (stalled) View.VISIBLE else View.GONE
         stallReport.visibility = if (stalled || job.running) View.VISIBLE else View.GONE
@@ -1999,8 +1796,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 "Ha a telefon a háttérben lelassította az appot, kapcsold ki az akkumulátor-optimalizálást (lent), " +
                 "vagy tartsd előtérben a képernyőt."
         }
-
-        // élő előnézet
         val shownFlow = flow.update(
             job.previewCues,
             DC.ICE,
@@ -2008,7 +1803,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         )
         previewBox.visibility = if (shownFlow) View.VISIBLE else View.GONE
     }
-
     private fun renderResults() {
         val items = SrtJob.queue.filter { it.state != SrtJob.Q_WAIT }
         val ok = items.count { it.state == SrtJob.Q_DONE }
@@ -2039,8 +1833,6 @@ class FileSubtitleActivity : AppCompatActivity() {
                 try { "\n" + QualityReport.build(q.cues!!).lines().joinToString(" · ") } catch (_: Exception) { "" }
             } ?: "") +
             (if (SrtJob.skippedParts > 0) "\n⚠ Az utolsó fájlnál ${SrtJob.skippedParts} darab részben kimaradt (a felismerés elakadt) – a naplóban a részletek." else "")
-
-        // helyzethez igazított tippek
         try {
             val tips = ArrayList<String>()
             for (q in items) {
@@ -2052,15 +1844,12 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
             if (tips.isNotEmpty()) resultText.append("\n\n💡 " + tips.distinct().take(3).joinToString("\n💡 "))
         } catch (e: Exception) { DiagLog.swallow("FileSubtitleActivity", e) }
-
-        // automatikus bezárás: minden kész fájl el van mentve
         if (watchedRun && !closeScheduled && OutputPrefs.autoClose(this) &&
             items.none { it.state == SrtJob.Q_DONE && !it.saved } && err == 0
         ) {
             closeScheduled = true
             main.postDelayed({ if (!isFinishing) finish() }, 2500)
         }
-        // ha az első kész fájlnak nincs hova mentenie, magától felkínálja a mentést
         if (watchedRun && !saveAsked) {
             val unsaved = items.firstOrNull { it.state == SrtJob.Q_DONE && !it.saved && it.srt != null }
             saveAsked = true
@@ -2071,9 +1860,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }
     }
-
-    // ------------------------------------------------------------ választók
-
     private fun selectedMode(): SrtExporter.Mode {
         val checked = modeGroup.checkedRadioButtonId
         val idx = (0 until modeGroup.childCount).indexOfFirst { modeGroup.getChildAt(it).id == checked }
@@ -2083,7 +1869,6 @@ class FileSubtitleActivity : AppCompatActivity() {
             else -> SrtExporter.Mode.BOTH
         }
     }
-
     private fun selectedSrc(): String {
         wizardSrc?.let { if (it.isNotBlank()) return it }
         if (prefs.meetingMode || !::srcGroup.isInitialized) return "hu"
@@ -2091,7 +1876,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         val idx = (0 until srcGroup.childCount).indexOfFirst { srcGroup.getChildAt(it).id == checked }
         return if (idx == 1) "hu" else "en"
     }
-
     private fun selectedDir(): String {
         if (prefs.meetingMode) return Prefs.DIR_NONE
         val wantTr = if (::translateSwitch.isInitialized) translateSwitch.isChecked
@@ -2101,7 +1885,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         val tgt = wizardTgt.ifBlank { "hu" }
         return if (src == tgt) Prefs.DIR_NONE else "${src}_${tgt}"
     }
-
     private fun startProcess() {
         if (SrtJob.batchRunning) return
         if (SrtJob.queue.none { it.state == SrtJob.Q_WAIT }) {
@@ -2113,7 +1896,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         watchedRun = true
         saveAsked = false
         closeScheduled = false
-        // A munkát az előtér-szolgáltatás végzi: másik appra váltva / zárolt képernyővel is megy tovább.
         val mode = selectedMode()
         try {
             prefs.raw().edit().putInt("lastOut", mode.ordinal.let { if (it == 0) 0 else if (it == 1) 1 else 2 })
@@ -2127,9 +1909,6 @@ class FileSubtitleActivity : AppCompatActivity() {
         render()
     }
 }
-
-
-/** Diamond Blue színek és rajzelemek a feldolgozó képernyő táblázatához (a témától függetlenül sötét kártya). */
 private object DC {
     val NAVY = 0xFF0C1830.toInt()
     val DEEP = 0xFF050A18.toInt()
@@ -2148,7 +1927,6 @@ private object DC {
     val PANEL_EDGE = 0x24B9E8FF
     val ACTIVE_FILL = 0x332878F0
     val ACTIVE_EDGE = 0x6653E7FF
-
     fun card(ctx: Context): LinearLayout = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         val pad = Ui.dp(ctx, 16)
@@ -2162,14 +1940,11 @@ private object DC {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = Ui.dp(ctx, 12) }
     }
-
     fun panel(ctx: Context, radiusDp: Int, fill: Int, edge: Int): GradientDrawable = GradientDrawable().apply {
         cornerRadius = Ui.dp(ctx, radiusDp).toFloat()
         setColor(fill)
         setStroke(Ui.dp(ctx, 1), edge)
     }
-
-    /** Lekerekített sáv: sötét sín + kitöltés (gradient vagy a progressTint által színezett fehér). */
     fun bar(ctx: Context, gradient: Boolean): android.graphics.drawable.Drawable {
         val r = Ui.dp(ctx, 6).toFloat()
         val track = GradientDrawable().apply { cornerRadius = r; setColor(0x33AFC4E2) }

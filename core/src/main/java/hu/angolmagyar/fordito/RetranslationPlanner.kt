@@ -1,9 +1,4 @@
 package hu.angolmagyar.fordito
-
-/**
- * Safe retranslation planning primitives. Planning is separate from execution: this API
- * produces a preview only. A caller must explicitly approve a change before applying it.
- */
 object RetranslationPlanner {
     data class Segment(
         val id: String,
@@ -13,9 +8,7 @@ object RetranslationPlanner {
         val sourceRevision: Int = 1,
         val translationRevision: Int = 1
     )
-
     enum class Reason { GLOSSARY_CHANGED, SOURCE_CHANGED, PROVIDER_CHANGED, STYLE_CHANGED, MANUAL_REQUEST }
-
     data class ProposedChange(
         val segmentId: String,
         val before: String,
@@ -25,7 +18,6 @@ object RetranslationPlanner {
         val sourceRevision: Int,
         val translationRevision: Int
     )
-
     data class Preview(
         val changes: List<ProposedChange>,
         val skippedManualSegments: List<String>,
@@ -34,8 +26,6 @@ object RetranslationPlanner {
         val changedCount: Int get() = changes.size
         val isEmpty: Boolean get() = changes.isEmpty()
     }
-
-    /** Builds a preview only. Unknown candidate IDs and blank candidates are ignored. */
     fun preview(
         segments: List<Segment>,
         candidates: Map<String, String>,
@@ -63,8 +53,6 @@ object RetranslationPlanner {
         }
         return Preview(changes, skipped)
     }
-
-    /** Applies only explicitly selected IDs whose translation revision still matches the preview. */
     fun applyApproved(
         segments: List<Segment>,
         preview: Preview,
@@ -83,8 +71,6 @@ object RetranslationPlanner {
             )
         }
     }
-
-    /** Compact line-oriented diff; the content is treated as plain text. */
     fun diff(change: ProposedChange): String = buildString {
         append("--- ").append(change.segmentId).append(" (előtte)\n")
         append("- ").append(change.before).append('\n')

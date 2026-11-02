@@ -1,6 +1,4 @@
 package hu.angolmagyar.fordito
-
-/** Deterministic offline spaced-repetition scheduling (SM-2 inspired, not a clinical/AI score). */
 object AdaptiveReviewScheduler {
     data class State(
         val repetitions: Int = 0,
@@ -9,9 +7,7 @@ object AdaptiveReviewScheduler {
         val dueAtEpochMs: Long = 0L,
         val lastReviewedAtEpochMs: Long? = null
     )
-
     data class Result(val state: State, val accepted: Boolean)
-
     fun review(previous: State, quality: Int, nowEpochMs: Long): Result {
         require(quality in 0..5) { "A minősítés 0 és 5 közötti legyen." }
         require(nowEpochMs >= 0L) { "Az időbélyeg nem lehet negatív." }
@@ -33,9 +29,7 @@ object AdaptiveReviewScheduler {
         val due = safeAdd(nowEpochMs, interval.toLong() * MILLIS_PER_DAY)
         return Result(State(repetitions, interval, ease, due, nowEpochMs), quality >= 3)
     }
-
     fun isDue(state: State, nowEpochMs: Long): Boolean = state.dueAtEpochMs <= nowEpochMs
-
     private fun safeAdd(a: Long, b: Long): Long = if (Long.MAX_VALUE - a < b) Long.MAX_VALUE else a + b
     private const val MILLIS_PER_DAY = 86_400_000L
     private const val MAX_INTERVAL_DAYS = 36_500

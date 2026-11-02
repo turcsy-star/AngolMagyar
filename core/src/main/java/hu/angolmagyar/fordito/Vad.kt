@@ -1,51 +1,26 @@
 package hu.angolmagyar.fordito
-
 import java.io.File
 import java.io.RandomAccessFile
 import kotlin.math.max
 import kotlin.math.min
-
-/**
- * Beszéd-szakaszolás (VAD): csendek kiszűrése, darabolás a Whisper számára.
- *
- * Két mód:
- *  - energia-alapú, adaptív küszöbbel (a fájl zajszintjéhez viszonyítva), mindig elérhető;
- *  - neurális (Silero, whisper.cpp), ha a hívó modellfájlt ad – hiba esetén automatikusan energiára vált.
- *
- * Minden pozíció 16 kHz-es minta-index (Int). v2.22.3: a v2.22.0 csonkot kiegészítettem a hiányzó
- * függvényekkel (segments, speechChunks, speechChunksFromFile, splitAtPauses, mergeSmallPieces, isMostlySilent).
- */
 object Vad {
     data class Seg(val start: Int, val end: Int)
-
     private const val RATE = 16000
-    private const val FRAME = 320                // 20 ms
-    private const val ABS_MIN_RMS = 200f         // ennél halkabb nem beszéd (kb. -44 dBFS)
-
-    /**
-     * Neurális (Silero) VAD hívása: (modellfájl, hang, szálak) → [t0,t1,…] centiszekundumban, vagy null.
-     * Az :app állítja be induláskor (App.onCreate); a :core így nem függ a natív könyvtártól.
-     */
+    private const val FRAME = 320
+    private const val ABS_MIN_RMS = 200f
     @Volatile var neuralProvider: ((String, FloatArray, Int) -> FloatArray?)? = null
-
     @Volatile var lastMethod: String = ""
     @Volatile var lastSpeechMs: Long = 0L
     @Volatile var lastFine: List<Seg> = emptyList()
-
-    // ------------------------------------------------------------------ keret-energia
-
     private fun rmsOf(pcm: ShortArray, from: Int, to: Int): Float {
         var sum = 0.0
         for (i in from until to) { val v = pcm[i].toDouble(); sum += v * v }
         return Math.sqrt(sum / max(1, to - from)).toFloat()
     }
-
     private fun frameRms(pcm: ShortArray): FloatArray {
         val n = pcm.size / FRAME
         return FloatArray(n) { rmsOf(pcm, it * FRAME, (it + 1) * FRAME) }
     }
-
-    /** Küszöb: zajszint (10. percentilis) háromszorosa, de legalább az abszolút minimum és a csúcsszint 5%-a. */
     internal fun threshold(rms: FloatArray): Float {
         if (rms.isEmpty()) return ABS_MIN_RMS
         val sorted = rms.copyOf().also { it.sort() }
@@ -53,8 +28,6 @@ object Vad {
         val peak = sorted[(sorted.size * 0.95).toInt().coerceIn(0, sorted.size - 1)]
         return max(ABS_MIN_RMS, max(floor * 3f, peak * 0.05f))
     }
-
-    /** Keret-szintű beszéd-maszkból finom szakaszok: a [minSilenceMs]-nél rövidebb szüneteket átível. */
     internal fun fineFromFrames(
         rms: FloatArray, thr: Float, minSilenceMs: Int, minSpeechMs: Int, totalSamples: Int
     ): List<Seg> {
@@ -76,12 +49,6 @@ object Vad {
         val minLen = minSpeechMs * RATE / 1000
         return out.filter { it.end - it.start >= minLen }
     }
-
-    // ------------------------------------------------------------------ memóriában lévő hang
-
-    /**
-     * Beszédszakaszok (kis kitöltéssel). A [maxSegMs]-nál hosszabb folyamatos beszédet a legcsendesebb pontnál vágja.
-     */
     fun segments(
         pcm: ShortArray,
         minSilenceMs: Int = 500,
@@ -97,11 +64,9 @@ object Vad {
         for (s in fine) capSegment(s, rms, maxLen.toInt(), capped)
         return pad(capped, padMs, pcm.size)
     }
-
     private fun capSegment(s: Seg, rms: FloatArray, maxLen: Int, out: MutableList<Seg>) {
         var cur = s
         while (cur.end - cur.start > maxLen) {
-            // a megengedett hossz hátsó felében a legcsendesebb keret
             val lo = (cur.start + maxLen / 2) / FRAME
             val hi = min((cur.start + maxLen) / FRAME, rms.size - 1)
             var best = hi
@@ -113,7 +78,6 @@ object Vad {
         }
         out.add(cur)
     }
-
     private fun pad(segs: List<Seg>, padMs: Int, total: Int): List<Seg> {
         if (segs.isEmpty()) return segs
         val p = padMs * RATE / 1000
@@ -127,8 +91,6 @@ object Vad {
         }
         return out
     }
-
-    /** Csak csend (vagy a zajszintnél alig hangosabb) van-e a szeletben. */
     fun isMostlySilent(slice: ShortArray): Boolean {
         if (slice.size < FRAME) return true
         val rms = frameRms(slice)
@@ -138,11 +100,6 @@ object Vad {
         val speechFrames = rms.count { it > thr }
         return speechFrames * FRAME * 1000L / RATE < 300
     }
-
-    /**
-     * Beszédszakaszok darabokba fűzése: a [maxGapMs]-nál kisebb szünetek összekötnek, a [maxChunkMs]-nál hosszabb
-     * csoportot a legnagyobb szünetnél vágja.
-     */
     fun speechChunks(
         pcm: ShortArray,
         maxGapMs: Int,
@@ -158,10 +115,6 @@ object Vad {
         lastMethod = "energia"
         return chunksFromFine(fine, pcm.size, maxGapMs, padMs, maxChunkMs, 0, 0, 0, 0, 0)
     }
-
-    // ------------------------------------------------------------------ fájlból (streaming)
-
-    /** 16 bites, little-endian PCM fájl [startSample, endSample) tartománya. */
     internal fun readRange(file: File, startSample: Int, endSample: Int): ShortArray {
         val n = max(0, endSample - startSample)
         val out = ShortArray(n)
@@ -182,7 +135,6 @@ object Vad {
         }
         return out
     }
-
     private fun frameRmsFromFile(file: File, totalSamples: Int): FloatArray {
         val nFrames = totalSamples / FRAME
         val out = FloatArray(nFrames)
@@ -209,11 +161,6 @@ object Vad {
         }
         return out
     }
-
-    /**
-     * Teljes fájl beszéd-darabolása, közös küszöbbel (a halk háttérzaj nem beszéd). Közben a hang nincs egyben a
-     * memóriában. Eredmény: kitöltött darabok; a finom szakaszok a [lastFine]-ban, a tiszta beszédhossz a [lastSpeechMs]-ben.
-     */
     fun speechChunksFromFile(
         file: File,
         totalSamples: Int,
@@ -250,8 +197,6 @@ object Vad {
             mergeMinSpeechMs, mergeMaxSpeechMs, mergeMaxSpanMs
         )
     }
-
-    /** Neurális VAD 5 perces ablakokban (a teljes hang nem kerül egyszerre a memóriába). */
     private fun neuralFine(file: File, total: Int, model: String, threads: Int, minSpeechMs: Int): List<Seg>? {
         val window = 5 * 60 * RATE
         val out = ArrayList<Seg>()
@@ -271,7 +216,6 @@ object Vad {
             }
             pos = end
         }
-        // az ablakhatáron kettévágott szakaszok összeillesztése + minimális hossz
         val merged = ArrayList<Seg>()
         for (s in out.sortedBy { it.start }) {
             val last = merged.lastOrNull()
@@ -281,9 +225,6 @@ object Vad {
         val minLen = minSpeechMs * RATE / 1000
         return merged.filter { it.end - it.start >= minLen }
     }
-
-    // ------------------------------------------------------------------ darabolási logika (tiszta)
-
     internal fun chunksFromFine(
         fine: List<Seg>, total: Int, maxGapMs: Int, padMs: Int, maxChunkMs: Int,
         minChunkMs: Int, softGapMs: Int, mergeMinMs: Int, mergeMaxMs: Int, mergeSpanMs: Int
@@ -293,7 +234,6 @@ object Vad {
         val softGap = softGapMs.toLong() * 16
         val minChunk = minChunkMs.toLong() * 16
         val maxChunk = maxChunkMs.toLong() * 16
-        // 1) csoportok: nagy szünet, vagy (elég hosszú darab után) lágy szünet vág
         val groups = ArrayList<MutableList<Seg>>()
         var cur = mutableListOf(fine[0])
         for (i in 1 until fine.size) {
@@ -304,10 +244,8 @@ object Vad {
             if (br) { groups.add(cur); cur = mutableListOf(s) } else cur.add(s)
         }
         groups.add(cur)
-        // 2) túl hosszú csoport: vágás a legnagyobb szünetnél
         var pieces = ArrayList<Seg>()
         for (g in groups) pieces.addAll(splitAtPauses(g, maxChunk.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()))
-        // 3) kis darabok összevonása
         if (mergeMinMs > 0 && mergeMaxMs > 0) {
             pieces = ArrayList(mergeSmallPieces(
                 pieces, fine, mergeMinMs.toLong() * 16, mergeMaxMs.toLong() * 16,
@@ -316,11 +254,6 @@ object Vad {
         }
         return pad(pieces, padMs, total)
     }
-
-    /**
-     * Szakaszok egy csoportját [maxSamples]-nél nem hosszabb darabokra bontja, mindig a legnagyobb szünetnél vágva.
-     * Egyetlen, a határnál hosszabb szakaszt nem darabol tovább.
-     */
     fun splitAtPauses(segs: List<Seg>, maxSamples: Int): List<Seg> {
         if (segs.isEmpty()) return emptyList()
         val span = segs.last().end.toLong() - segs.first().start
@@ -333,12 +266,6 @@ object Vad {
         }
         return splitAtPauses(segs.subList(0, bestI), maxSamples) + splitAtPauses(segs.subList(bestI, segs.size), maxSamples)
     }
-
-    /**
-     * Kis (kevés beszédet tartalmazó) darabok összevonása a szomszédjukkal, amíg az összevont beszéd legfeljebb
-     * [maxSpeech], a lefedett időtartam pedig legfeljebb [maxSpan] minta.
-     * "Kicsi" az a darab, amelyben a beszéd kevesebb, mint [minSpeech].
-     */
     fun mergeSmallPieces(pieces: List<Seg>, fine: List<Seg>, minSpeech: Long, maxSpeech: Long, maxSpan: Long): List<Seg> {
         if (pieces.isEmpty()) return emptyList()
         fun speechIn(s: Seg): Long {

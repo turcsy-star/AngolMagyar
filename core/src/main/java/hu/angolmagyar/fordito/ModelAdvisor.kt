@@ -1,21 +1,13 @@
 package hu.angolmagyar.fordito
-
-/**
- * Whisper-modell ajánlás a készülék alapján. A sebességértékek tájékoztató becslések (nem mért benchmark):
- * a tényleges idő a telefontól, a hangtól és a hőállapottól függ.
- */
 object ModelAdvisor {
     data class Candidate(
         val id: String,
         val label: String,
         val sizeMb: Int,
         val minRamMb: Int,
-        /** Pontosság-rangsor (nagyobb = pontosabb). */
         val quality: Int,
-        /** Becsült feldolgozási idő / hanghossz egy 8 magos készüléken (1.0 = valós idejű). */
         val rtf8: Double
     )
-
     data class Device(
         val ramMb: Int,
         val cores: Int,
@@ -23,7 +15,6 @@ object ModelAdvisor {
         val thermalStatus: Int = 0,
         val installedIds: Set<String> = emptySet()
     )
-
     data class Advice(
         val pick: Candidate,
         val estimatedRtf: Double,
@@ -31,7 +22,6 @@ object ModelAdvisor {
         val reason: String,
         val needsDownload: Boolean
     )
-
     val DEFAULTS = listOf(
         Candidate("wh_base", "Whisper base", 57, 1500, 1, 0.15),
         Candidate("wh_small", "Whisper small", 181, 2500, 2, 0.4),
@@ -39,17 +29,11 @@ object ModelAdvisor {
         Candidate("wh_turbo", "Whisper large-v3-turbo", 574, 4000, 4, 1.0),
         Candidate("wh_large", "Whisper large-v3", 1100, 6000, 5, 2.2)
     )
-
     fun estimateRtf(c: Candidate, d: Device): Double {
         val cores = d.cores.coerceIn(2, 8)
         val thermal = 1.0 + 0.15 * d.thermalStatus.coerceIn(0, 4)
         return c.rtf8 * (8.0 / cores) * thermal
     }
-
-    /**
-     * @param maxRtf a még elfogadott idő/hanghossz arány (alapértelmezés: legfeljebb 2× hosszabb a feldolgozás a hangnál)
-     * @param audioMinutes ha ismert, a becsült feldolgozási időt is megadja
-     */
     fun advise(
         device: Device,
         audioMinutes: Int? = null,

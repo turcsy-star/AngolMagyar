@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -139,26 +138,11 @@ import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.sin
 import hu.angolmagyar.fordito.LiveTranslateActivity as LiveActivity
-
-/**
- * v2.22.3 – Material 3 kezdőlap: egy érintéssel felirat-készítés, élő fordítás, átiratok.
- * Animált háttér (aurora), lépcsőzetes belépés, nyomásra rugózó kártyák, élő hanghullám.
- *
- * A részletes élő-fordítás képernyő a [LiveActivity] (a manifestben regisztrálva); a Wear, a gyorscsempe, a
- * parancsikonok és a feladat-beállító ennek adják át az `auto_start` / `profile` extrát.
- */
 class MainActivity : androidx.appcompat.app.AppCompatActivity() {
-
     private lateinit var prefs: Prefs
     private var appliedThemeSignature: String? = null
-
-    /**
-     * Első indításkor magától letölti az alap modelleket (Whisper large-v3 + offline fordító), ha még nincs
-     * Whisper-modell és Wi-Fin (nem mobilneten) vagyunk. Egyszer próbálja; a Modellek képernyőn bármikor kézzel is lehet.
-     */
     private fun autoDownloadModels() {
         try {
-            // egyszeri áttérés: a pontos profil és a large-v3 az alapértelmezett
             if (!prefs.raw().getBoolean("preciseDefault", false)) {
                 prefs.raw().edit().putBoolean("preciseDefault", true).apply()
                 Presets.apply(this, "precise")
@@ -170,7 +154,6 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
             }
             if (prefs.raw().getBoolean("autoDlDone", false) && !ModelDownloadService.running &&
                 !prefs.raw().getBoolean("largeAsked", false)) {
-                // régi telepítés (turbo/kisebb modell): a large-v3-at is letöltjük egyszer
                 prefs.raw().edit().putBoolean("autoDlDone", false).putBoolean("largeAsked", true).apply()
             }
             if (prefs.raw().getBoolean("autoDlDone", false)) return
@@ -184,26 +167,21 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
         } catch (_: Exception) {
         }
     }
-
-    /** A Beállításokból visszatérve azonnal alkalmazza a módosított Compose-témát. */
     private fun themeSignature(): String = listOf(
         prefs.luxuryThemeId,
         prefs.platinumTheme.toString(),
         prefs.oledBlack.toString()
     ).joinToString("|")
-
     override fun onResume() {
         super.onResume()
         if (!::prefs.isInitialized) return
         val current = themeSignature()
         val previous = appliedThemeSignature
         if (previous != null && current != previous) {
-            // Frissítsük az összehasonlítás alapját a recreate() előtt, hogy ne induljon újra végtelenül.
             appliedThemeSignature = current
             recreate()
         }
     }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -214,7 +192,6 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
         }
         forwardLegacyExtras(intent)
         autoDownloadModels()
-
         setContent {
             AngolMagyarTheme(isTrueBlack = prefs.oledBlack) {
                 ProvidePremiumDesignSystem {
@@ -260,14 +237,11 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
             }
         }
     }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         forwardLegacyExtras(intent)
     }
-
-    /** A régi belépési pontok (óra, csempe, parancsikon) `auto_start` / `profile` extráját az élő képernyő kezeli. */
     private fun forwardLegacyExtras(i: Intent?) {
         if (i == null) return
         if (i.hasExtra(LiveActivity.EXTRA_AUTO_START) || i.hasExtra(LiveActivity.EXTRA_PROFILE)) {
@@ -278,9 +252,6 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
         }
     }
 }
-
-// ---------------------------------------------------------------------------------------------- kezdőlap
-
 @Composable
 fun HomeScreen(
     onSubtitles: () -> Unit,
@@ -298,8 +269,6 @@ fun HomeScreen(
     onStop: () -> Unit
 ) {
     val snap by AppState.snapshot.collectAsState()
-
-    // futó felirat-feladat (a SrtJob nem StateFlow, ezért félmásodpercenként olvassuk)
     var jobRunning by remember { mutableStateOf(false) }
     var jobPct by remember { mutableStateOf(0) }
     var jobMsg by remember { mutableStateOf("") }
@@ -319,10 +288,8 @@ fun HomeScreen(
             delay(500)
         }
     }
-
     var shown by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { shown = true }
-
     var elapsed by remember { mutableStateOf("") }
     val amplitudes = remember { mutableStateListOf<Float>().apply { repeat(24) { add(0.12f) } } }
     LaunchedEffect(snap.running, snap.sessionStartedAt) {
@@ -337,17 +304,13 @@ fun HomeScreen(
                 delay(70)
             } else {
                 elapsed = ""
-                // Idle mode should not poll the audio level at recording cadence.
-                // Decay once, then sleep longer to reduce needless recompositions and battery use.
                 for (i in amplitudes.indices) amplitudes[i] = (amplitudes[i] * 0.82f).coerceAtLeast(0.08f)
                 delay(300)
             }
         }
     }
-
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         AuroraBackground(active = snap.running || jobRunning)
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -368,7 +331,6 @@ fun HomeScreen(
                     jobPct = jobPct
                 )
             }
-
             DownloadBanner(onClick = onModels)
             TranslationComfortCard()
             HeroCard(
@@ -378,7 +340,6 @@ fun HomeScreen(
                 onClick = onIntelligence
             )
             StateCards(error = snap.lastError?.message, onDiagnostics = onDiagnostics, onModels = onModels)
-
             Staggered(2, shown) {
                 HeroCard(
                     title = "Indítás: felirat készítése",
@@ -387,7 +348,6 @@ fun HomeScreen(
                     onClick = onSubtitles
                 )
             }
-
             AnimatedVisibility(
                 visible = jobRunning,
                 enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { it / 4 },
@@ -395,7 +355,6 @@ fun HomeScreen(
             ) {
                 JobCard(pct = jobPct, message = jobMsg, onOpen = onOpenJob)
             }
-
             AnimatedVisibility(
                 visible = jobJustFinished && !jobRunning,
                 enter = fadeIn(tween(350)) + slideInVertically(tween(450)) { it / 5 },
@@ -407,7 +366,6 @@ fun HomeScreen(
                     onDismiss = { jobJustFinished = false }
                 )
             }
-
             Staggered(3, shown) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     PremiumSectionTitle(
@@ -433,7 +391,6 @@ fun HomeScreen(
                     }
                 }
             }
-
             AnimatedVisibility(
                 visible = snap.running,
                 enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { it / 4 },
@@ -444,7 +401,6 @@ fun HomeScreen(
                     onPause = onPause, onStop = onStop
                 )
             }
-
             if (!snap.running) {
                 Staggered(4, shown) {
                     OutlinedButton(
@@ -457,9 +413,7 @@ fun HomeScreen(
                     }
                 }
             }
-
             Staggered(5, shown) { ThemePicker() }
-
             Staggered(5, shown) {
                 Column {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -476,13 +430,6 @@ fun HomeScreen(
         }
     }
 }
-
-
-
-/**
- * Platinum Ultra Console v12: a detailed, accessible status surface.
- * All values come from live app state; no decorative/fabricated activity metrics.
- */
 @Composable
 private fun PlatinumUltraConsole(
     active: Boolean,
@@ -503,8 +450,6 @@ private fun PlatinumUltraConsole(
         else -> "RENDSZER KÉSZENLÉTBEN"
     }
     val statusColor = if (active || jobRunning) mint else iceWhite
-    // A szolgáltatásból érkező értékek megjelenítés előtt korlátozva vannak;
-    // hibás vagy átmeneti állapotban sem csúszhat 0–100% tartományon kívül a UI.
     val safeLevel = level.coerceIn(0f, 1f)
     val safeJobPct = jobPct.coerceIn(0, 100)
     val levelPercent = (safeLevel * 100).toInt()
@@ -523,7 +468,6 @@ private fun PlatinumUltraConsole(
         animationSpec = tween(durationMillis = 260),
         label = "platinum_level"
     )
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
@@ -582,7 +526,6 @@ private fun PlatinumUltraConsole(
                     }
                 }
             }
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -608,8 +551,6 @@ private fun PlatinumUltraConsole(
                 )
                 Text("V16", color = steel, style = MaterialTheme.typography.labelSmall)
             }
-
-            // Decorative spectrum is a direct visualization of the measured input level.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -643,7 +584,6 @@ private fun PlatinumUltraConsole(
                     }
                 }
             }
-
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlatinumMetric(
                     modifier = Modifier.weight(1f),
@@ -660,7 +600,6 @@ private fun PlatinumUltraConsole(
                     accent = iceWhite
                 )
             }
-
             Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(
@@ -691,7 +630,6 @@ private fun PlatinumUltraConsole(
                     )
                 }
             }
-
             Text(
                 "DIAMOND  •  KORLÁTOZOTT MÉRÉSI ÉRTÉKEK  •  40 CSATORNÁS SPEKTRUM",
                 color = steel.copy(alpha = 0.82f),
@@ -700,7 +638,6 @@ private fun PlatinumUltraConsole(
         }
     }
 }
-
 @Composable
 private fun PlatinumMetric(
     modifier: Modifier = Modifier,
@@ -738,11 +675,6 @@ private fun PlatinumMetric(
         )
     }
 }
-
-/**
- * Diamond Experience hero: a lightweight, vector-rendered sapphire medallion.
- * Uses the existing reduced-motion and power-save preferences; no bitmap or network assets.
- */
 @Composable
 private fun DiamondExperiencePanel(active: Boolean) {
     val context = LocalContext.current
@@ -770,7 +702,6 @@ private fun DiamondExperiencePanel(active: Boolean) {
         )
         value
     }
-
     PremiumCard(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -857,9 +788,6 @@ private fun DiamondExperiencePanel(active: Boolean) {
         }
     }
 }
-
-
-/** Gyors elérés: célnyelv és feliratfordítási mód, a beállítások mély menüje nélkül. */
 @Composable
 private fun TranslationComfortCard() {
     val ctx = LocalContext.current
@@ -942,7 +870,6 @@ private fun TranslationComfortCard() {
       }
     }
 }
-
 @Composable
 private fun Staggered(index: Int, shown: Boolean, content: @Composable () -> Unit) {
     AnimatedVisibility(
@@ -951,12 +878,9 @@ private fun Staggered(index: Int, shown: Boolean, content: @Composable () -> Uni
             slideInVertically(tween(480, delayMillis = index * 80, easing = FastOutSlowInEasing)) { it / 5 }
     ) { content() }
 }
-
-/** A gombanimációt megszüntettük: nyomásra nincs méretváltozás (a hullámeffekt és a haptika marad). */
 @Composable
 @Suppress("UNUSED_PARAMETER")
 private fun Modifier.pressScale(source: MutableInteractionSource): Modifier = this
-
 @Composable
 private fun AuroraBackground(active: Boolean) {
     val ctx = LocalContext.current
@@ -980,7 +904,6 @@ private fun AuroraBackground(active: Boolean) {
         }
     }
 }
-
 @Composable
 private fun Header(running: Boolean, error: Boolean) {
     val ctx = LocalContext.current
@@ -1043,7 +966,6 @@ private fun Header(running: Boolean, error: Boolean) {
         }
     }
 }
-
 @Composable
 private fun HeroCard(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
@@ -1073,7 +995,6 @@ private fun HeroCard(title: String, subtitle: String, icon: ImageVector, onClick
         }
     }
 }
-
 @Composable
 private fun TileCard(
     title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier
@@ -1097,7 +1018,6 @@ private fun TileCard(
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
 @Composable
 private fun JobFinishedCard(message: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -1134,7 +1054,6 @@ private fun JobFinishedCard(message: String, onOpen: () -> Unit, onDismiss: () -
         }
     }
 }
-
 @Composable
 private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
     val context = LocalContext.current
@@ -1176,7 +1095,6 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
                     Text("$pct%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFFBFD7EA))
                 }
             }
-            // Valós lépés-színház a SrtJob állapotából
             if (ui.stages.isNotEmpty()) {
                 DiamondProcessTheater(state = ui, reduced = reduced)
             } else {
@@ -1212,8 +1130,6 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
         }
     }
 }
-
-
 @Composable
 private fun LiveCard(
     snap: hu.angolmagyar.fordito.AppSnapshot, elapsed: String, amplitudes: List<Float>,
@@ -1303,7 +1219,6 @@ private fun LiveCard(
         }
     }
 }
-
 @Composable
 fun LiveWaveform(amplitudes: List<Float>) {
     val infiniteTransition = rememberInfiniteTransition(label = "wave")
@@ -1320,8 +1235,6 @@ fun LiveWaveform(amplitudes: List<Float>) {
     val tertiary = MaterialTheme.colorScheme.tertiary
     val secondary = MaterialTheme.colorScheme.secondary
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
-
-    // Multi-band: low / mid / high sávok az amplitude history-ből
     val bands = remember(amplitudes) {
         val n = amplitudes.size.coerceAtLeast(1)
         val low = FloatArray(n)
@@ -1329,7 +1242,6 @@ fun LiveWaveform(amplitudes: List<Float>) {
         val high = FloatArray(n)
         for (i in amplitudes.indices) {
             val a = amplitudes[i].coerceIn(0.05f, 1f)
-            // időbeli szomszédokból "frekvencia" jellegű sávok
             val prev = amplitudes.getOrElse(i - 1) { a }
             val next = amplitudes.getOrElse(i + 1) { a }
             val smooth = (prev + a + next) / 3f
@@ -1340,7 +1252,6 @@ fun LiveWaveform(amplitudes: List<Float>) {
         }
         Triple(low, mid, high)
     }
-
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -1353,14 +1264,12 @@ fun LiveWaveform(amplitudes: List<Float>) {
         val count = amplitudes.size.coerceAtLeast(1)
         val groupW = width / count
         val barW = (groupW * 0.22f).coerceIn(2.5f, 8f)
-
         drawRoundRect(
             color = surfaceVariant.copy(alpha = 0.3f),
             topLeft = Offset(0f, centerY - 3f),
             size = Size(width, 6f),
             cornerRadius = CornerRadius(3f, 3f)
         )
-
         fun drawBand(values: FloatArray, colorStart: androidx.compose.ui.graphics.Color,
                      colorEnd: androidx.compose.ui.graphics.Color, xOff: Float, phaseShift: Float) {
             for (i in values.indices) {
@@ -1381,14 +1290,11 @@ fun LiveWaveform(amplitudes: List<Float>) {
                 )
             }
         }
-
         drawBand(bands.first, primary.copy(alpha = 0.85f), primary, -barW * 1.15f, 0f)
         drawBand(bands.second, tertiary, primary, 0f, 0.7f)
         drawBand(bands.third, secondary.copy(alpha = 0.9f), tertiary, barW * 1.15f, 1.4f)
     }
 }
-
-/** Az automatikus (vagy kézi) modell-letöltés állapota a kezdőlapon: animált csík, koppintásra a Modellek képernyő. */
 @Composable
 fun DownloadBanner(onClick: () -> Unit) {
     var running by remember { mutableStateOf(false) }
@@ -1426,8 +1332,6 @@ fun DownloadBanner(onClick: () -> Unit) {
         }
     }
 }
-
-/** Téma-választó: kiemelőszín (köztük Gyémánt) + megjelenés (rendszer / világos / sötét / OLED fekete). Azonnal érvényesül. */
 @Composable
 fun ThemePicker() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -1487,13 +1391,11 @@ fun ThemePicker() {
             androidx.compose.material3.Switch(checked = reduceMotion, onCheckedChange = {
                 reduceMotion = it
                 prefs.reduceMotion = it
-                activity?.recreate() // a teljes képernyőn leállítja / újraindítja a folyamatos animációkat
+                activity?.recreate()
             })
         }
     }
 }
-
-/** Üres / hiba állapotok: animált rajzolt ikon + egy gombos megoldás szöveges üzenet helyett. */
 @Composable
 fun StateCards(error: String?, onDiagnostics: () -> Unit, onModels: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -1539,7 +1441,6 @@ fun StateCards(error: String?, onDiagnostics: () -> Unit, onModels: () -> Unit) 
         )
     }
 }
-
 @Composable
 private fun IllustratedState(
     icon: ImageVector, title: String, text: String, button: String, accent: Color, onClick: () -> Unit

@@ -1,11 +1,5 @@
 package hu.angolmagyar.fordito
-
-/**
- * A hang burkológörbéje a hullámforma-nézethez: [bins] oszlopra, oszloponként egy rövid mintavétellel
- * (nem olvassa végig a teljes fájlt, így órás felvételnél is másodpercek alatt kész).
- */
 object Envelope {
-    /** @param read (kezdő minta, záró minta) → 16 bites minták (a fájl vége után üres/rövid tömb is lehet) */
     fun compute(totalSamples: Int, bins: Int, window: Int = 1600, read: (Int, Int) -> ShortArray): FloatArray {
         if (totalSamples <= 0 || bins <= 0) return FloatArray(0)
         val raw = FloatArray(bins)

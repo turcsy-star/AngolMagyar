@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -36,7 +35,6 @@ import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-
 private fun statusColor(s: StageStatus): Color = when (s) {
     StageStatus.PENDING -> PremiumColors.BrightBlue.copy(alpha = 0.35f)
     StageStatus.RUNNING -> PremiumColors.CyanGlow
@@ -45,7 +43,6 @@ private fun statusColor(s: StageStatus): Color = when (s) {
     StageStatus.FAILED -> PremiumColors.Error
     StageStatus.CANCELLED -> PremiumColors.Cancelled
 }
-
 private fun statusWord(s: StageStatus) = when (s) {
     StageStatus.PENDING -> "vár"
     StageStatus.RUNNING -> "fut"
@@ -54,11 +51,6 @@ private fun statusWord(s: StageStatus) = when (s) {
     StageStatus.FAILED -> "hiba"
     StageStatus.CANCELLED -> "megszakítva"
 }
-
-/**
- * Öt csomópontos folyamatvonal egyetlen Canvas-on. A végtelen animáció csak az aktív szakaszra fut,
- * és nem indul újra a haladás- vagy szövegfrissítésre (a kulcsa nem az adat).
- */
 @Composable
 fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier = Modifier) {
     if (stages.isEmpty()) return
@@ -66,7 +58,6 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
     val reducedMotion = rememberUpdatedState(reduced)
     val ctx = LocalContext.current
     val stateMs = if (reducedMotion.value) 0 else PremiumMotion.STATE_CHANGE
-
     val phase = if (reducedMotion.value) 0f else {
         val t = rememberInfiniteTransition(label = "flow")
         t.animateFloat(
@@ -75,7 +66,6 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
             label = "phase"
         ).value
     }
-
     val colors = stages.map { animateColorAsState(statusColor(it.status), tween(stateMs), label = "c").value }
     val checks = stages.map {
         animateFloatAsState(
@@ -93,7 +83,6 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
             tween(if (reducedMotion.value) 0 else 600), label = "fill"
         ).value
     }
-
     Column(modifier.fillMaxWidth()) {
         Canvas(
             Modifier.fillMaxWidth().height(72.dp)
@@ -101,8 +90,6 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
             val cy = size.height / 2f
             val r = 13.dp.toPx()
             fun cx(i: Int) = size.width * (i + 0.5f) / n
-
-            // összekötők
             for (i in 0 until n - 1) {
                 val x0 = cx(i) + r + 3.dp.toPx()
                 val x1 = cx(i + 1) - r - 3.dp.toPx()
@@ -117,11 +104,8 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
                 }
                 if (st == StageStatus.RUNNING && !reducedMotion.value) comet(x0, x1, cy, phase)
             }
-
-            // csomópontok
             for (i in 0 until n) drawNode(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reducedMotion.value)
         }
-
         Row(Modifier.fillMaxWidth()) {
             stages.forEach { s ->
                 Text(
@@ -137,8 +121,6 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
         }
     }
 }
-
-/** Mozgó fénypontok az aktív szakaszon (elhalványuló farokkal). */
 private fun DrawScope.comet(x0: Float, x1: Float, cy: Float, phase: Float) {
     for (k in 0 until 2) {
         val f0 = (phase + k * 0.5f) % 1f
@@ -151,7 +133,6 @@ private fun DrawScope.comet(x0: Float, x1: Float, cy: Float, phase: Float) {
         }
     }
 }
-
 private fun DrawScope.drawNode(
     status: StageStatus, color: Color, check: Float,
     x: Float, y: Float, r: Float, phase: Float, reduced: Boolean
@@ -202,7 +183,6 @@ private fun DrawScope.drawNode(
         }
     }
 }
-
 private fun DrawScope.bang(x: Float, y: Float, stroke: Float) {
     val dark = PremiumColors.DeepNavy
     drawLine(dark, Offset(x, y - 5.dp.toPx()), Offset(x, y + 1.dp.toPx()), stroke, StrokeCap.Round)

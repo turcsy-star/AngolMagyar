@@ -1,16 +1,8 @@
 package hu.angolmagyar.fordito
-
 import org.json.JSONArray
 import org.json.JSONObject
-
-/**
- * Vosk JSON eredmény feldolgozása: szöveg + opcionális confidence.
- * A Vosk result formátum: {"text": "...", "result": [{"word": "...", "conf": 0.95, ...}, ...]}
- */
 object RecognitionHelper {
-
     data class Result(val text: String, val confidence: Float)
-
     fun parseResult(json: String): Result {
         return try {
             val obj = JSONObject(json)
@@ -21,7 +13,6 @@ object RecognitionHelper {
             Result("", 0f)
         }
     }
-
     fun parsePartial(json: String): String {
         return try {
             JSONObject(json).optString("partial", "").trim()
@@ -29,8 +20,6 @@ object RecognitionHelper {
             ""
         }
     }
-
-    /** Átlagos szó-confidence; ha nincs result tömb, 1.0 (elfogadjuk). */
     private fun averageConfidence(obj: JSONObject): Float {
         val arr: JSONArray = obj.optJSONArray("result") ?: return 1f
         if (arr.length() == 0) return 1f
@@ -45,8 +34,6 @@ object RecognitionHelper {
         }
         return if (n == 0) 1f else (sum / n).toFloat()
     }
-
-    /** true, ha a confidence eléri a küszöböt (küszöb 0–100; 0 = minden átmegy). */
     fun passes(confidence: Float, minPercent: Int): Boolean {
         if (minPercent <= 0) return true
         return confidence * 100f >= minPercent

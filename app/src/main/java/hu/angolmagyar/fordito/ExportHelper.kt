@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
@@ -11,13 +10,9 @@ import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
-
-/** SRT mellett Markdown, jegyzőkönyv, valódi DOCX és PDF export. */
 object ExportHelper {
-
     const val MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     const val MIME_PDF = "application/pdf"
-
     fun toMarkdown(cues: List<SrtExporter.Cue>, title: String = "Átirat"): String {
         val sb = StringBuilder()
         sb.append("# ").append(title).append("\n\n")
@@ -40,8 +35,6 @@ object ExportHelper {
         }
         return sb.toString()
     }
-
-    /** Egyszerű szöveges jegyzőkönyv. */
     fun toPlainMinutes(cues: List<SrtExporter.Cue>, title: String = "Tárgyalási jegyzőkönyv"): String {
         val sb = StringBuilder()
         sb.append(title).append("\n")
@@ -56,23 +49,18 @@ object ExportHelper {
         }
         return sb.toString()
     }
-
     fun write(file: File, content: String) {
         file.parentFile?.mkdirs()
         file.writeText(content, Charsets.UTF_8)
     }
-
-    // ------------------------------------------------------------------ közös dokumentum-modell
-
     private data class Block(
         val text: String,
         val bold: Boolean = false,
         val italic: Boolean = false,
-        val size: Int = 11,      // pt
+        val size: Int = 11,
         val gray: Boolean = false,
         val spaceBefore: Boolean = false
     )
-
     private fun blocks(
         cues: List<SrtExporter.Cue>,
         title: String,
@@ -123,9 +111,6 @@ object ExportHelper {
         }
         return out
     }
-
-    // ------------------------------------------------------------------ DOCX
-
     private fun xml(s: String): String {
         val sb = StringBuilder(s.length + 16)
         for (ch in s) {
@@ -140,8 +125,6 @@ object ExportHelper {
         }
         return sb.toString()
     }
-
-    /** Minimális, Wordben/LibreOffice-ban megnyíló OOXML (.docx). */
     fun writeDocx(
         out: OutputStream,
         cues: List<SrtExporter.Cue>,
@@ -188,7 +171,6 @@ object ExportHelper {
             put("word/document.xml", document)
         }
     }
-
     fun docxBytes(
         cues: List<SrtExporter.Cue>, title: String,
         summary: MeetingSummary.Result? = null, includeSource: Boolean = false
@@ -197,10 +179,6 @@ object ExportHelper {
         writeDocx(bos, cues, title, summary, includeSource)
         return bos.toByteArray()
     }
-
-    // ------------------------------------------------------------------ PDF
-
-    /** Többoldalas A4 PDF a rendszer PdfDocument osztályával. */
     fun writePdf(
         out: OutputStream,
         cues: List<SrtExporter.Cue>,
@@ -218,7 +196,6 @@ object ExportHelper {
         var canvas: android.graphics.Canvas? = null
         var y = 0f
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
         fun footer() {
             val c = canvas ?: return
             paint.typeface = Typeface.DEFAULT
@@ -227,7 +204,6 @@ object ExportHelper {
             paint.color = 0xFF777777.toInt()
             c.drawText("$title – $pageNo", margin, pageH - 22f, paint)
         }
-
         fun newPage() {
             page?.let {
                 footer()
@@ -239,7 +215,6 @@ object ExportHelper {
             canvas = p.canvas
             y = margin
         }
-
         newPage()
         for (b in blocks(cues, title, summary, includeSource)) {
             paint.typeface = if (b.italic) Typeface.create(Typeface.DEFAULT, Typeface.ITALIC) else Typeface.DEFAULT
@@ -260,7 +235,6 @@ object ExportHelper {
                 var n = paint.breakText(rest, true, maxW, null)
                 if (n <= 0) n = 1
                 if (n < rest.length) {
-                    // szóhatáron törünk, ha lehet
                     val sp = rest.lastIndexOf(' ', n - 1)
                     if (sp > 0) n = sp + 1
                 }
@@ -279,7 +253,6 @@ object ExportHelper {
             doc.close()
         }
     }
-
     fun pdfBytes(
         cues: List<SrtExporter.Cue>, title: String,
         summary: MeetingSummary.Result? = null, includeSource: Boolean = false

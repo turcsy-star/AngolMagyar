@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -24,14 +23,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
-
-/**
- * Hang-/videófájlok sorozatából SRT készítése előtérben futó szolgáltatásként: másik appra váltva,
- * zárolt képernyővel és az Activity bezárása után is tovább dolgozik (értesítés + wake lock).
- * A fájlok listáját és az állapotot a [SrtJob] tartja, a képernyő azt jeleníti meg.
- */
 class SrtJobService : Service() {
-
     companion object {
         private const val CH_RUN = "srt_job_run"
         private const val CH_DONE = "srt_job_done"
@@ -48,14 +40,7 @@ class SrtJobService : Service() {
         private const val EXTRA_LANG = "lang"
         const val KIND_SUBTITLE = "subtitle"
         const val KIND_TRANSCRIPT = "transcript"
-
-        /** Ennyi ideje nincs haladás → figyelmeztetés (valószínűleg a rendszer lelassította a háttérfutást). */
         const val STALL_WARN_MS = 150_000L
-
-        /**
-         * Indítás: a [SrtJob.queue] várakozó fájljait dolgozza fel sorban.
-         * Az állapot azonnal "fut"-ra vált, így a képernyő rögtön mutatja a lépéseket.
-         */
         fun start(
             ctx: Context, mode: SrtExporter.Mode, src: String, dir: String,
             needTranslate: Boolean, diarize: Boolean, kind: String, langTag: String
@@ -75,7 +60,6 @@ class SrtJobService : Service() {
                 .putExtra(EXTRA_DIARIZE, diarize)
                 .putExtra(EXTRA_KIND, kind)
                 .putExtra(EXTRA_LANG, langTag)
-            // a fájlokhoz tartozó olvasási jogot is átadjuk a szolgáltatásnak
             val clip = ClipData.newRawUri("files", waiting[0].uri)
             for (k in 1 until waiting.size) clip.addItem(ClipData.Item(waiting[k].uri))
             i.clipData = clip
@@ -87,28 +71,22 @@ class SrtJobService : Service() {
                 SrtJob.endBatch()
             }
         }
-
         fun cancel(ctx: Context) {
             try {
                 ctx.startService(Intent(ctx, SrtJobService::class.java).setAction(ACTION_CANCEL))
             } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
         }
-
         fun langName(code: String): String = when (code) {
             "hu" -> "magyar"; "de" -> "német"; "fr" -> "francia"
             "es" -> "spanyol"; "it" -> "olasz"; "uk" -> "ukrán"
             else -> "angol"
         }
     }
-
-    /** Egy kötegre (az összes fájlra) érvényes beállítások. */
     private class Opts(
         val mode: SrtExporter.Mode, val src: String, val dir: String, val needTranslate: Boolean,
         val diarize: Boolean, val kind: String, val langTag: String
     )
-
     private val cancelFlag = AtomicBoolean(false)
-    /** A rendszer időkorlátja miatt állt le: a "pendingJob" és az ellenőrzőpont megmarad a folytatáshoz. */
     @Volatile private var timedOut = false
     private var chunker: ParallelChunker? = null
     private var recRef: FileRecognizer? = null
@@ -122,13 +100,10 @@ class SrtJobService : Service() {
         override fun run() {
             if (!SrtJob.batchRunning) return
             pushRunNotif()
-            // ~30 mp-enként állapotsor a diagnosztikai naplóba (zárolt képernyő alatt is fut: a szolgáltatás előtérben van)
             if (++tickN % 6 == 0) DiagLog.tick(this@SrtJobService)
             tickHandler.postDelayed(this, 5_000)
         }
     }
-
-    /** A képernyő be-/kikapcsolását naplózzuk: így kiderül, hogy zároláskor leáll-e a feldolgozás. */
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -138,7 +113,6 @@ class SrtJobService : Service() {
         }
     }
     private var screenReg = false
-
     private val jobListener: () -> Unit = {
         if (SrtJob.batchRunning) {
             val now = System.currentTimeMillis()
@@ -149,15 +123,12 @@ class SrtJobService : Service() {
             }
         }
     }
-
     private fun pushRunNotif() {
         try {
             getSystemService(NotificationManager::class.java).notify(NOTIF_RUN, runNotif())
         } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
     }
-
     override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onCreate() {
         super.onCreate()
         ensureChannels()
@@ -173,7 +144,6 @@ class SrtJobService : Service() {
             screenReg = true
         } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
     }
-
     override fun onDestroy() {
         if (screenReg) { try { unregisterReceiver(screenReceiver) } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) } }
         SrtJob.removeListener(jobListener)
@@ -181,8 +151,6 @@ class SrtJobService : Service() {
         releaseWake()
         super.onDestroy()
     }
-
-    /** Android 15: az adatszinkron típusú előtér-szolgáltatásnak ~6 órás korlátja van. */
     override fun onTimeout(startId: Int, fgsType: Int) {
         timedOut = true
         cancelFlag.set(true)
@@ -195,7 +163,6 @@ class SrtJobService : Service() {
         )
         stopSelf()
     }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
@@ -222,7 +189,6 @@ class SrtJobService : Service() {
                 chunker?.cancel()
                 recRef?.abort()
                 if (worker?.isAlive != true) {
-                    // nincs mit leállítani (pl. a rendszer újraindította a szolgáltatást)
                     if (SrtJob.running) SrtJob.stopped()
                     SrtJob.stopWaiting()
                     SrtJob.endBatch()
@@ -232,9 +198,6 @@ class SrtJobService : Service() {
         }
         return START_NOT_STICKY
     }
-
-    // ------------------------------------------------------------------ értesítések
-
     private fun ensureChannels() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = getSystemService(NotificationManager::class.java)
@@ -252,20 +215,17 @@ class SrtJobService : Service() {
             }
         )
     }
-
     private fun openPi(): PendingIntent = PendingIntent.getActivity(
         this, 0,
         Intent(this, FileSubtitleActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
-
     private fun cancelPi(): PendingIntent = PendingIntent.getService(
         this, 1,
         Intent(this, SrtJobService::class.java).setAction(ACTION_CANCEL),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
     )
-
     private fun runNotif(): Notification {
         val now = System.currentTimeMillis()
         val pct = SrtJob.overall
@@ -294,7 +254,6 @@ class SrtJobService : Service() {
             .addAction(0, "Megszakítás", cancelPi())
             .build()
     }
-
     private fun startAsForeground() {
         val n = runNotif()
         if (Build.VERSION.SDK_INT >= 34) {
@@ -305,7 +264,6 @@ class SrtJobService : Service() {
         tickHandler.removeCallbacks(notifTick)
         tickHandler.postDelayed(notifTick, 5_000)
     }
-
     private fun stopFg() {
         tickHandler.removeCallbacks(notifTick)
         try {
@@ -314,7 +272,6 @@ class SrtJobService : Service() {
         } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
         stopSelf()
     }
-
     private fun postResultNotif(title: String, text: String) {
         try {
             val n = NotificationCompat.Builder(this, CH_DONE)
@@ -328,24 +285,19 @@ class SrtJobService : Service() {
             getSystemService(NotificationManager::class.java).notify(NOTIF_DONE, n)
         } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
     }
-
     private fun acquireWake() {
         try {
             val pm = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AngolMagyar:SrtJob").also {
                 it.setReferenceCounted(false)
-                it.acquire(6 * 60 * 60 * 1000L) // max 6 óra
+                it.acquire(6 * 60 * 60 * 1000L)
             }
         } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
     }
-
     private fun releaseWake() {
         try { wakeLock?.let { if (it.isHeld) it.release() } } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
         wakeLock = null
     }
-
-    // ---------------------------------------------------------------- a feldolgozás
-
     private fun errText(e: Throwable): String {
         val parts = ArrayList<String>()
         var t: Throwable? = e
@@ -358,17 +310,11 @@ class SrtJobService : Service() {
         }
         return parts.joinToString(" ← ")
     }
-
-    /**
-     * A bizonytalan felismerésű sorok újrafuttatása nagyobb nyalábbal; csak akkor cseréli a sort,
-     * ha az új eredmény megbízhatósága érdemben jobb. A cserélt sorok fordítását újra elkészíti.
-     */
     private fun secondPass(
         input: List<SrtExporter.Cue>, pcm: File, asr: Engines.Asr, lang: String, dir: String,
         needTranslate: Boolean, rec: FileRecognizer
     ): List<SrtExporter.Cue> {
         val flags = try { LineQuality.summarize(input) } catch (_: Exception) { emptyList() }
-        // a 60 mp-nél hosszabb blokk nem beszéd (csendbe nyúló hallucináció): nem érdemes újrafuttatni
         val bad = input.indices.filter {
             (input[it].lp < -0.9f || flags.getOrNull(it)?.contains("töredék") == true) &&
                 input[it].endMs - input[it].startMs <= 60_000L
@@ -377,7 +323,6 @@ class SrtJobService : Service() {
             DiagLog.log("MÁSODIK MENET: nincs újrafuttatandó szakasz")
             return input
         }
-        // egymás melletti rossz sorok egy szakaszba (legfeljebb 25 mp)
         val groups = ArrayList<IntRange>()
         var gs = bad[0]; var ge = bad[0]
         for (i in bad.drop(1)) {
@@ -385,7 +330,6 @@ class SrtJobService : Service() {
             else { groups.add(gs..ge); gs = i; ge = i }
         }
         groups.add(gs..ge)
-        // kétmenetes mód: ha van nagyobb (large-v3) modell, a bizonytalan szakaszokat azzal futtatjuk újra
         val big = ModelManager.installedSpecs(this).firstOrNull { it.id == ModelManager.WH_LARGE.id && it.id != asr.whisper?.id }
         val maxSpans = 12
         val picked = groups.sortedBy { g -> input.subList(g.first, g.last + 1).sumOf { it.lp.toDouble() } }.take(maxSpans)
@@ -421,13 +365,9 @@ class SrtJobService : Service() {
         }
         return out
     }
-
-    /** SRT összeállítása a beállítások szerint: olvasható darabolás / időzítés, színes beszélők. */
     private fun buildSrt(cues: List<SrtExporter.Cue>, mode: SrtExporter.Mode): String {
         return SrtBuild.build(this, cues, mode)
     }
-
-    /** A teljes sor feldolgozása egymás után; egy fájl hibája nem állítja meg a többit. */
     private fun runBatch(o: Opts) {
         cancelFlag.set(false)
         timedOut = false
@@ -451,7 +391,6 @@ class SrtJobService : Service() {
             }
         }.also { it.start() }
     }
-
     private fun batchNotif() {
         val items = SrtJob.queue.filter { it.state != SrtJob.Q_WAIT }
         if (items.isEmpty()) return
@@ -476,7 +415,6 @@ class SrtJobService : Service() {
             postResultNotif("SRT készítés vége – ${items.size} fájl", parts.joinToString(", "))
         }
     }
-
     private fun processOne(item: SrtJob.QItem, o: Opts) {
         val uri = item.uri
         val prefs = Prefs(this)
@@ -487,21 +425,17 @@ class SrtJobService : Service() {
         val useDiarization = o.diarize
         val kind = o.kind
         val langTag = o.langTag
-        // Az értékeket most olvassuk ki: ha közben a képernyő bezárul, a beállítások változhatnak.
         val meeting = prefs.meetingMode
         val safeMode = prefs.meetingSafeMode
         val chunkMin = prefs.meetingChunkMinutes
         val preferOnnx = prefs.preferOnnx
-
         SrtJob.reset(needTranslate)
-        // ha az app közben leáll, a következő indításkor felajánljuk a folytatást (az ellenőrzőpont megvan)
         try {
             prefs.raw().edit().putString(
                 "pendingJob", org.json.JSONObject().put("uri", item.uri.toString()).put("name", item.name).toString()
             ).apply()
         } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
         DiagLog.log("FÁJL INDUL: ${item.name} · ${Perf.describe()} · ${DiagLog.powerState(this)}")
-
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val base = item.name.takeIf { it.isNotBlank() }?.let { OutputWriter.baseName(it) } ?: "felirat_$stamp"
         val srtFileName = srtNameFor(kind, base, langTag, false)
@@ -509,8 +443,6 @@ class SrtJobService : Service() {
         var partialSupplier: (() -> List<SrtExporter.Cue>)? = null
         var histKey = ""
         var audioMs = 1L
-
-        /** Elmenti az eddigi (részleges) eredményt, ha van; a mentés helyét adja vissza. */
         fun salvage(): String? {
             val cues = try { partialSupplier?.invoke().orEmpty() } catch (_: Exception) { emptyList() }
             if (cues.isEmpty()) return null
@@ -520,11 +452,9 @@ class SrtJobService : Service() {
                 null
             }
         }
-
         var fr: FileRecognizer? = null
         var pcmFile: File? = null
         try {
-            // ------------------------------------------------------------ előkészítés
             SrtJob.begin(SrtJob.ST_PREP, "Felismerő kiválasztása…")
             val asr = Engines.asrFor(this, prefs, sourceLang)
             SrtJob.engineLabel = asr.label
@@ -546,7 +476,6 @@ class SrtJobService : Service() {
                     )
                 }
                 else -> {
-                    // A rendszer-felismerő csak magyarhoz való; más nyelvnél nem váltunk rá csendben.
                     if (sourceLang != "hu") {
                         throw IllegalStateException(
                             "Nincs ${langName(sourceLang)} nyelvű felismerő modell (Whisper vagy Vosk). " +
@@ -576,8 +505,6 @@ class SrtJobService : Service() {
             recognizer.prepare(asr, needTranslate, dir)
             if (cancelFlag.get()) throw InterruptedException("Megszakítva")
             SrtJob.finish(asr.label)
-
-            // -------------------------------------------------------- hang kinyerése
             SrtJob.begin(SrtJob.ST_EXTRACT, "Hang dekódolása")
             val pcmTmp = File(cacheDir, "pcm_${System.currentTimeMillis()}.raw")
             pcmFile = pcmTmp
@@ -589,9 +516,7 @@ class SrtJobService : Service() {
                 throw IllegalStateException("Nem sikerült dekódolni a hangot. Próbálj WAV/MP3 fájlt.")
             }
             SrtJob.finish()
-
             SrtJob.begin(SrtJob.ST_PCM)
-            // Ne töltsük be az egész PCM-et a memóriába – hosszú filmeknél OutOfMemoryError.
             val totalSamples = (pcmTmp.length() / 2).toInt().coerceAtLeast(0)
             val durationMin = totalSamples / 16000.0 / 60.0
             audioMs = (totalSamples / 16L).coerceAtLeast(1L)
@@ -605,8 +530,6 @@ class SrtJobService : Service() {
                 }
             }.start()
             SrtJob.finish(String.format(Locale.US, "%s hang", SrtJob.fmtDur(audioMs)))
-
-            // ------------------------------------------------ felismerés (chunkokban)
             val sequential = asr.kind != Engines.K_VOSK
             val chunkMs = when {
                 meeting -> chunkMin * 60 * 1000
@@ -624,44 +547,34 @@ class SrtJobService : Service() {
                 "${asr.label} · ${langName(sourceLang)} beszéd · ${SrtJob.fmtDur(audioMs)} hang"
             )
             if (SrtJob.histEstMs > 0) {
-                // kezdeti becslés a korábbi futásokból; utána a mért tempó veszi át (másodpercenként frissül)
                 SrtJob.setEta(recogStart + SrtJob.histEstMs, "korábbi futások alapján")
             }
-
-            // beszélők: hosszú felvételnél mindig chunkonként (egész fájl memóriába töltése tilos)
-            val perChunkDiar = useDiarization // memóriatakarékos: mindig darabonként
+            val perChunkDiar = useDiarization
             var globalSegs: List<SpeakerDiarizer.Segment> = emptyList()
-
             val chunk = ParallelChunker(this, meeting && safeMode)
             chunker = chunk
             partialSupplier = { chunk.merged() }
             var doneAudio = 0L
             val partialFile = File(TranscriptStore.dir(this), "felirat_${stamp}_reszleges.srt")
-
-            // folytatás: a korábban kész darabok (ugyanaz a fájl és beállítás) nem számolódnak újra
             var ckpt: Checkpoint? = null
             var savedChunks: Map<Int, List<SrtExporter.Cue>> = emptyMap()
             var histBasisKey = histKey
             var histBasisMs = audioMs
-
             val events = object : ParallelChunker.Events {
                 override fun onChunkStart(idx: Int, total: Int) {
                     if (SrtJob.chunkState.size != total) SrtJob.initChunks(total)
                     SrtJob.chunkStart(idx)
                 }
-
                 override fun onChunkDone(idx: Int, total: Int, cues: List<SrtExporter.Cue>, audioMs: Long) {
                     SrtJob.chunkFinish(idx, cues.size)
                     SrtJob.preview = (SrtJob.preview + cues.map { previewLine(it) }).takeLast(8)
                     SrtJob.previewCues = (SrtJob.previewCues + cues).takeLast(6)
                     doneAudio += audioMs
                     if (!savedChunks.containsKey(idx)) ckpt?.append(idx, cues)
-                    // részeredmény mentése a belső tárba (megszakításnál / hibánál megmarad)
                     try {
                         partialFile.writeText(SrtExporter.build(chunk.merged(), mode), Charsets.UTF_8)
                     } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
                 }
-
                 override fun onWait(reason: String, cooling: Boolean) {
                     SrtJob.cooling = cooling
                     SrtJob.waitReason = reason
@@ -669,14 +582,11 @@ class SrtJobService : Service() {
                     SrtJob.changed()
                 }
             }
-
-            // Whisper: intelligens darabolás fájlból (ablakonként) – nincs teljes PCM a memóriában
             val useSmartChunks = asr.kind == Engines.K_WHISPER
             val speechRanges = if (useSmartChunks) {
                 SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
                 val vadModel = VadModel.ensure(this) { SrtJob.progress(0, it) }
                 val vadReady = vadModel != null
-                // ha a Whisper maga is kihagyja a darabon belüli csendet, nagy darabok kellenek (kontextus)
                 val gapMs = if (vadReady) 30_000 else if (meeting) 10_000 else 8000
                 SrtJob.progress(0, "Intelligens darabolás (csendek kiszűrése)…")
                 val ranges = Vad.speechChunksFromFile(
@@ -690,7 +600,6 @@ class SrtJobService : Service() {
                     threads = 4,
                     minChunkMs = if (vadReady) 90_000 else 25_000,
                     softGapMs = if (vadReady) 90_000 else 20_000,
-                    // kevés, szétszórt beszéd: a Whisper darabonként legalább egy teljes 30 mp-es ablakot számol
                     mergeMinSpeechMs = 120_000,
                     mergeMaxSpeechMs = 300_000,
                     mergeMaxSpanMs = 15 * 60_000
@@ -705,7 +614,6 @@ class SrtJobService : Service() {
                     "Intelligens darabolás: ${ranges.size} darab, " +
                         "beszéd ${SrtJob.fmtDur(speechMs)} / ${SrtJob.fmtDur(audioMs)}"
                 )
-                // a becslés a tényleges beszédhossz alapján (a csendeket nem számoljuk): külön előzmény-kulcs
                 histBasisKey = "$histKey|sp2"
                 histBasisMs = pureMs.coerceAtLeast(1L)
                 val spRatio = hist.getFloat("$histBasisKey|p${Perf.level}", 0f).takeIf { it > 0f }
@@ -737,14 +645,11 @@ class SrtJobService : Service() {
                 DiagLog.log("INTELLIGENS DARABOLÁS: ${ranges.size} darab · beszéd ${SrtJob.fmtDur(speechMs)} / ${SrtJob.fmtDur(audioMs)}")
                 ranges
             } else emptyList()
-
-            // ellenőrzőpont: kulcs = fájl + motor + modell + nyelv + darabolás
             run {
                 val key = Checkpoint.keyOf(
                     uri, asr.key, asr.whisper?.id ?: "", sourceLang, needTranslate, dir, totalSamples,
                     speechRanges.size, speechRanges.firstOrNull()?.start ?: 0, speechRanges.lastOrNull()?.end ?: 0,
                     chunkMs, overlapMs, AsrPrefs.beam(this), useDiarization, SubPrefs.contextTranslate(this),
-                    // a javító szabályok és a szótár is az ujjlenyomat része: változásuk után nem használ elavult darabot
                     prefs.enFixes.hashCode(), prefs.customVocab.hashCode(),
                     (prefs.raw().getString("autoRulesEn", "") ?: "").hashCode(), Projects.huRules(this).hashCode()
                 )
@@ -756,7 +661,6 @@ class SrtJobService : Service() {
                     DiagLog.log("FOLYTATÁS: ${savedChunks.size} darab ellenőrzőpontból")
                 }
             }
-
             val result = if (useSmartChunks && speechRanges.isEmpty()) {
                 SrtJob.progress(100, "Nincs felismerhető beszéd")
                 ParallelChunker.Result(emptyList(), 0, 0, false)
@@ -772,7 +676,6 @@ class SrtJobService : Service() {
                 ) { slice, offsetMs, idx ->
                     val sliceMs = slice.size / 16L
                     SrtJob.chunkSize(idx, sliceMs, sliceMs)
-                    // folytatás: ezt a darabot korábban már kiszámoltuk
                     savedChunks[idx]?.let { prev ->
                         SrtJob.chunkProgress(idx, 1.0, "korábbi eredmény (folytatás)", sliceMs, audioMs)
                         return@runFromFile prev
@@ -790,11 +693,6 @@ class SrtJobService : Service() {
                         base0 = 0.1
                     }
                     SrtJob.chunkProgress(idx, base0, "felismerés indul…", sliceMs, audioMs)
-
-                    /**
-                     * Egy (rész)darab felismerése elakadás-őrrel (csak Whisper): ha a felismerés hosszú ideig nem lép előre,
-                     * megszakítjuk, és a hívó újra próbálja kisebb darabokkal. Null = elakadt.
-                     */
                     fun part(pcm: ShortArray, off: Long, f0: Double, f1: Double, tm: TimeMap? = null): List<SrtExporter.Cue>? {
                         val guard = asr.kind == Engines.K_WHISPER
                         val tick = AtomicLong(System.currentTimeMillis())
@@ -808,7 +706,6 @@ class SrtJobService : Service() {
                                 while (!done.get() && !cancelFlag.get()) {
                                     try { Thread.sleep(5_000) } catch (_: InterruptedException) { return@Runnable }
                                     val idle = System.currentTimeMillis() - tick.get()
-                                    // zárolt képernyőn a rendszer lassíthat: ott türelmesebbek vagyunk
                                     val lim = if (DiagLog.screenOn) limit else limit * 3
                                     if (inWhisper.get() && idle > lim) {
                                         fired.set(true)
@@ -840,8 +737,6 @@ class SrtJobService : Service() {
                             wd?.interrupt()
                         }
                     }
-
-                    // Whispernél csak a beszédrészeket dolgozzuk fel (csendek nélkül összefűzve); az időket visszaképezzük
                     val startSample = speechRanges.getOrNull(idx)?.start ?: (offsetMs * 16L).toInt()
                     val comp = if (asr.kind == Engines.K_WHISPER) Compact.build(slice, startSample, Vad.lastFine) else null
                     val basePcm = comp?.first ?: slice
@@ -852,8 +747,6 @@ class SrtJobService : Service() {
                     }
                     val full = part(basePcm, offsetMs, 0.0, 1.0, tm)
                     if (full != null) return@runFromFile full
-
-                    // elakadt: két félre bontva újra
                     SrtJob.message = "Elakadt darab újrapróbálása kisebb részekben…"
                     SrtJob.changed()
                     val half = basePcm.size / 2
@@ -875,7 +768,6 @@ class SrtJobService : Service() {
             }
             if (cancelFlag.get() && result.stoppedEarly) throw InterruptedException("Megszakítva")
             var cues = result.cues
-            // önjavító szótár: a felvételen belül ritkán, hibásan leírt nevek a gyakori alakra javulnak (és megjegyződnek)
             if (sourceLang == "en" && VocabLearner.auto(prefs)) try {
                 val map = SpellCluster.find(cues.map { it.source })
                 if (map.isNotEmpty()) {
@@ -883,7 +775,6 @@ class SrtJobService : Service() {
                     cues = cues.map { c -> c.copy(source = SpellCluster.apply(c.source, map), target = SpellCluster.apply(c.target, map)) }
                     VocabLearner.addAutoRules(prefs, map)
                     DiagLog.log("ÖNJAVÍTÓ SZÓTÁR: " + map.entries.joinToString { "${it.key}→${it.value}" })
-                    // a javított forrású sorok fordítása újra lefut (a név a mondatban is jól ragozódjon)
                     if (needTranslate && dir != Prefs.DIR_NONE && !cancelFlag.get()) {
                         val changed = cues.indices.filter { cues[it].source != before[it].source }
                         if (changed.isNotEmpty()) {
@@ -922,11 +813,8 @@ class SrtJobService : Service() {
             SrtJob.finish("${cues.size} blokk")
             SrtJob.chunkDone = SrtJob.chunkTotal
             if (cancelFlag.get()) throw InterruptedException("Megszakítva")
-
-            // a felismerés tényleges sebessége (idő / hanghossz) a következő becsléshez
             try {
                 val recMs = SrtJob.steps[SrtJob.ST_RECOG].durMs
-                // folytatott futás ideje nem reprezentatív → nem frissítjük az előzményt
                 if (recMs > 0 && histBasisKey.isNotEmpty() && savedChunks.isEmpty()) {
                     val key = "$histBasisKey|p${Perf.level}"
                     val newRatio = recMs.toFloat() / histBasisMs.coerceAtLeast(1L)
@@ -937,7 +825,6 @@ class SrtJobService : Service() {
                 }
             } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
             try {
-                // mért ablak-idő a következő becsléshez (csak teljes, nem folytatott futásból)
                 if (savedChunks.isEmpty()) {
                     var w = 0L; var ms = 0L
                     for (ci in SrtJob.chunkInfo) if (ci.tookMs >= 2000) { w += EtaModel.windows(ci.speechMs); ms += ci.tookMs }
@@ -954,12 +841,8 @@ class SrtJobService : Service() {
             } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
             SrtJob.preview = cues.takeLast(8).map { previewLine(it) }
             SrtJob.previewCues = cues.takeLast(6)
-
-            // -------------------------------------------------------------- mentés
             SrtJob.begin(SrtJob.ST_SAVE, "SRT összeállítása…")
             val srt = buildSrt(cues, mode)
-
-            // mentés a belső tárba mindig
             SrtJob.progress(20, "Mentés az alkalmazás tárolójába…")
             val name = "felirat_$stamp.srt"
             File(TranscriptStore.dir(this), name).writeText(srt, Charsets.UTF_8)
@@ -968,13 +851,9 @@ class SrtJobService : Service() {
             val plain = ExportHelper.toPlainMinutes(cues)
             ExportHelper.write(File(TranscriptStore.dir(this), "jegyzokonyv_$stamp.txt"), plain)
             try { partialFile.delete() } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
-
-            // …és a beállított helyre (a videó mellé / alapértelmezett mappába)
             SrtJob.progress(60, "Mentés a beállított helyre…")
             val where = saveOutputs(kind, uri, base, langTag, srt, cues, false)
-
             SrtJob.complete(cues.size, srt, name, where)
-            // az ellenőrzőpont megmarad (7 nap): ugyanazon fájl és beállítás újrafuttatása a kész darabokat újrahasznosítja
             DiagLog.log("FÁJL KÉSZ: ${item.name} · ${cues.size} blokk · ${SrtJob.fmtDur(System.currentTimeMillis() - SrtJob.startMs)}")
             item.srt = srt
             item.srtName = srtFileName
@@ -983,7 +862,6 @@ class SrtJobService : Service() {
             item.cues = cues
             item.localFile = name
             if (needTranslate) try { TranslationMemoryStore.record(this, cues) } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
-            // sorozat-mód: a felismert szereplőnevek bekerülnek a projekt szereplői közé, a következő rész már ismeri őket
             try {
                 val known = Projects.get(this, "cast")
                 val have = NameFix.parseNames(known).map { it.lowercase() }.toSet()
@@ -1020,7 +898,6 @@ class SrtJobService : Service() {
             item.state = SrtJob.Q_ERR
             SrtJob.changed()
         } finally {
-            // időkorlát esetén a folytatási ajánlat megmarad (az ellenőrzőpont sem törlődik)
             if (!timedOut) try { prefs.raw().edit().remove("pendingJob").apply() } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
             try { fr?.close() } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
             try { pcmFile?.delete() } catch (e: Exception) { DiagLog.swallow("SrtJobService", e) }
@@ -1028,7 +905,6 @@ class SrtJobService : Service() {
             recRef = null
         }
     }
-
     private fun previewLine(c: SrtExporter.Cue): String {
         val t = SrtExporter.formatTime(c.startMs).take(8)
         val txt = c.source.ifBlank { c.target }
@@ -1036,19 +912,11 @@ class SrtJobService : Service() {
         val spk = if (c.speaker.isNotBlank()) "${c.speaker}: " else ""
         return "[$t] $spk$txt$tr"
     }
-
     private fun srtNameFor(kind: String, base: String, langTag: String, partial: Boolean): String {
         val suffix = if (partial) ".reszleges" else ""
         return if (kind == KIND_TRANSCRIPT) "${base}_atirat$suffix.srt"
         else "$base${if (langTag.isNotBlank()) ".$langTag" else ""}$suffix.srt"
     }
-
-    /**
-     * Egy fájl mentése a kiválasztott módon:
-     *  - "videó mellé" (alapértelmezett): oda, ahonnan a videót betöltöttük; ha ez nem megy, az alapértelmezett mappába,
-     *  - "alapértelmezett mappa": csak oda.
-     * Ad: ember-olvasható hely, vagy null.
-     */
     private fun saveFile(video: Uri, name: String, mime: String, bytes: ByteArray): String? {
         val tree = OutputPrefs.defaultTree(this)
         val beside = OutputPrefs.saveMode(this) == OutputPrefs.SAVE_BESIDE
@@ -1064,13 +932,6 @@ class SrtJobService : Service() {
         }
         return null
     }
-
-    /**
-     * Kimenet mentése a beállított helyre.
-     *  - átirat: SRT + TXT,
-     *  - felirat: SRT.
-     * Null = nincs beállított / elérhető hely; ilyenkor a képernyő mentés-ablakot kínál.
-     */
     private fun saveOutputs(
         kind: String, video: Uri, base: String, langTag: String, srt: String,
         cues: List<SrtExporter.Cue>, partial: Boolean
@@ -1085,7 +946,6 @@ class SrtJobService : Service() {
         }
         return w
     }
-
     private fun speakerAt(prefs: Prefs, segments: List<SpeakerDiarizer.Segment>, timeMs: Long): String {
         if (segments.isEmpty()) return ""
         val seg = segments.firstOrNull { timeMs >= it.startMs && timeMs < it.endMs }

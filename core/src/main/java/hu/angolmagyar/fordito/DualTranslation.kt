@@ -1,11 +1,5 @@
 package hu.angolmagyar.fordito
-
-/**
- * Két magyar fordítási változat összevetése ugyanahhoz az angol forráshoz.
- * Nem rangsorol: ellenőrzési támpontokat ad (eltérő szavak, számok, magázás, szabályalapú jelzések).
- */
 object DualTranslation {
-
     data class Comparison(
         val identical: Boolean,
         val similarityPercent: Int,
@@ -21,13 +15,10 @@ object DualTranslation {
         val formalB: Boolean,
         val notes: List<String>
     )
-
     private val WORD = Regex("[\\p{L}\\p{N}]+")
     private val NUMBER = Regex("\\d+(?:[.,]\\d+)?")
-
     private fun words(s: String): List<String> = WORD.findAll(s.lowercase()).map { it.value }.toList()
     private fun numbers(s: String): Set<String> = NUMBER.findAll(s).map { it.value.replace(',', '.') }.toSet()
-
     fun compare(source: String, a: String, b: String): Comparison {
         val wa = words(a)
         val wb = words(b)
@@ -39,7 +30,6 @@ object DualTranslation {
         val union = (setA + setB).size
         val similarity = if (union == 0) 100 else common.size * 100 / union
         val identical = wa == wb
-
         val numA = numbers(a)
         val numB = numbers(b)
         val numSrc = numbers(source)
@@ -47,7 +37,6 @@ object DualTranslation {
         val findingsB = TranslationQualityAudit.inspect(source, b).findings
         val formalA = TextPolish.looksFormal(a)
         val formalB = TextPolish.looksFormal(b)
-
         val notes = ArrayList<String>()
         if (identical) {
             notes.add("A két változat szó szerint azonos.")
@@ -72,7 +61,6 @@ object DualTranslation {
         }
         if (findingsA.size != findingsB.size)
             notes.add("A szabályalapú jelzések száma eltér (A: ${findingsA.size}, B: ${findingsB.size}); ez nem minőségi rangsor.")
-
         return Comparison(identical, similarity, common, onlyA, onlyB, wa.size, wb.size, numA == numB,
             findingsA, findingsB, formalA, formalB, notes)
     }

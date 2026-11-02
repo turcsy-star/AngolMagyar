@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -23,12 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
-
-/** Korábbi nyomásra összehúzódó animáció – a gombanimációkat megszüntettük, ezért ez szándékosan nem csinál semmit. */
 @Suppress("UNUSED_PARAMETER")
 fun Modifier.pressScale(reduced: Boolean = false): Modifier = this
-
-/** Többrétegű „üveg” felület: áttetsző fehér réteg, ferde fénykiemelés és átmenetes perem. */
 @Composable
 fun PlatinumGlassCard(modifier: Modifier = Modifier, reduced: Boolean = false, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(18.dp)

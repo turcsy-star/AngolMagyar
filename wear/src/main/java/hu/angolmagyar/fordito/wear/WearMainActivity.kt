@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.wear
-
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
@@ -51,14 +50,6 @@ import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-
-/**
- * v2.21.1 – Wear OS felület: valódi Data Layer szinkron a telefonnal.
- *
- * Protocol (megegyezik a telefon WearBridge-ével):
- *  - /am/cmd     üzenet: "start_mic" | "stop" | "toggle_pause"
- *  - /am/status  DataItem: running, paused, mode, lastHu, lastEn, warn
- */
 class WearMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,11 +60,9 @@ class WearMainActivity : ComponentActivity() {
         }
     }
 }
-
 private const val TAG = "WearAM"
 private const val PATH_CMD = "/am/cmd"
 private const val PATH_STATUS = "/am/status"
-
 data class PhoneStatus(
     val running: Boolean = false,
     val paused: Boolean = false,
@@ -83,7 +72,6 @@ data class PhoneStatus(
     val warn: String = "",
     val connected: Boolean = false
 )
-
 private fun wearHaptic(ctx: Context) {
     try {
         val v = if (Build.VERSION.SDK_INT >= 31) {
@@ -99,14 +87,11 @@ private fun wearHaptic(ctx: Context) {
         }
     } catch (_: Exception) {}
 }
-
 @Composable
 fun WearApp() {
     val context = LocalContext.current
     var status by remember { mutableStateOf(PhoneStatus()) }
     var busy by remember { mutableStateOf(false) }
-
-    // Data Layer figyelés
     DisposableEffect(Unit) {
         val client = Wearable.getDataClient(context)
         val listener = DataClient.OnDataChangedListener { buffer: DataEventBuffer ->
@@ -125,7 +110,6 @@ fun WearApp() {
                         warn = map.getString("warn", "") ?: "",
                         connected = true
                     )
-                    // Complication frissítéshez
                     context.getSharedPreferences("wear_status", Context.MODE_PRIVATE).edit()
                         .putBoolean("running", status.running)
                         .putBoolean("paused", status.paused)
@@ -138,8 +122,6 @@ fun WearApp() {
         client.addListener(listener)
         onDispose { client.removeListener(listener) }
     }
-
-    // Első csatlakozás ellenőrzés
     LaunchedEffect(Unit) {
         try {
             val nodes = withContext(Dispatchers.IO) {
@@ -152,12 +134,10 @@ fun WearApp() {
             Log.d(TAG, "nodes: ${e.message}")
         }
     }
-
     fun sendCmd(cmd: String) {
         if (busy) return
         wearHaptic(context)
         busy = true
-        // fire-and-forget a UI szálon (Wearable API main-safe)
         Wearable.getNodeClient(context).connectedNodes
             .addOnSuccessListener { nodes: List<Node> ->
                 if (nodes.isEmpty()) {
@@ -180,7 +160,6 @@ fun WearApp() {
                 busy = false
             }
     }
-
     Scaffold(timeText = { TimeText() }) {
         Column(
             modifier = Modifier
@@ -189,7 +168,6 @@ fun WearApp() {
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Állapot
             Text(
                 text = when {
                     !status.connected -> "Telefon?"
@@ -200,10 +178,7 @@ fun WearApp() {
                 style = MaterialTheme.typography.title3,
                 textAlign = TextAlign.Center
             )
-
             Spacer(modifier = Modifier.height(6.dp))
-
-            // Felirat előnézet
             val caption = status.lastHu.ifBlank { status.lastEn }
             if (caption.isNotBlank()) {
                 Text(
@@ -225,8 +200,6 @@ fun WearApp() {
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-
-            // Gombok
             Row(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
@@ -246,7 +219,6 @@ fun WearApp() {
                 ) {
                     Text(if (status.running) "Stop" else "Rec")
                 }
-
                 if (status.running) {
                     Spacer(modifier = Modifier.width(10.dp))
                     Button(
@@ -257,7 +229,6 @@ fun WearApp() {
                     }
                 }
             }
-
             if (!status.connected) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(

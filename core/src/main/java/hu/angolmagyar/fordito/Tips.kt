@@ -1,6 +1,4 @@
 package hu.angolmagyar.fordito
-
-/** Helyzethez igazított tippek: a hibaüzenetből / az eredményből következő teendők magyarul. */
 object Tips {
     fun forError(msg: String): List<String> {
         val m = msg.lowercase()
@@ -22,8 +20,6 @@ object Tips {
         if (out.isEmpty()) out.add("Ha ismétlődik, a „Hibajelentés / napló küldése…” gombbal elküldheted a naplót.")
         return out
     }
-
-    /** A kész felirat alapján: üres kimenet, túl kevés beszéd, sok jelölt sor. */
     fun forResult(blocks: Int, flagged: Int, lang: String): List<String> {
         val out = ArrayList<String>()
         if (blocks == 0) {

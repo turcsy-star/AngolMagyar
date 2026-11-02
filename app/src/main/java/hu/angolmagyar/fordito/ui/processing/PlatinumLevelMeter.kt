@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import android.content.Context
 import android.util.AttributeSet
 import android.widget.FrameLayout
@@ -40,25 +39,17 @@ import hu.angolmagyar.fordito.TranslateService
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
 import hu.angolmagyar.fordito.ui.design.PremiumMotion
 import kotlinx.coroutines.delay
-
 private const val BARS = 48
-
-/**
- * Élő hangszintmérő: 48 oszlop, balra gördülő előzmény. Minden oszlop a [AppState.level] egy korábbi
- * valós mintája (nincs kitalált hullámzás); csendben csak egy vékony pont látszik.
- */
 @Composable
 fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
     val reducedMotion = rememberUpdatedState(reduced)
     val bars = remember { FloatArray(BARS) }
     var frame by remember { mutableIntStateOf(0) }
-    var peak by remember { mutableIntStateOf(0) } // 0..100, lassan lecsengő csúcsjelző
-
+    var peak by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         while (true) {
             val lvl = AppState.level.coerceIn(0f, 1f)
             val last = bars[BARS - 1]
-            // gyors felfutás, lassú lecsengés
             val v = if (lvl >= last) lvl else last * 0.8f + lvl * 0.2f
             System.arraycopy(bars, 1, bars, 0, BARS - 1)
             bars[BARS - 1] = v
@@ -68,7 +59,6 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
             delay(if (reducedMotion.value) 90L else 40L)
         }
     }
-
     val running = AppState.running
     val paused = AppState.paused
     val source = when (AppState.mode) {
@@ -79,7 +69,6 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
     }
     val now = (bars[BARS - 1] * 100).toInt()
     val state = when { !running -> "KÉSZENLÉT"; paused -> "SZÜNET"; now < 2 -> "CSEND"; else -> "FIGYEL" }
-
     val shape = RoundedCornerShape(18.dp)
     Column(
         modifier.fillMaxWidth().clip(shape)
@@ -94,17 +83,16 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
             Text(state, color = if (state == "FIGYEL") PlatinumColors.Emerald else PlatinumColors.TextDim, fontSize = 10.sp, letterSpacing = 1.4.sp)
         }
         Canvas(Modifier.fillMaxWidth().height(56.dp)) {
-            frame.let { } // az újrarajzolás kulcsa
+            frame.let { }
             val slot = size.width / BARS
             val bw = slot * 0.56f
             val mid = size.height / 2f
-            // középvonal
             drawLine(PlatinumColors.SteelDark.copy(alpha = 0.5f), Offset(0f, mid), Offset(size.width, mid), 1.dp.toPx())
             for (i in 0 until BARS) {
                 val v = bars[i]
                 val half = (v * (size.height / 2f - 2.dp.toPx())).coerceAtLeast(1.2.dp.toPx())
                 val x = i * slot + (slot - bw) / 2f
-                val age = i / (BARS - 1f) // az újabb minták fényesebbek
+                val age = i / (BARS - 1f)
                 val top = if (v > 0.66f) PlatinumColors.DiamondWhite else PlatinumColors.PlatinumHigh
                 drawRoundRect(
                     Brush.verticalGradient(listOf(top.copy(alpha = 0.35f + 0.65f * age), PlatinumColors.Steel.copy(alpha = 0.25f + 0.5f * age)), mid - half, mid + half),
@@ -118,8 +106,6 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
         }
     }
 }
-
-/** View-burkoló a View-alapú Élő fordítás képernyőhöz. */
 class PlatinumLevelView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     init {
         addView(

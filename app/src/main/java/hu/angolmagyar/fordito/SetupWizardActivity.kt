@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -16,38 +15,25 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-
-/**
- * Első indítás: egy képernyő = egy engedély. Nagy "Engedélyezés" és "Tovább" gomb, nincs görgetés.
- * Az utolsó lépés a modellek letöltése (ajánlott csomag egy koppintással).
- */
 class SetupWizardActivity : AppCompatActivity() {
-
     private enum class Step { MIC, NOTIF, OVERLAY, BATTERY, MODELS }
-
     private lateinit var prefs: Prefs
     private lateinit var host: LinearLayout
     private var steps: List<Step> = emptyList()
     private var idx = 0
-
     private fun dp(v: Int) = Ui.dp(this, v)
-
     private val permLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { next() }
-
     private fun hasMic() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
         PackageManager.PERMISSION_GRANTED
-
     private fun hasNotif() = Build.VERSION.SDK_INT < 33 ||
         ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
-
     private fun hasBattery() = try {
         (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
     } catch (_: Exception) {
         true
     }
-
     private fun done(s: Step) = when (s) {
         Step.MIC -> hasMic()
         Step.NOTIF -> hasNotif()
@@ -55,11 +41,10 @@ class SetupWizardActivity : AppCompatActivity() {
         Step.BATTERY -> hasBattery()
         Step.MODELS -> Engines.missingForLive(this, prefs) == null
     }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        prefs.onboarded = true // egyszer fut le automatikusan
+        prefs.onboarded = true
         host = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_VERTICAL
@@ -78,13 +63,10 @@ class SetupWizardActivity : AppCompatActivity() {
         }
         show()
     }
-
     override fun onResume() {
         super.onResume()
-        // beállításokból visszatérve: ha megvan az engedély, megyünk tovább
         if (steps.isNotEmpty() && idx < steps.size && steps[idx] != Step.MODELS && done(steps[idx])) next()
     }
-
     private fun next() {
         idx++
         if (idx >= steps.size) {
@@ -93,7 +75,6 @@ class SetupWizardActivity : AppCompatActivity() {
         }
         show()
     }
-
     private fun show() {
         host.removeAllViews()
         val s = steps[idx]
@@ -134,9 +115,7 @@ class SetupWizardActivity : AppCompatActivity() {
         host.addView(Ui.button(this, primary, true) { act(s) })
         host.addView(Ui.button(this, if (s == Step.MODELS) "Később" else "Tovább", false) { next() })
     }
-
     private data class Four(val a: String, val b: String, val c: String, val d: String)
-
     private fun act(s: Step) {
         when (s) {
             Step.MIC -> permLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
@@ -146,7 +125,6 @@ class SetupWizardActivity : AppCompatActivity() {
             )
             Step.BATTERY -> BatterySettings.open(this)
             Step.MODELS -> {
-                // Ne indítson automatikus letöltést – a felhasználó válassza ki a modelleket
                 startActivity(Intent(this, ModelsActivity::class.java))
                 finish()
             }

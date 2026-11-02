@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import org.json.JSONObject
 import java.io.File
@@ -8,13 +7,9 @@ import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
-
-/** Beállítások + átiratok mentése egyetlen zip fájlba, és visszaállítása. */
 object BackupHelper {
-
     private const val PREFS_ENTRY = "prefs.json"
     private const val DIR_PREFIX = "transcripts/"
-
     fun export(ctx: Context, out: OutputStream): Int {
         var files = 0
         ZipOutputStream(out).use { zip ->
@@ -41,8 +36,6 @@ object BackupHelper {
         }
         return files
     }
-
-    /** @return a visszaállított átirat-fájlok száma */
     fun import(ctx: Context, input: InputStream): Int {
         var files = 0
         val dir = TranscriptStore.dir(ctx)
@@ -68,7 +61,6 @@ object BackupHelper {
                 } else if (e.name.startsWith(DIR_PREFIX)) {
                     val name = e.name.removePrefix(DIR_PREFIX)
                     val f = File(dir, name)
-                    // zip-slip védelem
                     if (name.isBlank() || !f.canonicalPath.startsWith(dirCanon + File.separator)) continue
                     f.outputStream().use { zip.copyTo(it) }
                     files++
@@ -77,8 +69,6 @@ object BackupHelper {
         }
         return files
     }
-
-    /** Minden átirat törlése (a kuka is). */
     fun deleteAllTranscripts(ctx: Context): Int {
         var n = 0
         for (d in listOf(TranscriptStore.dir(ctx), TranscriptStore.trashDir(ctx))) {

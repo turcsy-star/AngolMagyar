@@ -1,17 +1,8 @@
 package hu.angolmagyar.fordito
-
 import android.content.Context
 import java.io.File
 import java.security.MessageDigest
-
-/**
- * Ellenőrzőpont a félbeszakadt feldolgozás folytatásához: minden kész darab cue-it a lemezre írja.
- * Ha ugyanazt a fájlt ugyanazokkal a beállításokkal újraindítod, a kész darabokat nem számolja újra.
- * Formátum (soronként, tabbal tagolva): "C idx n" fejléc, utána n db "start end speaker source target".
- */
 class Checkpoint(private val file: File, private val key: String) {
-
-    /** A korábban kész darabok (idx → cue-k). Ha a kulcs nem egyezik vagy a fájl hibás, üres. */
     fun load(): Map<Int, List<SrtExporter.Cue>> {
         val res = LinkedHashMap<Int, List<SrtExporter.Cue>>()
         if (!file.exists()) return res
@@ -23,7 +14,7 @@ class Checkpoint(private val file: File, private val key: String) {
             if (h.size != 3 || h[0] != "C") break
             val idx = h[1].toIntOrNull() ?: break
             val n = h[2].toIntOrNull() ?: break
-            if (i + n > lines.size - 1) break // csonka (félbemaradt) rekord
+            if (i + n > lines.size - 1) break
             val cues = ArrayList<SrtExporter.Cue>(n)
             var ok = true
             for (k in 1..n) {
@@ -37,7 +28,6 @@ class Checkpoint(private val file: File, private val key: String) {
         }
         return res
     }
-
     @Synchronized
     fun append(idx: Int, cues: List<SrtExporter.Cue>) {
         try {
@@ -49,15 +39,12 @@ class Checkpoint(private val file: File, private val key: String) {
             file.appendText(sb.toString(), Charsets.UTF_8)
         } catch (e: Exception) { DiagLog.swallow("Checkpoint", e) }
     }
-
     fun clear() {
         try { file.delete() } catch (e: Exception) { DiagLog.swallow("Checkpoint", e) }
     }
-
     companion object {
         fun forJob(ctx: Context, key: String): Checkpoint {
             val dir = File(ctx.filesDir, "ckpt")
-            // a régi (7 napnál régebbi) ellenőrzőpontok törlése
             try {
                 dir.listFiles()?.forEach {
                     if (System.currentTimeMillis() - it.lastModified() > 7L * 24 * 3600 * 1000) it.delete()
@@ -65,13 +52,11 @@ class Checkpoint(private val file: File, private val key: String) {
             } catch (e: Exception) { DiagLog.swallow("Checkpoint", e) }
             return Checkpoint(File(dir, "$key.ckpt"), key)
         }
-
         fun keyOf(vararg parts: Any): String {
             val md = MessageDigest.getInstance("SHA-1")
             val bytes = md.digest(parts.joinToString("|") { it.toString() }.toByteArray(Charsets.UTF_8))
             return bytes.joinToString("") { "%02x".format(it) }.take(24)
         }
-
         private fun esc(s: String): String {
             val sb = StringBuilder(s.length + 8)
             for (ch in s) when (ch) {
@@ -83,7 +68,6 @@ class Checkpoint(private val file: File, private val key: String) {
             }
             return sb.toString()
         }
-
         private fun unesc(s: String): String {
             val sb = StringBuilder(s.length)
             var i = 0
@@ -103,11 +87,9 @@ class Checkpoint(private val file: File, private val key: String) {
             }
             return sb.toString()
         }
-
         fun encode(c: SrtExporter.Cue): String =
             "${c.startMs}\t${c.endMs}\t${esc(c.speaker)}\t${esc(c.source)}\t${esc(c.target)}" +
                 "\t${c.lp}\t${c.noSpeechProb}\t${c.wordConfidence.joinToString(";") { it.toString() }}"
-
         fun decode(line: String): SrtExporter.Cue? {
             val p = line.split("\t")
             if (p.size != 5 && p.size < 8) return null

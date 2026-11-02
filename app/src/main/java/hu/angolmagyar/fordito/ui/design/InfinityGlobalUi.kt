@@ -1,17 +1,7 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.ui.graphics.Color
-
-/**
- * Infinity Global UI – v3.00.0
- *
- * Központi design tokenek és paletta-migrációs segéd.
- * A klasszikus View → Compose teljes migrációja folyamatos.
- */
 object InfinityGlobalUi {
-
     enum class MigrationStatus { NOT_STARTED, PARTIAL, COMPLETE }
-
     data class Palette(
         val name: String,
         val accent: Color,
@@ -24,7 +14,6 @@ object InfinityGlobalUi {
         val warning: Color,
         val error: Color
     )
-
     val PlatinumDark = Palette(
         name = "Platinum Dark",
         accent = Color(0xFFB8C0CC),
@@ -37,7 +26,6 @@ object InfinityGlobalUi {
         warning = Color(0xFFE8B86D),
         error = Color(0xFFE07A7A)
     )
-
     val DiamondBlue = Palette(
         name = "Diamond Blue",
         accent = Color(0xFF6EB5FF),
@@ -50,9 +38,7 @@ object InfinityGlobalUi {
         warning = Color(0xFFE8B86D),
         error = Color(0xFFE07A7A)
     )
-
     val migrationStatus: MigrationStatus = MigrationStatus.PARTIAL
-
     val migrationChecklist: List<Pair<String, Boolean>> = listOf(
         "Színsémák központi tokenekbe szervezve" to true,
         "PremiumCard / PremiumMotion egységes használata" to true,
@@ -67,7 +53,6 @@ object InfinityGlobalUi {
         "Intelligence hub + Global Dashboard Compose" to true,
         "Diamond kiadási kapu (checklist + regresszió)" to true
     )
-
     fun completedCount(): Int = migrationChecklist.count { it.second }
     fun totalCount(): Int = migrationChecklist.size
     fun progressLabel(): String = "${completedCount()}/${totalCount()} · ${migrationStatus.name}"

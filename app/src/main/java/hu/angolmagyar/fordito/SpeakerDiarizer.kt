@@ -1,39 +1,18 @@
 package hu.angolmagyar.fordito
-
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.sqrt
-
-/**
- * Beszélő-szegmentálás (diarization) – két réteg:
- *
- * 1) **EnergyDiarizer** (most működik, offline, modell nélkül):
- *    hangerő + spektrális durva jegyek + csend → S1/S2… váltás.
- *
- * 2) **OnnxDiarizer** (váz): később ECAPA/wespeaker ONNX embedding + klaszterezés.
- *
- * A Magic5 Pro (8 Gen 2, 12 GB) elbírja az ONNX utat; a modellfájl külön telepítendő.
- */
 interface SpeakerDiarizer {
     data class Segment(
         val startMs: Long,
         val endMs: Long,
-        val speakerId: Int, // 0-based → S1, S2…
+        val speakerId: Int,
         val pcmStart: Int,
         val pcmEnd: Int
     )
-
     fun diarize(pcm16Mono: ShortArray, sampleRate: Int = 16000): List<Segment>
-
     fun label(speakerId: Int): String = "S${speakerId + 1}"
 }
-
-/**
- * Gyakorlati, modell nélküli diarization tárgyaláshoz.
- * - Csend vágja a szegmenseket
- * - Új szegmensnél: ha a hangjegy (RMS + ZCR) jelentősen más, új beszélő, különben ugyanaz
- * - Max [maxSpeakers] klaszter
- */
 class EnergyDiarizer(
     private val silenceRms: Double = 40.0,
     private val minSilenceMs: Int = 900,
@@ -41,19 +20,15 @@ class EnergyDiarizer(
     private val maxSpeakers: Int = 6,
     private val changeThreshold: Double = 0.35
 ) : SpeakerDiarizer {
-
     private data class Feat(val rms: Double, val zcr: Double)
-
     override fun diarize(pcm16Mono: ShortArray, sampleRate: Int): List<SpeakerDiarizer.Segment> {
         if (pcm16Mono.isEmpty()) return emptyList()
         val frameMs = 30
         val frameLen = sampleRate * frameMs / 1000
         val hop = frameLen
         val nFrames = (pcm16Mono.size / hop).coerceAtLeast(1)
-
         val voiced = BooleanArray(nFrames)
         val feats = Array(nFrames) { Feat(0.0, 0.0) }
-
         for (f in 0 until nFrames) {
             val start = f * hop
             val end = (start + frameLen).coerceAtMost(pcm16Mono.size)
@@ -72,8 +47,6 @@ class EnergyDiarizer(
             feats[f] = Feat(rms, zcr)
             voiced[f] = rms >= silenceRms
         }
-
-        // szegmensek: összefüggő voiced futamok, minSilenceMs szünettel elválasztva
         val minSilFrames = (minSilenceMs / frameMs).coerceAtLeast(1)
         val minSpeechFrames = (minSpeechMs / frameMs).coerceAtLeast(1)
         val raw = mutableListOf<IntRange>()
@@ -84,7 +57,6 @@ class EnergyDiarizer(
             val s = i
             while (i < nFrames && voiced[i]) i++
             var e = i
-            // rövid csendet „áthidaljuk”, ha utána megint beszéd
             while (i < nFrames) {
                 var sil = 0
                 val silStart = i
@@ -95,18 +67,14 @@ class EnergyDiarizer(
                     i = silStart
                     break
                 }
-                // short gap – continue speech
                 while (i < nFrames && voiced[i]) i++
                 e = i
             }
             if (e - s >= minSpeechFrames) raw.add(s until e)
             while (i < nFrames && !voiced[i]) i++
         }
-
-        // beszélő hozzárendelés
         val centers = ArrayList<Feat>()
         val segs = ArrayList<SpeakerDiarizer.Segment>()
-
         for (range in raw) {
             val feat = average(feats, range)
             var best = -1
@@ -119,7 +87,6 @@ class EnergyDiarizer(
                 }
             }
             val spk = if (best >= 0 && bestDist < changeThreshold) {
-                // frissítsük a centrumot
                 centers[best] = mix(centers[best], feat, 0.2)
                 best
             } else if (centers.size < maxSpeakers) {
@@ -128,7 +95,6 @@ class EnergyDiarizer(
             } else {
                 best.coerceAtLeast(0)
             }
-
             val startMs = range.first.toLong() * frameMs
             val endMs = range.last.toLong() * frameMs + frameMs
             val pcmStart = range.first * hop
@@ -141,7 +107,6 @@ class EnergyDiarizer(
         }
         return segs
     }
-
     private fun average(feats: Array<Feat>, range: IntRange): Feat {
         var r = 0.0
         var z = 0.0
@@ -154,7 +119,6 @@ class EnergyDiarizer(
         n = n.coerceAtLeast(1)
         return Feat(r / n, z / n)
     }
-
     private fun distance(a: Feat, b: Feat): Double {
         val rmsA = ln(1 + a.rms)
         val rmsB = ln(1 + b.rms)
@@ -162,32 +126,21 @@ class EnergyDiarizer(
         val dz = abs(a.zcr - b.zcr) * 8.0
         return dr + dz
     }
-
     private fun mix(a: Feat, b: Feat, w: Double) =
         Feat(a.rms * (1 - w) + b.rms * w, a.zcr * (1 - w) + b.zcr * w)
 }
-
-/**
- * ONNX speaker-embedding diarization.
- * Modell: files/models/speaker_encoder.onnx
- * Bemenet: float32 [1,N] vagy [1,1,N] 16 kHz mono (−1…1)
- * Kimenet: embedding vektor. Hiba esetén EnergyDiarizer.
- */
 class OnnxDiarizer(
     private val modelFile: java.io.File?,
     private val fallback: SpeakerDiarizer = EnergyDiarizer(),
     private val maxSpeakers: Int = 6,
     private val clusterThreshold: Double = 0.55
 ) : SpeakerDiarizer {
-
     val isOnnxReady: Boolean
         get() = modelFile != null && modelFile.isFile && modelFile.length() > 1000
-
     @Volatile private var session: ai.onnxruntime.OrtSession? = null
     @Volatile private var env: ai.onnxruntime.OrtEnvironment? = null
     private var inputName: String? = null
     private var loadFailed = false
-
     private fun ensureSession(): ai.onnxruntime.OrtSession? {
         if (loadFailed || !isOnnxReady) return null
         session?.let { return it }
@@ -210,7 +163,6 @@ class OnnxDiarizer(
             }
         }
     }
-
     override fun diarize(pcm16Mono: ShortArray, sampleRate: Int): List<SpeakerDiarizer.Segment> {
         if (!isOnnxReady) return fallback.diarize(pcm16Mono, sampleRate)
         val sess = ensureSession() ?: return fallback.diarize(pcm16Mono, sampleRate)
@@ -269,7 +221,6 @@ class OnnxDiarizer(
             fallback.diarize(pcm16Mono, sampleRate)
         }
     }
-
     private fun embedWindow(
         sess: ai.onnxruntime.OrtSession,
         inName: String,
@@ -297,7 +248,6 @@ class OnnxDiarizer(
                 )
                 tensor.use { t ->
                     sess.run(mapOf(inName to t)).use { result ->
-                        // Result.get(int): OnnxValue (régebbi/újabb verziókban Optional is lehet)
                         val raw: Any? = result.get(0)
                         val ov = if (raw is java.util.Optional<*>) raw.orElse(null) else raw
                         return flattenOutput((ov as? ai.onnxruntime.OnnxValue)?.value)
@@ -307,7 +257,6 @@ class OnnxDiarizer(
         }
         return null
     }
-
     private fun flattenOutput(value: Any?): FloatArray? = when (value) {
         is FloatArray -> value
         is Array<*> -> when (val first = value.getOrNull(0)) {
@@ -317,7 +266,6 @@ class OnnxDiarizer(
         }
         else -> null
     }
-
     private fun cosineDistance(a: FloatArray, b: FloatArray): Double {
         val n = minOf(a.size, b.size)
         if (n == 0) return 1.0
@@ -335,28 +283,23 @@ class OnnxDiarizer(
         if (denom < 1e-9) return 1.0
         return 1.0 - (dot / denom).coerceIn(-1.0, 1.0)
     }
-
     private fun mixVec(a: FloatArray, b: FloatArray, w: Float): FloatArray {
         val n = minOf(a.size, b.size)
         return FloatArray(n) { i -> a[i] * (1 - w) + b[i] * w }
     }
-
     fun close() {
         try { session?.close() } catch (e: Exception) { DiagLog.swallow("SpeakerDiarizer", e) }
         session = null
         env = null
     }
 }
-
 object DiarizerFactory {
     fun modelFile(ctx: android.content.Context): java.io.File =
         java.io.File(ctx.filesDir, "models/speaker_encoder.onnx")
-
     fun create(ctx: android.content.Context, preferOnnx: Boolean = true): SpeakerDiarizer {
         val onnx = modelFile(ctx)
         return if (preferOnnx) OnnxDiarizer(onnx) else EnergyDiarizer()
     }
-
     fun onnxStatus(ctx: android.content.Context): String {
         val f = modelFile(ctx)
         return if (f.isFile && f.length() > 1000)
@@ -364,7 +307,6 @@ object DiarizerFactory {
         else
             "ONNX modell nincs – energia S1/S2 (speaker_encoder.onnx → models/)"
     }
-
     fun isOnnxInstalled(ctx: android.content.Context): Boolean {
         val f = modelFile(ctx)
         return f.isFile && f.length() > 1000

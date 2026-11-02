@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -42,19 +41,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hu.angolmagyar.fordito.Prefs
-
-/** Shared layout tokens for a gradual migration of legacy screens to Compose. */
 data class PremiumSpacing(val xSmall: Dp = 4.dp, val small: Dp = 8.dp, val medium: Dp = 12.dp, val large: Dp = 20.dp, val xLarge: Dp = 28.dp)
 data class PremiumMotionDurations(val shortMillis: Int = 160, val standardMillis: Int = 280, val longMillis: Int = 420)
-
 val LocalSpacing = compositionLocalOf { PremiumSpacing() }
 val LocalMotion = compositionLocalOf { PremiumMotionDurations() }
-
 @Composable
 fun ProvidePremiumDesignSystem(spacing: PremiumSpacing = PremiumSpacing(), motion: PremiumMotionDurations = PremiumMotionDurations(), content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalSpacing provides spacing, LocalMotion provides motion, content = content)
 }
-
 @Composable
 fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme
@@ -122,8 +116,6 @@ fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
         }
     }
 }
-
-/** Small, consistent heading for grouped controls on premium screens. */
 @Composable
 fun PremiumSectionTitle(
     title: String,
@@ -148,7 +140,6 @@ fun PremiumSectionTitle(
         }
     }
 }
-
 @Composable
 fun StatusPill(label: String, modifier: Modifier = Modifier, accent: Color = MaterialTheme.colorScheme.primary) {
     val spacing = LocalSpacing.current
@@ -156,7 +147,6 @@ fun StatusPill(label: String, modifier: Modifier = Modifier, accent: Color = Mat
         Text(label, modifier = Modifier.padding(horizontal = spacing.medium, vertical = spacing.xSmall), style = MaterialTheme.typography.labelMedium)
     }
 }
-
 @Composable
 fun PrimaryAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit = {}) {
     val spacing = LocalSpacing.current

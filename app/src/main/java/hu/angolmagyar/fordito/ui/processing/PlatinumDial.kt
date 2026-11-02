@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.processing
-
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,12 +31,6 @@ import hu.angolmagyar.fordito.ui.design.PlatinumColors
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
-
-/**
- * Platina műszer: fémes kávagyűrű forgó fényponttal, 60 gravírozott osztás, haladásív pezsgőarany véggel
- * és szegmensgyűrű (egy szegmens = egy feldolgozott darab). Csak valós adatot mutat:
- * ha a % vagy a szegmensszám nem ismert, a megfelelő rész üresen marad.
- */
 @Composable
 fun PlatinumDial(
     percent: Int?, chunksDone: Int, chunksTotal: Int?,
@@ -64,13 +57,10 @@ fun PlatinumDial(
         else -> PlatinumColors.DiamondWhite
     }
     val desc = "Összesített haladás: " + (percent?.let { "$it százalék" } ?: "ismeretlen")
-
     Box(modifier.size(size).semantics { contentDescription = desc }, contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(size)) {
             val c = Offset(this.size.width / 2f, this.size.height / 2f)
             val rad = this.size.minDimension / 2f
-
-            // kávagyűrű: fémes kúpos átmenet, a fénypont lassan körbejár
             val bezelW = rad * 0.085f
             rotate(spin * 360f, c) {
                 drawCircle(
@@ -84,15 +74,12 @@ fun PlatinumDial(
                     rad - bezelW / 2f, c, style = Stroke(bezelW)
                 )
             }
-            // lap
             drawCircle(
                 Brush.radialGradient(
                     listOf(PlatinumColors.GraphiteHigh, PlatinumColors.Graphite, PlatinumColors.Onyx),
                     c, rad * 0.9f
                 ), rad - bezelW, c
             )
-
-            // 60 gravírozott osztás
             val tickOut = rad * 0.86f
             for (i in 0 until 60) {
                 val a = (i / 60f) * 2f * PI.toFloat() - PI.toFloat() / 2f
@@ -111,8 +98,6 @@ fun PlatinumDial(
                     strokeWidth = (if (major) 1.8f else 1f) * density, cap = StrokeCap.Round
                 )
             }
-
-            // haladásív
             val arcR = rad * 0.68f
             val arcW = rad * 0.075f
             val tl = Offset(c.x - arcR, c.y - arcR)
@@ -128,7 +113,6 @@ fun PlatinumDial(
                         0f, 360f * frac, false, tl, sz, style = Stroke(arcW, cap = StrokeCap.Round)
                     )
                 }
-                // fényes ívvég
                 val ea = frac * 2f * PI.toFloat() - PI.toFloat() / 2f
                 val tip = Offset(c.x + arcR * cos(ea), c.y + arcR * sin(ea))
                 drawCircle(
@@ -137,8 +121,6 @@ fun PlatinumDial(
                 )
                 drawCircle(PlatinumColors.PlatinumHigh, arcW * 0.32f, tip)
             }
-
-            // szegmensgyűrű: egy szegmens = egy darab (csak ismert összegnél)
             val n = chunksTotal ?: 0
             if (n in 1..72) {
                 val segR = rad * 0.52f
@@ -156,8 +138,6 @@ fun PlatinumDial(
                     drawArc(col, -90f + i * (360f / n) + gap / 2f, sweep, false, stl, ssz, style = Stroke(segW, cap = StrokeCap.Butt))
                 }
             }
-
-            // üveg-visszfény a lap felső részén
             drawArc(
                 Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent), c.y - rad, c.y),
                 200f, 140f, false, Offset(c.x - rad * 0.8f, c.y - rad * 0.8f), Size(rad * 1.6f, rad * 1.6f),

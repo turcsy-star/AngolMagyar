@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui.design
-
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
@@ -19,16 +18,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import hu.angolmagyar.fordito.Prefs
 import kotlin.math.max
-
-/**
- * P10 accessibility helpers: touch targets, contrast guidance, reduced motion,
- * font scale awareness. Does not claim WCAG certification; provides practical checks.
- */
 object AccessibilityKit {
-
-    /** Material / WCAG-inspired minimum touch target. */
     val MinTouchTarget: Dp = 48.dp
-
     data class Snapshot(
         val fontScale: Float,
         val largestText: Boolean,
@@ -38,7 +29,6 @@ object AccessibilityKit {
         val oledBlack: Boolean,
         val nightMode: Boolean
     )
-
     fun snapshot(context: Context): Snapshot {
         val cfg = context.resources.configuration
         val fontScale = cfg.fontScale
@@ -55,24 +45,15 @@ object AccessibilityKit {
             nightMode = night
         )
     }
-
-    /**
-     * Relative luminance contrast ratio (simplified WCAG formula).
-     * @return ratio >= 1; aim for >= 4.5 for normal text, >= 3 for large text.
-     */
     fun contrastRatio(foreground: Color, background: Color): Double {
         val l1 = max(foreground.luminance().toDouble(), background.luminance().toDouble())
         val l2 = kotlin.math.min(foreground.luminance().toDouble(), background.luminance().toDouble())
         return (l1 + 0.05) / (l2 + 0.05)
     }
-
     fun passesNormalTextContrast(foreground: Color, background: Color): Boolean =
         contrastRatio(foreground, background) >= 4.5
-
     fun passesLargeTextContrast(foreground: Color, background: Color): Boolean =
         contrastRatio(foreground, background) >= 3.0
-
-    /** Human-readable checklist lines for diagnostics / settings. */
     fun checklist(context: Context): List<String> {
         val s = snapshot(context)
         return buildList {
@@ -88,13 +69,10 @@ object AccessibilityKit {
         }
     }
 }
-
-/** Ensures minimum touch target without changing visual size of small icons alone. */
 @Composable
 fun Modifier.accessibleTouchTarget(minSize: Dp = AccessibilityKit.MinTouchTarget): Modifier {
     return this.sizeIn(minWidth = minSize, minHeight = minSize)
 }
-
 @Composable
 fun rememberAccessibilitySnapshot(): AccessibilityKit.Snapshot {
     val context = LocalContext.current
@@ -103,8 +81,6 @@ fun rememberAccessibilitySnapshot(): AccessibilityKit.Snapshot {
         AccessibilityKit.snapshot(context)
     }
 }
-
-/** Attach a stable content description when [text] is non-blank. */
 fun Modifier.accessibleDescription(text: String?): Modifier {
     if (text.isNullOrBlank()) return this
     return this.semantics { contentDescription = text }

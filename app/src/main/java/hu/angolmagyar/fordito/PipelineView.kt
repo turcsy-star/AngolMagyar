@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
@@ -9,16 +8,9 @@ import android.util.AttributeSet
 import android.view.View
 import android.view.animation.LinearInterpolator
 import kotlin.math.sin
-
-/**
- * A feliratkészítés folyamata egy pillantásra: Hang → Szakaszolás → Felismerés → Fordítás → Felirat.
- * A kész lépés zöld pipa, az aktív lépés körül hullám terjed, a következő lépés felé pontok áramlanak,
- * a hátralévők szürkék. A lépések állapotát a SrtJob lépései adják ([set]).
- */
 class PipelineView @JvmOverloads constructor(
     ctx: Context, attrs: AttributeSet? = null
 ) : View(ctx, attrs), PipelineHost {
-
     private val labels = arrayOf("Előkészítés", "Hang", "Betöltés", "Felismerés + fordítás", "Mentés")
     private var states = IntArray(labels.size)
     private var pct = 0
@@ -29,84 +21,70 @@ class PipelineView @JvmOverloads constructor(
     private var initialized = false
     private var liveHeard = ""
     private var liveTranslated = ""
-
-    /** A valódi, éppen hallott és lefordított mondat (rövidítve jelenik meg az aktív lépés fölött). */
     override fun setLive(heard: String, translated: String) {
         liveHeard = heard
         liveTranslated = translated
     }
-
     private fun shortText(s: String, max: Int = 22): String {
         val t = s.trim().replace(Regex("\\s+"), " ")
         return if (t.length <= max) t else t.take(max - 1).trimEnd() + "…"
     }
-
     private val d = resources.displayMetrics.density
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; textSize = 10.5f * d }
-
     private val anim = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = 3200
         repeatCount = ValueAnimator.INFINITE
         interpolator = LinearInterpolator()
         addUpdateListener {
             phase = it.animatedFraction
-            // a haladás-kitöltés finoman követi a célértéket (nincs ugrálás)
             dispPct += (pct - dispPct) * 0.06f
             if (kotlin.math.abs(pct - dispPct) < 0.05f) dispPct = pct.toFloat()
             spin = (spin + 0.045f) % (2f * Math.PI.toFloat())
             if (hasActive() || popping()) invalidate()
         }
     }
-
     private fun hasActive() = states.any { it == SrtJob.ACTIVE }
     private fun popping(): Boolean { val now = System.currentTimeMillis(); return doneAt.any { now - it < 600 } }
-
     override fun set(newStates: IntArray, activePct: Int) {
         val n = minOf(newStates.size, states.size)
         var changed = pct != activePct
         val now = System.currentTimeMillis()
         for (i in 0 until n) if (states[i] != newStates[i]) {
-            // kész lett → kipattanó animáció (az első beállításkor már kész lépéseknél nincs)
             if (initialized && newStates[i] == SrtJob.DONE) doneAt[i] = now
             states[i] = newStates[i]; changed = true
         }
         initialized = true
-        if (activePct < pct - 2) dispPct = activePct.toFloat() // új lépés: nem csúszik vissza
+        if (activePct < pct - 2) dispPct = activePct.toFloat()
         pct = activePct
         if (changed) invalidate()
     }
-
     override fun onAttachedToWindow() { super.onAttachedToWindow(); anim.start() }
     override fun onDetachedFromWindow() { anim.cancel(); super.onDetachedFromWindow() }
-
     override fun onMeasure(w: Int, h: Int) {
         setMeasuredDimension(MeasureSpec.getSize(w), (118 * d).toInt())
     }
-
-    /** Az aktív lépés kis "mi történik most" animációja a csomópont fölött. */
     private fun mini(c: Canvas, step: Int, cx: Float, baseY: Float, col: Int) {
         p.style = Paint.Style.FILL
         p.color = col
         when (step) {
-            0 -> for (k in 0 until 3) { // előkészítés: sorban táguló pontok
+            0 -> for (k in 0 until 3) {
                 val f = ((phase * 3f - k) % 3f + 3f) % 3f
                 val rr = (2f + 2.5f * (1f - kotlin.math.abs(f - 0.5f).coerceAtMost(1f))) * d
                 c.drawCircle(cx + (k - 1) * 9f * d, baseY - 6f * d, rr, p)
             }
-            1 -> for (k in 0 until 5) { // hang: pergő oszlopok
+            1 -> for (k in 0 until 5) {
                 val h = (5f + 11f * (0.5f + 0.5f * sin(phase * 2f * Math.PI.toFloat() * 3f + k * 1.3f))) * d
                 c.drawRoundRect(cx + (k - 2) * 7f * d - 1.6f * d, baseY - h, cx + (k - 2) * 7f * d + 1.6f * d, baseY, 2f * d, 2f * d, p)
             }
-            2 -> for (k in 0 until 5) { // betöltés: sorban megtelő négyzetek
+            2 -> for (k in 0 until 5) {
                 val on = phase * 6f > k + 0.5f
                 p.color = if (on) col else 0x55888AA0
                 c.drawRoundRect(cx + (k - 2) * 8f * d - 3f * d, baseY - 9f * d, cx + (k - 2) * 8f * d + 3f * d, baseY - 3f * d, 1.5f * d, 1.5f * d, p)
             }
-            3 -> { // felismerés + fordítás: az angol szó magyarrá alakul
+            3 -> {
                 val first = shortText(liveHeard)
                 val second = shortText(liveTranslated)
-                // ha még nincs valódi szöveg, nem mutatunk kitalált példát
                 if (first.isEmpty()) return
                 val pr = first to (if (second.isEmpty()) "…" else second)
                 text.typeface = Typeface.DEFAULT_BOLD
@@ -117,7 +95,7 @@ class PipelineView @JvmOverloads constructor(
                 c.drawText(if (showFirst) pr.first else "→ " + pr.second, cx, baseY - 6f * d - 4f * d * phase, text)
                 text.color = oldC
             }
-            4 -> { // mentés: dokumentum, amelyre sorok íródnak
+            4 -> {
                 p.style = Paint.Style.STROKE; p.strokeWidth = 1.6f * d
                 c.drawRoundRect(cx - 7f * d, baseY - 16f * d, cx + 7f * d, baseY, 2f * d, 2f * d, p)
                 p.style = Paint.Style.FILL
@@ -126,7 +104,6 @@ class PipelineView @JvmOverloads constructor(
             }
         }
     }
-
     override fun onDraw(c: Canvas) {
         val n = states.size
         val w = width.toFloat()
@@ -139,8 +116,6 @@ class PipelineView @JvmOverloads constructor(
         val sec = Ui.color(context, R.color.textSecondary)
         val txt = Ui.color(context, R.color.textPrimary)
         val idle = 0x55888AA0
-
-        // összekötők
         p.style = Paint.Style.STROKE
         p.strokeCap = Paint.Cap.ROUND
         p.strokeWidth = 4f * d
@@ -153,19 +128,17 @@ class PipelineView @JvmOverloads constructor(
                 p.color = done
                 c.drawLine(x0, cy, x1, cy, p)
             } else if (states[i] == SrtJob.ACTIVE) {
-                // az aktív lépés felé áramló pontok: haladás szerinti kitöltés + mozgó fények
                 val fill = x0 + (x1 - x0) * (dispPct.coerceIn(0f, 100f) / 100f)
                 p.color = (primary and 0x00FFFFFF) or (0x99 shl 24)
                 c.drawLine(x0, cy, fill, cy, p)
                 p.style = Paint.Style.FILL
-                // két üstökös: lassan gyorsuló-lassuló fej, elhalványuló farokkal
                 for (k in 0 until 2) {
                     val f0 = (phase + k * 0.5f) % 1f
                     for (tl in 0 until 7) {
                         val f = (f0 - tl * 0.022f).coerceAtLeast(0f)
                         val e = 0.5f - 0.5f * kotlin.math.cos(Math.PI.toFloat() * f)
                         val x = x0 + (x1 - x0) * e
-                        val edge = kotlin.math.sin(Math.PI.toFloat() * f0) // a végeken eltűnik
+                        val edge = kotlin.math.sin(Math.PI.toFloat() * f0)
                         val al = (edge * (1f - tl / 7f) * 230).toInt().coerceIn(0, 255)
                         p.color = (primary and 0x00FFFFFF) or (al shl 24)
                         c.drawCircle(x, cy, (3.4f - tl * 0.28f) * d, p)
@@ -174,8 +147,6 @@ class PipelineView @JvmOverloads constructor(
                 p.style = Paint.Style.STROKE
             }
         }
-
-        // csomópontok
         for (i in 0 until n) {
             val cx = side + i * step
             when (states[i]) {
@@ -183,7 +154,6 @@ class PipelineView @JvmOverloads constructor(
                     val age = (System.currentTimeMillis() - doneAt[i]) / 520f
                     val pop = if (age in 0f..1f) 1f + 0.35f * sin(age * Math.PI.toFloat()) else 1f
                     if (age in 0f..1f) {
-                        // kipattanó gyűrű + szikrák
                         p.style = Paint.Style.STROKE; p.strokeWidth = 2.4f * d
                         p.color = (done and 0x00FFFFFF) or (((1f - age) * 200).toInt() shl 24)
                         c.drawCircle(cx, cy, r + 20f * d * age, p)
@@ -202,7 +172,6 @@ class PipelineView @JvmOverloads constructor(
                 }
                 SrtJob.ACTIVE -> {
                     mini(c, i, cx, cy - r - 10f * d, primary)
-                    // lágy fény a csomópont körül (lassan "lélegzik")
                     val br = 0.5f + 0.5f * sin(phase * 2f * Math.PI.toFloat())
                     val gr = r * (2.0f + 0.25f * br)
                     p.style = Paint.Style.FILL
@@ -213,7 +182,6 @@ class PipelineView @JvmOverloads constructor(
                     )
                     c.drawCircle(cx, cy, gr, p)
                     p.shader = null
-                    // két, időben eltolt, kifelé táguló és elhalványuló hullám
                     p.style = Paint.Style.STROKE; p.strokeWidth = 1.8f * d
                     for (k in 0 until 2) {
                         val t = (phase + k * 0.5f) % 1f
@@ -224,7 +192,6 @@ class PipelineView @JvmOverloads constructor(
                     }
                     p.style = Paint.Style.FILL; p.color = primary
                     c.drawCircle(cx, cy, r, p)
-                    // finom, forgó ív a körben (elhalványuló végű)
                     p.style = Paint.Style.STROKE; p.strokeWidth = 2.4f * d; p.strokeCap = Paint.Cap.ROUND
                     val deg = Math.toDegrees(spin.toDouble()).toFloat()
                     val ar = r - 4.5f * d
@@ -244,7 +211,6 @@ class PipelineView @JvmOverloads constructor(
                     c.drawCircle(cx, cy, r, p)
                 }
             }
-            // felirat
             text.typeface = if (states[i] == SrtJob.ACTIVE) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
             text.color = if (states[i] == SrtJob.PENDING) sec else txt
             val lab = labels[i]

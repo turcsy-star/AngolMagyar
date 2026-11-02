@@ -1,25 +1,14 @@
 package hu.angolmagyar.fordito
-
-/**
- * Teljes Diamond integráció – v3.00.0
- *
- * Kiadási kapu, integrációs ellenőrzőlista és a hullám modulok összefoglalója.
- * Nem helyettesíti az eszköztesztet; a checklist a forráscsomag állapotát tükrözi.
- */
 object DiamondIntegration {
-
     const val VERSION_NAME = "3.00.0"
     const val VERSION_CODE = 30000
-
     enum class GateStatus { OPEN, PARTIAL, CLOSED }
-
     data class CheckItem(
         val id: String,
         val title: String,
         val done: Boolean,
         val note: String = ""
     )
-
     data class GateReport(
         val versionName: String,
         val versionCode: Int,
@@ -38,8 +27,6 @@ object DiamondIntegration {
             "Diamond $versionName · $doneCount/$total checklist · kapu: $status" +
                 (regression?.let { " · regresszió: ${if (it.allPassed) "OK" else "FAIL"}" } ?: "")
     }
-
-    /** Forrásszintű kiadási ellenőrzőlista (v3.00). */
     fun checklist(): List<CheckItem> = listOf(
         CheckItem("nav", "Közös navigáció (NavTransitions + Intelligence hub)", true,
             "Hub és Next Wave útvonalak egységesek"),
@@ -61,17 +48,10 @@ object DiamondIntegration {
         CheckItem("gradle_ci", "Reprodukálható Gradle CI build", false,
             "Környezetfüggő (DNS / wrapper)")
     )
-
-    /**
-     * Kapuállapot: checklist + opcionális beépített regresszió.
-     * @param runRegression true esetén lefuttatja a PerformanceRegressionSuite.runBuiltin()-ot
-     */
     fun evaluate(runRegression: Boolean = true): GateReport {
         val reg = if (runRegression) PerformanceRegressionSuite.runBuiltin() else null
         return GateReport(VERSION_NAME, VERSION_CODE, checklist(), reg)
     }
-
-    /** Rövid modul-térkép a hub / dokumentáció számára. */
     fun moduleMap(): List<Pair<String, String>> = listOf(
         "2.63 Learning Analytics" to "Kész",
         "2.64 Smart Context + Quality" to "Kész",

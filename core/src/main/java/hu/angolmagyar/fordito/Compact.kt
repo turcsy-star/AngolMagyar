@@ -1,6 +1,4 @@
 package hu.angolmagyar.fordito
-
-/** Idő-leképezés: a csendek nélküli (összefűzött) darab ideje → az eredeti videó ideje (ms). */
 class TimeMap(private val cStart: LongArray, private val oStart: LongArray, private val len: LongArray) {
     fun toOrig(t: Long): Long {
         if (cStart.isEmpty()) return t
@@ -10,18 +8,9 @@ class TimeMap(private val cStart: LongArray, private val oStart: LongArray, priv
         val d = t - cStart[k]
         return if (d <= len[k]) oStart[k] + d else oStart[k] + len[k]
     }
-
-    /** Ha a darabot félbevágjuk: a második fél idejének eltolása. */
     fun shifted(deltaMs: Long) = TimeMap(LongArray(cStart.size) { cStart[it] - deltaMs }, oStart, len)
 }
-
-/** A darabból kivágja a csendeket: csak a beszédrészek (kis ráhagyással) maradnak, rövid szünetekkel összefűzve. */
 object Compact {
-    /**
-     * @param slice a darab hangja (a darab a [chunkStartSample]-nél kezdődik az eredeti hangban)
-     * @param fine a VAD beszédszakaszai az egész hangban (sample-indexek, rendezve)
-     * @return az összefűzött hang + idő-leképezés, vagy null, ha nincs érdemi nyereség
-     */
     fun build(slice: ShortArray, chunkStartSample: Int, fine: List<Vad.Seg>, rate: Int = 16000): Pair<ShortArray, TimeMap>? {
         if (slice.isEmpty() || fine.isEmpty()) return null
         val cs = chunkStartSample
@@ -38,7 +27,6 @@ object Compact {
         val pad = rate * 250 / 1000
         val joinGap = rate * 600 / 1000
         val silence = rate * 300 / 1000
-        // közeli beszédrészek összevonása (a rövid szünet marad természetes hang)
         val m = ArrayList<IntArray>()
         var cur = local[0].copyOf()
         for (i in 1 until local.size) {
@@ -46,7 +34,6 @@ object Compact {
             if (n[0] - cur[1] <= joinGap) cur[1] = maxOf(cur[1], n[1]) else { m.add(cur); cur = n.copyOf() }
         }
         m.add(cur)
-        // ráhagyás: a szomszédos részek nem lóghatnak egymásba
         val a = IntArray(m.size)
         val b = IntArray(m.size)
         for (i in m.indices) {
@@ -65,7 +52,7 @@ object Compact {
         var pos = 0
         val baseMs = cs.toLong() * 1000L / rate
         for (i in m.indices) {
-            if (i > 0) pos += silence // nullák (a tömb alapból 0)
+            if (i > 0) pos += silence
             System.arraycopy(slice, a[i], out, pos, b[i] - a[i])
             cStart[i] = pos.toLong() * 1000L / rate
             oStart[i] = baseMs + a[i].toLong() * 1000L / rate

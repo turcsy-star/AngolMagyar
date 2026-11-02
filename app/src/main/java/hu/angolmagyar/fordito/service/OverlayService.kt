@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.service
-
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -16,20 +15,11 @@ import androidx.core.app.NotificationCompat
 import hu.angolmagyar.fordito.AppState
 import hu.angolmagyar.fordito.R
 import hu.angolmagyar.fordito.ui.MainActivity
-
-/**
- * v2.21.0 – Lebegő ablak szolgáltatás.
- * Megjelenít egy kis, mindig látható feliratot a rendszer tetején.
- * A meglévő Overlay.kt logikájával párhuzamosan használható / később összevonható.
- */
 class OverlayService : Service() {
-
     private var windowManager: WindowManager? = null
     private var overlayView: TextView? = null
     private var running = false
-
     override fun onBind(intent: Intent?): IBinder? = null
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_SHOW -> showOverlay()
@@ -38,13 +28,10 @@ class OverlayService : Service() {
         }
         return START_STICKY
     }
-
     private fun showOverlay() {
         if (running) return
         running = true
-
         startForeground(NOTIFICATION_ID, buildNotification())
-
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val tv = TextView(this).apply {
             text = AppState.lastCaptionHu.ifBlank { "Angol-Magyar – várakozás…" }
@@ -55,7 +42,6 @@ class OverlayService : Service() {
             maxLines = 3
         }
         overlayView = tv
-
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -72,7 +58,6 @@ class OverlayService : Service() {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             y = 80
         }
-
         try {
             windowManager?.addView(tv, params)
         } catch (e: Exception) {
@@ -80,7 +65,6 @@ class OverlayService : Service() {
             stopSelf()
         }
     }
-
     private fun hideOverlay() {
         running = false
         try {
@@ -91,7 +75,6 @@ class OverlayService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
-
     private fun buildNotification(): Notification {
         val channelId = "overlay_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -113,12 +96,10 @@ class OverlayService : Service() {
             .setOngoing(true)
             .build()
     }
-
     override fun onDestroy() {
         hideOverlay()
         super.onDestroy()
     }
-
     companion object {
         const val ACTION_SHOW = "hu.angolmagyar.fordito.OVERLAY_SHOW"
         const val ACTION_HIDE = "hu.angolmagyar.fordito.OVERLAY_HIDE"

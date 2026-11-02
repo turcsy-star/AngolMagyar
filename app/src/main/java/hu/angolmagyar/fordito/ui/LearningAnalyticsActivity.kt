@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,7 +20,6 @@ import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import java.text.SimpleDateFormat
 import java.util.Locale
-
 class LearningAnalyticsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); enableEdgeToEdge()
@@ -29,7 +27,6 @@ class LearningAnalyticsActivity : ComponentActivity() {
         setContent { AngolMagyarTheme(isTrueBlack = prefs.oledBlack) { LearningAnalyticsScreen(onBack = { finish() }) } }
     }
 }
-
 @Composable private fun LearningAnalyticsScreen(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val store = remember { LearningAnalyticsStore(context) }
@@ -86,7 +83,6 @@ class LearningAnalyticsActivity : ComponentActivity() {
         Text("Adatvédelem: az elemzés kizárólag összesített számlálókat tárol az alkalmazás helyi beállításaiban. Az adatok nem kerülnek hálózatra.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
 @Composable private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
     PremiumCard(modifier) { Column(verticalArrangement = Arrangement.spacedBy(5.dp)) { Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) } }
 }

@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito.ui
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,8 +34,6 @@ import hu.angolmagyar.fordito.core.db.ReviewScheduleEntity
 import hu.angolmagyar.fordito.ui.design.PremiumCard
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import kotlinx.coroutines.launch
-
-/** User-facing, offline-only quality and memory workspace. It is read-only except for audit queries. */
 class OfflineIntelligenceCenterActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +46,6 @@ class OfflineIntelligenceCenterActivity : ComponentActivity() {
         }
     }
 }
-
 @Composable
 private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -66,7 +62,6 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
     var memoryMatches by remember { mutableStateOf(emptyList<hu.angolmagyar.fordito.OfflineMemoryRanker.Match>()) }
     var dueItems by remember { mutableStateOf(emptyList<ReviewScheduleEntity>()) }
     var busy by remember { mutableStateOf(false) }
-
     fun refreshOverview() {
         scope.launch {
             busy = true
@@ -82,9 +77,7 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
             busy = false
         }
     }
-
     LaunchedEffect(Unit) { refreshOverview() }
-
     Column(
         Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -93,7 +86,6 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
         Text("DIAMOND • OFFLINE INTELLIGENCE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Minőség és tanulási központ", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Helyi szótár, fordítási memória és ismétlési állapot – internetkapcsolat nélkül.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("HELYI ÁLLAPOT", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -104,7 +96,6 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
                 OutlinedButton(onClick = { refreshOverview() }, enabled = !busy) { Text("Állapot frissítése") }
             }
         }
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("FORDÍTÁSMINŐSÉG-ELLENŐRZÉS", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -131,7 +122,6 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
                 }
             }
         }
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("FORDÍTÁSI MEMÓRIA", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -162,7 +152,6 @@ private fun OfflineIntelligenceCenterScreen(onBack: () -> Unit) {
                 Text("A keresés offline, lexikai hasonlóság alapján működik; nem szemantikus AI-értékelés.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("KÖVETKEZŐ ISMÉTLÉSEK", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)

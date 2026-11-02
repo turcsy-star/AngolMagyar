@@ -1,26 +1,8 @@
 package hu.angolmagyar.fordito
-
-/**
- * Hátralévő idő a Whisper tényleges működése szerint: a modell 30 mp-es ablakokban számol, tehát egy darab
- * ideje az ablakok számával arányos (az 1–10 mp-es apró darab is egy teljes ablaknyi időbe kerül).
- * A mért "ms / ablak" a már kész darabokból jön, ennek hiányában a korábbi futásokból.
- */
 object EtaModel {
     const val WINDOW_MS = 30_000L
-    /** A felismerés utáni mentési lépés becsült ideje. */
     const val TAIL_MS = 25_000L
-
     fun windows(speechMs: Long): Int = ((speechMs + WINDOW_MS - 1) / WINDOW_MS).toInt().coerceAtLeast(1)
-
-    /**
-     * @param lens darabonkénti beszédhossz (ms)
-     * @param state 0 = vár, 1 = dolgozik, 2 = kész
-     * @param frac darabonkénti haladás 0..1
-     * @param tookMs a kész darabok ideje (0 = ismeretlen, pl. folytatásból átvett)
-     * @param elapsedMs a dolgozó darabok eddigi ideje
-     * @param priorMsPerWindow korábbi futásokból, 0 = nincs adat
-     * @return hátralévő idő (ms) a mentéssel együtt, vagy -1, ha még nem becsülhető
-     */
     fun remainingMs(
         lens: LongArray, state: IntArray, frac: DoubleArray, tookMs: LongArray, elapsedMs: LongArray,
         priorMsPerWindow: Long
@@ -34,7 +16,6 @@ object EtaModel {
         }
         var perWin = if (doneWin > 0) doneMs.toDouble() / doneWin else priorMsPerWindow.toDouble()
         if (perWin <= 0.0) {
-            // még nincs kész darab és korábbi adat sem: a dolgozó darab saját tempójából
             for (i in 0 until n) {
                 if (state[i] == 1 && frac[i] >= 0.1 && elapsedMs[i] >= 5000) {
                     perWin = elapsedMs[i] / (windows(lens[i]) * frac[i])

@@ -1,8 +1,5 @@
 package hu.angolmagyar.fordito.ui.design
-
 import androidx.compose.ui.graphics.Color
-
-/** App-wide premium palettes. Values are deliberately restrained to preserve text contrast. */
 data class LuxuryPalette(
     val id: String,
     val title: String,
@@ -13,7 +10,6 @@ data class LuxuryPalette(
     val edge: Color,
     val text: Color
 )
-
 object LuxuryPalettes {
     val all = listOf(
         LuxuryPalette("forest", "Forest Graphite", Color(0xFF07130F), Color(0xFF12231B), Color(0xFF62A982), Color(0xFF2F7657), Color(0xFFB7E0C7), Color(0xFFF0F8F2)),

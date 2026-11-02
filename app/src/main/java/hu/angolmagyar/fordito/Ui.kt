@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.animation.AnimatorSet
 import android.animation.ValueAnimator
 import android.animation.ObjectAnimator
@@ -25,22 +24,13 @@ import androidx.appcompat.widget.AppCompatImageButton
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.graphics.toArgb
 import hu.angolmagyar.fordito.ui.design.LuxuryPalettes
-
-/** Közös, kézzel épített UI-elemek (téma-érzékeny színekkel). */
 object Ui {
-
-    /** Tartalom maximális szélessége (tablet / fekvő mód). */
     private const val MAX_CONTENT_DP = 640
-
     fun dp(ctx: Context, v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
-
-    /** Android 12+: a háttérképből képzett rendszer-kiemelőszín (Beállítások → Haladó → Dinamikus színek). */
     fun dynamicColors(ctx: Context): Boolean = try {
         android.os.Build.VERSION.SDK_INT >= 31 && Prefs(ctx).raw().getBoolean("dynColors", false)
     } catch (_: Exception) { false }
-
     fun setDynamicColors(ctx: Context, on: Boolean) { Prefs(ctx).raw().edit().putBoolean("dynColors", on).apply() }
-
     fun color(ctx: Context, res: Int): Int {
         if (android.os.Build.VERSION.SDK_INT >= 31 && (res == R.color.primary || res == R.color.accentGlow || res == R.color.primaryDim) && dynamicColors(ctx)) {
             val night = (ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
@@ -49,8 +39,6 @@ object Ui {
                 ContextCompat.getColor(ctx, if (night) android.R.color.system_accent1_200 else android.R.color.system_accent1_600)
             } catch (_: Exception) { ContextCompat.getColor(ctx, res) }
         }
-        // Infinity Luxury paletta: a régi View-alapú képernyők is ugyanazt a palettát használják,
-        // mint a Compose felület. Így a kártyák, hátterek, szövegek és kiemelések együtt frissülnek.
         val prefs = Prefs(ctx)
         if (prefs.platinumTheme) {
             val palette = LuxuryPalettes.byId(prefs.luxuryThemeId)
@@ -65,7 +53,6 @@ object Ui {
                 R.color.accentGlow -> return palette.glow.toArgb()
             }
         }
-        // választott kiemelőszín-téma (az indigó az alap, az nem változtat semmit)
         if (res == R.color.primary || res == R.color.primaryDim || res == R.color.accentGlow) {
             if (Accent.id(ctx) != "indigo") {
                 return if (res == R.color.accentGlow) Accent.glow(ctx) else Accent.primary(ctx)
@@ -73,8 +60,6 @@ object Ui {
         }
         return ContextCompat.getColor(ctx, res)
     }
-
-    /** Függőleges oszlop, amely széles képernyőn nem nyúlik szét. */
     private class MaxWidthColumn(ctx: Context, private val maxPx: Int) : LinearLayout(ctx) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val size = MeasureSpec.getSize(widthMeasureSpec)
@@ -87,11 +72,8 @@ object Ui {
             super.onMeasure(w, heightMeasureSpec)
         }
     }
-
     fun column(ctx: Context): LinearLayout =
         MaxWidthColumn(ctx, dp(ctx, MAX_CONTENT_DP)).apply { orientation = LinearLayout.VERTICAL }
-
-    /** ScrollView, amelyben az oszlop vízszintesen középre kerül. */
     fun scrollOf(ctx: Context, column: View): ScrollView =
         ScrollView(ctx).apply {
             isFillViewport = true
@@ -107,11 +89,6 @@ object Ui {
                 )
             )
         }
-
-    /**
-     * Prémium, kék cinematic fejléc a régi View-alapú képernyőkhöz.
-     * Nem helyettesít funkciót: csak vizuális hierarchiát és rövid belépési animációt ad.
-     */
     fun heroHeader(ctx: Context, eyebrow: String, heading: String, detail: String): LinearLayout {
         val wrap = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -127,7 +104,6 @@ object Ui {
             alpha = 0f
             translationY = dp(ctx, 12).toFloat()
         }
-        // Finom, neon-cyan fénycsík: egységes filmes motívum minden régi View-képernyőn.
         wrap.addView(View(ctx).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 intArrayOf(0xFF22D3EE.toInt(), 0xFF60A5FA.toInt(), 0x0022D3EE))
@@ -163,8 +139,6 @@ object Ui {
             .setDuration(520).setInterpolator(DecelerateInterpolator(1.7f)).start()
         return wrap
     }
-
-    /** Egységes, élénk kék szakaszjelölő a hosszú képernyők hierarchiájához. */
     fun sectionLabel(ctx: Context, label: String): TextView =
         TextView(ctx).apply {
             text = label.uppercase()
@@ -174,13 +148,11 @@ object Ui {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(ctx, 2), dp(ctx, 18), 0, dp(ctx, 5))
         }
-
     fun card(ctx: Context): LinearLayout =
         LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             val pad = dp(ctx, 18)
             setPadding(pad, pad, pad, pad)
-            // finom, üveges hatás: a kártya színe enyhén a kiemelőszín felé árnyalódik
             val base = color(ctx, R.color.card)
             val tint = androidx.core.graphics.ColorUtils.blendARGB(base, color(ctx, R.color.accentGlow), 0.085f)
             background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(
@@ -192,7 +164,6 @@ object Ui {
                 setStroke(dp(ctx, 1), androidx.core.graphics.ColorUtils.setAlphaComponent(color(ctx, R.color.accentGlow), 76))
             }
             elevation = dp(ctx, 3).toFloat()
-            // Rövid, visszafogott cascade-enter. Nem érinti a listener-eket vagy a tartalomállapotot.
             val reducedMotion = try {
                 Prefs(ctx).reduceMotion || android.provider.Settings.Global.getFloat(
                     ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
@@ -209,7 +180,6 @@ object Ui {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(ctx, 12) }
         }
-
     fun text(
         ctx: Context, t: String, size: Float, colorRes: Int, bold: Boolean
     ): TextView = TextView(ctx).apply {
@@ -219,20 +189,16 @@ object Ui {
         if (bold) setTypeface(typeface, Typeface.BOLD)
         letterSpacing = 0.01f
     }
-
     fun title(ctx: Context, t: String, size: Float = 22f): TextView =
         text(ctx, t, size, R.color.textPrimary, true).apply {
             setPadding(0, dp(ctx, 2), 0, dp(ctx, 4))
             letterSpacing = -0.01f
         }
-
     fun body(ctx: Context, t: String): TextView = text(ctx, t, 15f, R.color.textPrimary, false)
-
     fun small(ctx: Context, t: String): TextView =
         text(ctx, t, 13f, R.color.textSecondary, false).apply {
             setPadding(0, dp(ctx, 2), 0, dp(ctx, 2))
         }
-
     fun button(ctx: Context, label: String, filled: Boolean, onClick: () -> Unit): AppCompatButton =
         AppCompatButton(ctx).apply {
             text = label
@@ -260,11 +226,6 @@ object Ui {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dp(ctx, 10) }
         }
-
-    /**
-     * Kompakt indítókártya: ikon + cím + alcím. A kiemelt (pl. utoljára használt) kártya
-     * színes, a többi csendes keretes.
-     */
     fun modeCard(
         ctx: Context, iconRes: Int, title: String, subtitle: String,
         highlighted: Boolean, onClick: () -> Unit
@@ -321,9 +282,6 @@ object Ui {
             addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
     }
-
-
-    /** Négyzetes indító csempe: ikon + cím + rövid leírás. Két csempe fér egymás mellé. */
     fun tile(
         ctx: Context, iconRes: Int, title: String, subtitle: String,
         enabled: Boolean = true, onClick: () -> Unit
@@ -368,8 +326,6 @@ object Ui {
             })
         }
     }
-
-    /** Két csempe egymás mellett. */
     fun tileRow(ctx: Context, left: View, right: View): LinearLayout =
         LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -383,7 +339,6 @@ object Ui {
                 marginStart = dp(ctx, 5)
             })
         }
-
     fun smallButton(ctx: Context, label: String, onClick: () -> Unit): AppCompatButton =
         AppCompatButton(ctx).apply {
             text = label
@@ -407,8 +362,6 @@ object Ui {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
         }
-
-    /** Négyzetes ikongomb leírással (TalkBack + hosszú nyomásra tooltip). */
     fun iconButton(ctx: Context, iconRes: Int, description: String, onClick: () -> Unit): AppCompatImageButton =
         AppCompatImageButton(ctx).apply {
             setImageResource(iconRes)
@@ -427,7 +380,6 @@ object Ui {
             }
             layoutParams = LinearLayout.LayoutParams(dp(ctx, 46), dp(ctx, 46))
         }
-
     fun progressRow(ctx: Context): Pair<ProgressBar, TextView> {
         val bar = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
@@ -442,13 +394,10 @@ object Ui {
         val label = small(ctx, "")
         return bar to label
     }
-
-    /** Staggered fade+slide belépés a gyerek view-kra. */
     fun animateIn(parent: ViewGroup, delayStepMs: Long = 60) {
         var d = 0L
         for (i in 0 until parent.childCount) {
             val v = parent.getChildAt(i)
-            // kezdőállapot: csak itt, az animáció indításakor lesz átlátszó
             v.alpha = 0f
             v.translationY = dp(parent.context, 16).toFloat()
             v.animate()
@@ -461,8 +410,6 @@ object Ui {
             d += delayStepMs
         }
     }
-
-    /** Animáció nélkül láthatóvá teszi a gyerekeket (frissítéskor nincs villogás). */
     fun settle(parent: ViewGroup) {
         for (i in 0 until parent.childCount) {
             val v = parent.getChildAt(i)
@@ -470,7 +417,6 @@ object Ui {
             v.translationY = 0f
         }
     }
-
     fun pulse(view: View) {
         val a1 = ObjectAnimator.ofFloat(view, View.SCALE_X, 1f, 1.06f, 1f)
         val a2 = ObjectAnimator.ofFloat(view, View.SCALE_Y, 1f, 1.06f, 1f)

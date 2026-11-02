@@ -1,5 +1,4 @@
 package hu.angolmagyar.fordito
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -49,11 +48,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
-/**
- * Compose-alapú Beállítások – Megjelenés / kényelem szekció.
- * A klasszikus SettingsActivity-ból is elérhető; részleges Compose migráció.
- */
 class SettingsComposeActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,7 +86,6 @@ class SettingsComposeActivity : ComponentActivity() {
         }
     }
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
@@ -101,7 +94,6 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
     var oled by remember { mutableStateOf(prefs.oledBlack) }
     var haptics by remember { mutableStateOf(prefs.haptics) }
     var keepScreen by remember { mutableStateOf(prefs.keepScreenOn) }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -146,7 +138,6 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
                     }
                 }
             }
-
             SectionCard(title = "Visszajelzés", icon = Icons.Default.Vibration) {
                 SwitchRow(
                     title = "Haptikus rezgés",
@@ -158,7 +149,6 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
                     if (it) Haptics.click(ctx)
                 }
             }
-
             SectionCard(title = "Kijelző", icon = Icons.Default.PhoneAndroid) {
                 SwitchRow(
                     title = "Képernyő ébren tartása",
@@ -169,7 +159,6 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
                     prefs.keepScreenOn = it
                 }
             }
-
             Text(
                 "A többi beállítás (felismerő, fordítás, szabályok) a klasszikus Beállításokban érhető el.",
                 style = MaterialTheme.typography.bodySmall,
@@ -179,7 +168,6 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
         }
     }
 }
-
 @Composable
 private fun SectionCard(title: String, icon: ImageVector, content: @Composable () -> Unit) {
     Card(
@@ -201,7 +189,6 @@ private fun SectionCard(title: String, icon: ImageVector, content: @Composable (
         }
     }
 }
-
 @Composable
 private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
@@ -215,7 +202,6 @@ private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
-
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
