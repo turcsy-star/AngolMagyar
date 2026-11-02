@@ -15,12 +15,12 @@ class PremiumTokensTest {
 
     @Test fun spacingAndMotionTokensArePositive() {
         val spacing = PremiumSpacing()
-        val motion = PremiumMotion()
+        val motion = PremiumMotion
         assertTrue(spacing.xSmall.value > 0f)
         assertTrue(spacing.small >= spacing.xSmall)
         assertTrue(spacing.large >= spacing.medium)
-        assertTrue(motion.shortMillis > 0)
-        assertTrue(motion.standardMillis >= motion.shortMillis)
-        assertTrue(motion.longMillis >= motion.standardMillis)
+        assertTrue(motion.FADE > 0)
+        assertTrue(motion.STATE_CHANGE >= motion.FADE)
+        assertTrue(motion.CARD_ENTER >= motion.STATE_CHANGE)
     }
 }

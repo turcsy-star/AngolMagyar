@@ -80,11 +80,8 @@ class Overlay(
         setColor(0x33FFFFFF)
     }
 
-    private fun pressFeedback(v: View) {
+    private fun pressFeedback(@Suppress("UNUSED_PARAMETER") v: View) {
         Haptics.tick(ctx)
-        v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(60).withEndAction {
-            v.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
-        }.start()
     }
 
     /** Szöveges chip (leírással a kisegítő technológiáknak). */

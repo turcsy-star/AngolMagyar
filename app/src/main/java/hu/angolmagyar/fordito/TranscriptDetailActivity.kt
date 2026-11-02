@@ -750,12 +750,25 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Export előtt: az ismétlődő hallucinációk (pl. "Bye." ×4) kiszűrése és olvasható időzítés
+     * (a napló csak kezdő időt tárol, ezért a blokk-hossz a szöveghosszhoz igazodik).
+     */
+    private fun tidyForExport(snap: List<SrtExporter.Cue>): List<SrtExporter.Cue> {
+        var w = snap
+        try {
+            if (SubPrefs.hallucFilter(this) && w.size >= 2) w = Hallucination.clean(w).cues
+            if (SubPrefs.reflow(this)) w = SubFormat.polish(w)
+        } catch (e: Exception) { DiagLog.swallow("TranscriptDetailActivity", e) }
+        return w
+    }
+
     private fun exportSrt(mode: SrtExporter.Mode) {
         val snap = cues.toList()
         val m = if (hasTargets(snap)) mode else SrtExporter.Mode.SOURCE_ONLY
         confirmSubtitleExport(snap, m) {
             saveAs(baseName() + ".srt") { out ->
-                out.write(SrtExporter.build(snap, m).toByteArray(Charsets.UTF_8))
+                out.write(SrtExporter.build(tidyForExport(snap), m).toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -765,7 +778,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
         confirmSubtitleExport(snap, m) {
             saveAs(baseName() + ".vtt") { out ->
-                out.write(SrtExporter.buildVtt(snap, m).toByteArray(Charsets.UTF_8))
+                out.write(SrtExporter.buildVtt(tidyForExport(snap), m).toByteArray(Charsets.UTF_8))
             }
         }
     }
@@ -775,7 +788,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         val m = if (hasTargets(snap)) SrtExporter.Mode.BOTH else SrtExporter.Mode.SOURCE_ONLY
         confirmSubtitleExport(snap, m) {
             saveAs(baseName() + ".ass") { out ->
-                out.write(SrtExporter.buildAss(snap, m).toByteArray(Charsets.UTF_8))
+                out.write(SrtExporter.buildAss(tidyForExport(snap), m).toByteArray(Charsets.UTF_8))
             }
         }
     }

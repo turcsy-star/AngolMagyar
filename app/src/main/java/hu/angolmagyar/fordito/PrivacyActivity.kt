@@ -1,115 +1,182 @@
 package hu.angolmagyar.fordito
 
 import android.os.Bundle
-import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.widget.SwitchCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import hu.angolmagyar.fordito.ui.design.PremiumCard
+import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Adatvédelem: mi marad a telefonon, mi kerül ki; mentés, visszaállítás, törlés. */
-class PrivacyActivity : AppCompatActivity() {
-
-    private lateinit var prefs: Prefs
-    private fun dp(v: Int) = Ui.dp(this, v)
-
-    private val exportLauncher =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-            if (uri == null) return@registerForActivityResult
-            Thread {
-                try {
-                    val n = contentResolver.openOutputStream(uri)?.use { BackupHelper.export(this, it) } ?: 0
-                    runOnUiThread { Toast.makeText(this, "Mentve ($n átirat + beállítások).", Toast.LENGTH_LONG).show() }
-                } catch (e: Exception) {
-                    runOnUiThread { Toast.makeText(this, "Mentési hiba: ${e.message}", Toast.LENGTH_LONG).show() }
-                }
-            }.start()
-        }
-
-    private val importLauncher =
-        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri == null) return@registerForActivityResult
-            Thread {
-                try {
-                    val n = contentResolver.openInputStream(uri)?.use { BackupHelper.import(this, it) } ?: 0
-                    runOnUiThread {
-                        Toast.makeText(
-                            this, "Visszaállítva ($n átirat). Indítsd újra az appot a beállításokhoz.",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                } catch (e: Exception) {
-                    runOnUiThread { Toast.makeText(this, "Visszaállítási hiba: ${e.message}", Toast.LENGTH_LONG).show() }
-                }
-            }.start()
-        }
-
+/** Adatvédelem: mi marad a telefonon, mi kerül ki; mentés, visszaállítás, törlés. (Compose, 4.2.10) */
+class PrivacyActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        prefs = Prefs(this)
-        val column = Ui.column(this).apply { setPadding(dp(16), dp(16), dp(16), dp(32)) }
-        val scroll = Ui.scrollOf(this, column)
-        setContentView(scroll)
-        ViewCompat.setOnApplyWindowInsetsListener(scroll) { v, insets ->
-            val b = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(b.left, b.top, b.right, b.bottom)
-            insets
+        enableEdgeToEdge()
+        val prefs = Prefs(this)
+        setContent {
+            AngolMagyarTheme(isTrueBlack = prefs.oledBlack) {
+                PrivacyScreen(prefs = prefs, onBack = { finish() })
+            }
         }
-        column.addView(Ui.button(this, "← Vissza", false) { finish() })
-        column.addView(Ui.title(this, "Adatvédelem és mentés"))
+    }
+}
 
-        val c1 = Ui.card(this)
-        c1.addView(Ui.title(this, "Mi marad a telefonon?", 16f))
-        c1.addView(Ui.body(this,
-            "• A hang feldolgozása a telefonon történik (angol: Vosk; magyar: az Android beépített " +
-                "felismerője, offline csomaggal).\n• Az átiratok és a hangfelvételek csak a telefon belső tárában vannak.\n" +
-                "• A fordítás offline (ML Kit)."))
-        column.addView(c1)
+@Composable
+private fun PrivacyScreen(prefs: Prefs, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var allowOnline by remember { mutableStateOf(prefs.allowOnlineAsr) }
+    var confirmDelete by remember { mutableStateOf(false) }
 
-        val c2 = Ui.card(this)
-        c2.addView(Ui.title(this, "Mi kerül ki a hálózatra?", 16f))
-        c2.addView(Ui.body(this,
-            "• Modellek letöltése (Vosk, ML Kit), ez csak letöltés, hang nem megy ki.\n" +
-                "• Csak ha te engedélyezed: online magyar felismerés, ilyenkor a hang a Google szervereire kerül."))
-        c2.addView(SwitchCompat(this).apply {
-            text = "Online magyar felismerés engedélyezése (tartalék)"
-            isChecked = prefs.allowOnlineAsr
-            minHeight = dp(52)
-            setOnCheckedChangeListener { _, c -> prefs.allowOnlineAsr = c }
-        })
-        column.addView(c2)
+    fun toast(msg: String) = Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
 
-        val c3 = Ui.card(this)
-        c3.addView(Ui.title(this, "Mentés és visszaállítás", 16f))
-        c3.addView(Ui.small(this, "Egyetlen zip: beállítások + minden átirat. Telefoncseréhez vagy biztonsági másolatnak."))
-        c3.addView(Ui.button(this, "Mentés fájlba…", true) {
-            val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-            exportLauncher.launch("angolmagyar_mentes_$stamp.zip")
-        })
-        c3.addView(Ui.button(this, "Visszaállítás fájlból…", false) {
-            importLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
-        })
-        column.addView(c3)
-
-        val c4 = Ui.card(this)
-        c4.addView(Ui.title(this, "Törlés", 16f))
-        c4.addView(Ui.button(this, "Minden átirat törlése", false) {
-            AlertDialog.Builder(this)
-                .setTitle("Minden átirat törlése?")
-                .setMessage("Az átiratok és a kuka tartalma végleg törlődik. A beállítások megmaradnak.")
-                .setPositiveButton("Törlés") { _, _ ->
-                    val n = BackupHelper.deleteAllTranscripts(this)
-                    Toast.makeText(this, "$n fájl törölve.", Toast.LENGTH_LONG).show()
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val msg = withContext(Dispatchers.IO) {
+                try {
+                    val n = ctx.contentResolver.openOutputStream(uri)?.use { BackupHelper.export(ctx, it) } ?: 0
+                    "Mentve ($n átirat + beállítások)."
+                } catch (e: Exception) {
+                    "Mentési hiba: ${e.message}"
                 }
-                .setNegativeButton("Mégse", null)
-                .show()
-        })
-        column.addView(c4)
+            }
+            toast(msg)
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val msg = withContext(Dispatchers.IO) {
+                try {
+                    val n = ctx.contentResolver.openInputStream(uri)?.use { BackupHelper.import(ctx, it) } ?: 0
+                    "Visszaállítva ($n átirat). Indítsd újra az appot a beállításokhoz."
+                } catch (e: Exception) {
+                    "Visszaállítási hiba: ${e.message}"
+                }
+            }
+            toast(msg)
+        }
+    }
+
+    Column(
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding().navigationBarsPadding()
+            .verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        OutlinedButton(onClick = onBack, modifier = Modifier.heightIn(min = 48.dp)) { Text("← Vissza") }
+        Text("Adatvédelem és mentés", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() })
+
+        PremiumCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Mi marad a telefonon?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() })
+                Text("• A hang feldolgozása a telefonon történik (angol: Vosk; magyar: az Android beépített felismerője, offline csomaggal).\n" +
+                    "• Az átiratok és a hangfelvételek csak a telefon belső tárában vannak.\n" +
+                    "• A fordítás offline (ML Kit).\n" +
+                    "• A kamerás szövegfelismerés (OCR) is a telefonon fut.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+
+        PremiumCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Mi kerül ki a hálózatra?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() })
+                Text("• Modellek letöltése (Vosk, ML Kit), ez csak letöltés, hang nem megy ki.\n" +
+                    "• Csak ha te engedélyezed: online magyar felismerés, ilyenkor a hang a Google szervereire kerül.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Online magyar felismerés engedélyezése (tartalék)", Modifier.weight(1f))
+                    Switch(checked = allowOnline, onCheckedChange = { allowOnline = it; prefs.allowOnlineAsr = it })
+                }
+            }
+        }
+
+        PremiumCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Mentés és visszaállítás", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() })
+                Text("Egyetlen zip: beállítások + minden átirat. Telefoncseréhez vagy biztonsági másolatnak.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = {
+                    val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                    exportLauncher.launch("angolmagyar_mentes_$stamp.zip")
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Mentés fájlba…") }
+                OutlinedButton(onClick = {
+                    importLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "*/*"))
+                }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Visszaállítás fájlból…") }
+            }
+        }
+
+        PremiumCard {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Törlés", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics { heading() })
+                OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                    Text("Minden átirat törlése")
+                }
+            }
+        }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Minden átirat törlése?") },
+            text = { Text("Az átiratok és a kuka tartalma végleg törlődik. A beállítások megmaradnak.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    val n = BackupHelper.deleteAllTranscripts(ctx)
+                    toast("$n fájl törölve.")
+                }) { Text("Törlés") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Mégse") } }
+        )
     }
 }

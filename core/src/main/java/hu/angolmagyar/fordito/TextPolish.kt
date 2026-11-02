@@ -202,7 +202,8 @@ object TextPolish {
         "kövessen" to "kövess", "legyen" to "légy", "magyarázzon" to "magyarázz", "jelezzen" to "jelezz",
         "próbáljon" to "próbálj", "szálljon" to "szállj", "érjen" to "érj", "mosolyogjon" to "mosolyogj",
         "gyújtson" to "gyújts", "nyisson" to "nyiss", "csináljon" to "csinálj", "adjon" to "adj",
-        "kapjon" to "kapj", "fogadjon" to "fogadj", "döntsön" to "dönts", "pihenjen" to "pihenj"
+        "kapjon" to "kapj", "fogadjon" to "fogadj", "döntsön" to "dönts", "pihenjen" to "pihenj",
+        "siessen" to "siess", "feküdjön" to "feküdj", "induljon" to "indulj", "lazítson" to "lazíts"
     )
 
     // tárgyas / határozott ragozás
@@ -216,7 +217,9 @@ object TextPolish {
         "mutassa" to "mutasd", "ismételje" to "ismételd", "kapcsolja" to "kapcsold", "nyomja" to "nyomd",
         "hallgassa" to "hallgasd", "kövesse" to "kövesd", "ellenőrizze" to "ellenőrizd",
         "vizsgálja" to "vizsgáld", "engedje" to "engedd", "ismerje" to "ismerd",
-        "tudja" to "tudd", "lássa" to "lásd"
+        "tudja" to "tudd", "lássa" to "lásd",
+        "hozza" to "hozd", "feledje" to "feledd", "felejtse" to "felejtsd", "gondolja" to "gondold",
+        "kapja" to "kapd", "fogja" to "fogd", "érezze" to "érezd", "élvezze" to "élvezd"
     )
 
     // kérdés eleji ige: 3. sz. → 2. sz. ("Tud …?" → "Tudsz …?"); a 2. elem: tárgyas-e (a/az után is lehet)
@@ -255,6 +258,18 @@ object TextPolish {
 
     private val RE_KEREM = Regex(
         "^(\\s*)(Kérem)(,?\\s+)(" + (IMP_INDEF.keys + IMP_DEF.keys).joinToString("|") + ")(?![$L])",
+        RegexOption.IGNORE_CASE
+    )
+
+    // "Ne feledje …", "Csak jöjjön ide." – a felszólító nem a mondat első szava
+    private val RE_LEAD_IMP = Regex(
+        "^(\\s*)(ne|csak|inkább|most|na)(\\s+)(" + (IMP_INDEF.keys + IMP_DEF.keys).sortedByDescending { it.length }.joinToString("|") + ")(?![$L])",
+        RegexOption.IGNORE_CASE
+    )
+
+    // ", siessen." – vessző után, a mondat végén álló felszólító
+    private val RE_TAIL_IMP = Regex(
+        "(,\\s+)(" + (IMP_INDEF.keys + IMP_DEF.keys).sortedByDescending { it.length }.joinToString("|") + ")([.!…]*)$",
         RegexOption.IGNORE_CASE
     )
 
@@ -303,6 +318,20 @@ object TextPolish {
         // mondatkezdő felszólító
         s = replaceFirstWord(s, RE_IMP_INDEF, IMP_INDEF)
         s = replaceFirstWord(s, RE_IMP_DEF, IMP_DEF)
+        // "Ne feledje" / "Csak jöjjön ide"
+        RE_LEAD_IMP.find(s)?.let { m ->
+            val v = m.groupValues[4].lowercase()
+            val r = IMP_INDEF[v] ?: IMP_DEF[v]
+            if (r != null) s = m.groupValues[1] + m.groupValues[2] + m.groupValues[3] + matchCase(m.groupValues[4], r) + s.substring(m.value.length)
+        }
+        // "Gyerünk, siessen."
+        if (!question && !third) {
+            RE_TAIL_IMP.find(s)?.let { m ->
+                val v = m.groupValues[2].lowercase()
+                val r = IMP_INDEF[v] ?: IMP_DEF[v]
+                if (r != null) s = s.substring(0, m.range.first) + m.groupValues[1] + r + m.groupValues[3]
+            }
+        }
 
         // kérdés eleji igék
         if (question && !third) {

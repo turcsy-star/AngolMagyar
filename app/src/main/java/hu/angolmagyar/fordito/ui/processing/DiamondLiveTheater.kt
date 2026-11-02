@@ -36,6 +36,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +73,9 @@ private const val BARS = 56
  */
 @Composable
 fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
+    // Kotlin 2.0.21 Compose IR may lose the parameter mapping when this value is
+    // captured directly by generated animation/effect lambdas. Keep a stable State.
+    val reducedMotion = rememberUpdatedState(reduced)
     val ctx = LocalContext.current
     val cinema = remember(ctx) { PremiumMotion.cinemaEnabled(ctx) }
     val bars = remember { FloatArray(BARS) }
@@ -91,7 +95,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             val pct = (lvl * 100).toInt()
             if (pct > peak) peak = pct else peak = (peak * 0.92f).toInt()
             frame++
-            delay(if (reduced) 80L else 42L)
+            delay(if (reducedMotion.value) 80L else 42L)
         }
     }
 
@@ -105,10 +109,10 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
     val silence = phase == LivePhase.LISTENING && smoothLevel < 0.06f
     val spectrumScale by animateFloatAsState(
         targetValue = if (silence && cinema) 0.55f else 1f,
-        animationSpec = tween(if (reduced) 0 else 500),
+        animationSpec = tween(if (reducedMotion.value) 0 else 500),
         label = "silenceScale"
     )
-    val pulse = if (reduced) 0.6f else {
+    val pulse = if (reducedMotion.value) 0.6f else {
         val inf = rememberInfiniteTransition(label = "dl_pulse")
         inf.animateFloat(
             0.4f, 1f,
@@ -116,7 +120,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             label = "p"
         ).value
     }
-    val ringSpin = if (reduced) 0f else {
+    val ringSpin = if (reducedMotion.value) 0f else {
         val inf = rememberInfiniteTransition(label = "dl_ring")
         inf.animateFloat(
             0f, 360f,
@@ -139,7 +143,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 1.dp,
                 Brush.linearGradient(
                     listOf(
-                        PlatinumColors.Champagne.copy(alpha = 0.4f),
+                        PlatinumColors.DiamondWhite.copy(alpha = 0.4f),
                         PlatinumColors.IceBlue.copy(alpha = 0.2f),
                         PlatinumColors.SteelDark.copy(alpha = 0.45f)
                     )
@@ -156,7 +160,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
         ) {
             Text(
                 "DIAMOND · ÉLŐ JEL",
-                color = PlatinumColors.Champagne,
+                color = PlatinumColors.DiamondWhite,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 fontWeight = FontWeight.Medium
@@ -168,13 +172,13 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            PhaseOrb(phase = phase, level = smoothLevel, spin = ringSpin, pulse = pulse, reduced = reduced)
+            PhaseOrb(phase = phase, level = smoothLevel, spin = ringSpin, pulse = pulse, reduced = reducedMotion.value)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 AnimatedContent(
                     targetState = phase,
                     transitionSpec = {
-                        (fadeIn(tween(if (reduced) 0 else 220)) + slideInVertically { it / 5 })
-                            .togetherWith(fadeOut(tween(if (reduced) 0 else 160)))
+                        (fadeIn(tween(if (reducedMotion.value) 0 else 220)) + slideInVertically { it / 5 })
+                            .togetherWith(fadeOut(tween(if (reducedMotion.value) 0 else 160)))
                     },
                     label = "phaseTitle"
                 ) { p ->
@@ -233,7 +237,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 val age = i / (BARS - 1f)
                 val active = phase == LivePhase.LISTENING || phase == LivePhase.RECOGNIZING
                 val top = when {
-                    v > 0.7f -> PlatinumColors.Champagne
+                    v > 0.7f -> PlatinumColors.DiamondWhite
                     active -> PlatinumColors.IceBlue
                     else -> PlatinumColors.PlatinumHigh
                 }
@@ -300,7 +304,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             phaseLabel = phaseTitle(phase),
             primary = AppState.lastCaptionEn,
             secondary = AppState.lastCaptionHu.let { if (it.isNotBlank()) "→ $it" else "" },
-            reduced = reduced,
+            reduced = reducedMotion.value,
             cinema = cinema
         )
     }
@@ -311,18 +315,22 @@ private enum class LivePhase { IDLE, LISTENING, RECOGNIZING, TRANSLATING, PAUSED
 @Composable
 private fun rememberLivePhase(level: Float): LivePhase {
     var phase by remember { mutableStateOf(LivePhase.IDLE) }
+    // The polling coroutine survives recompositions; read the latest smoothed
+    // level instead of the value captured when LaunchedEffect(Unit) first ran.
+    val latestLevel = rememberUpdatedState(level)
     LaunchedEffect(Unit) {
         while (true) {
+            val currentLevel = latestLevel.value
             phase = when {
                 AppState.paused -> LivePhase.PAUSED
                 !AppState.running -> LivePhase.IDLE
-                level > 0.08f -> LivePhase.LISTENING
+                currentLevel > 0.08f -> LivePhase.LISTENING
                 AppState.lastCaptionEn.isNotBlank() && AppState.lastCaptionHu.isBlank() -> LivePhase.RECOGNIZING
                 AppState.lastCaptionHu.isNotBlank() -> LivePhase.TRANSLATING
                 else -> LivePhase.LISTENING
             }
-            // refine: if service running and quiet, still listening
-            if (AppState.running && !AppState.paused && level <= 0.08f &&
+            // Quiet input is still a listening state unless a caption is being processed.
+            if (AppState.running && !AppState.paused && currentLevel <= 0.08f &&
                 phase != LivePhase.TRANSLATING && phase != LivePhase.RECOGNIZING
             ) {
                 phase = LivePhase.LISTENING
@@ -345,7 +353,7 @@ private fun phaseColor(p: LivePhase) = when (p) {
     LivePhase.IDLE -> PlatinumColors.Steel
     LivePhase.LISTENING -> PlatinumColors.Emerald
     LivePhase.RECOGNIZING -> PlatinumColors.IceBlue
-    LivePhase.TRANSLATING -> PlatinumColors.Champagne
+    LivePhase.TRANSLATING -> PlatinumColors.DiamondWhite
     LivePhase.PAUSED -> PlatinumColors.Amber
 }
 
@@ -392,7 +400,8 @@ private fun PhaseOrb(
     pulse: Float,
     reduced: Boolean
 ) {
-    val animLevel by animateFloatAsState(level, tween(if (reduced) 0 else 120), label = "lv")
+    val reducedMotion = rememberUpdatedState(reduced)
+    val animLevel by animateFloatAsState(level, tween(if (reducedMotion.value) 0 else 120), label = "lv")
     Box(Modifier.size(68.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(68.dp)) {
             val stroke = 3.5.dp.toPx()
@@ -401,16 +410,16 @@ private fun PhaseOrb(
             val sweep = (0.12f + animLevel * 0.88f) * 360f
             drawArc(
                 brush = Brush.sweepGradient(
-                    listOf(phaseColor(phase), PlatinumColors.Champagne, phaseColor(phase))
+                    listOf(phaseColor(phase), PlatinumColors.DiamondWhite, phaseColor(phase))
                 ),
-                startAngle = -90f + if (reduced) 0f else spin * 0.15f,
+                startAngle = -90f + if (reducedMotion.value) 0f else spin * 0.15f,
                 sweepAngle = sweep,
                 useCenter = false,
                 style = Stroke(stroke, cap = StrokeCap.Round),
                 size = Size(r * 2, r * 2),
                 topLeft = Offset(center.x - r, center.y - r)
             )
-            if (!reduced && (phase == LivePhase.LISTENING || phase == LivePhase.RECOGNIZING)) {
+            if (!reducedMotion.value && (phase == LivePhase.LISTENING || phase == LivePhase.RECOGNIZING)) {
                 val gr = r + 4.dp.toPx() * pulse
                 drawCircle(phaseColor(phase).copy(alpha = 0.2f * pulse), gr)
                 val ang = Math.toRadians(spin.toDouble())
@@ -433,9 +442,13 @@ private fun PhaseOrb(
 /** View-burkoló az Élő fordítás képernyőhöz. */
 class DiamondLiveView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     init {
-        val reduced = PremiumMotion.reduced(ctx)
         addView(
-            ComposeView(ctx).apply { setContent { DiamondLiveTheater(reduced) } },
+            ComposeView(ctx).apply {
+                // Resolve the motion preference in composition; do not capture a constructor-local value.
+                setContent {
+                    DiamondLiveTheater(reduced = PremiumMotion.reduced(LocalContext.current))
+                }
+            },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         )
     }

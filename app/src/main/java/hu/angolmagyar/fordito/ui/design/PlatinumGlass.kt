@@ -24,19 +24,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 
-/** Mikrointerakció: érintésre finoman összenyomódik (nem fogyasztja el az eseményt, a görgetés működik). */
-fun Modifier.pressScale(reduced: Boolean = false): Modifier = composed {
-    var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (pressed && !reduced) 0.97f else 1f, tween(if (reduced) 0 else 140), label = "press")
-    this.graphicsLayer { scaleX = scale; scaleY = scale }.pointerInput(Unit) {
-        awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            pressed = true
-            waitForUpOrCancellation()
-            pressed = false
-        }
-    }
-}
+/** Korábbi nyomásra összehúzódó animáció – a gombanimációkat megszüntettük, ezért ez szándékosan nem csinál semmit. */
+@Suppress("UNUSED_PARAMETER")
+fun Modifier.pressScale(reduced: Boolean = false): Modifier = this
 
 /** Többrétegű „üveg” felület: áttetsző fehér réteg, ferde fénykiemelés és átmenetes perem. */
 @Composable
@@ -46,8 +36,8 @@ fun PlatinumGlassCard(modifier: Modifier = Modifier, reduced: Boolean = false, c
         modifier.pressScale(reduced)
             .clip(shape)
             .background(Color.White.copy(alpha = 0.045f))
-            .background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent, PlatinumColors.Champagne.copy(alpha = 0.05f))))
-            .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f), PlatinumColors.Champagne.copy(alpha = 0.25f))), shape)
+            .background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.Transparent, PlatinumColors.DiamondWhite.copy(alpha = 0.05f))))
+            .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = 0.30f), Color.White.copy(alpha = 0.05f), PlatinumColors.DiamondWhite.copy(alpha = 0.25f))), shape)
             .padding(12.dp)
     ) { content() }
 }

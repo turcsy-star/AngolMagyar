@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -69,6 +70,7 @@ fun DiamondProcessTheater(
     modifier: Modifier = Modifier
 ) {
     val ctx = LocalContext.current
+    val reducedMotion = rememberUpdatedState(reduced)
     val cinema = remember { PremiumMotion.cinemaEnabled(ctx) }
     val stages = state.stages
     if (stages.isEmpty() && !state.running && !state.finished) return
@@ -77,7 +79,7 @@ fun DiamondProcessTheater(
         it.status == StageStatus.RUNNING || it.status == StageStatus.WARNING
     } ?: stages.lastOrNull { it.status == StageStatus.COMPLETED || it.status == StageStatus.FAILED }
 
-    val pulse = if (reduced || !state.running) 0f else {
+    val pulse = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_pulse")
         inf.animateFloat(
             0.35f, 1f,
@@ -85,7 +87,7 @@ fun DiamondProcessTheater(
             label = "p"
         ).value
     }
-    val sweep = if (reduced || !state.running) 0f else {
+    val sweep = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_sweep")
         inf.animateFloat(
             0f, 360f,
@@ -93,7 +95,7 @@ fun DiamondProcessTheater(
             label = "s"
         ).value
     }
-    val flow = if (reduced || !state.running) 0f else {
+    val flow = if (reducedMotion.value || !state.running) 0f else {
         val inf = rememberInfiniteTransition(label = "dpt_flow")
         inf.animateFloat(
             0f, 1f,
@@ -105,7 +107,7 @@ fun DiamondProcessTheater(
     val shape = RoundedCornerShape(20.dp)
     DiamondDepthStack(
         active = state.running,
-        reduced = reduced,
+        reduced = reducedMotion.value,
         cinema = cinema,
         modifier = modifier
             .fillMaxWidth()
@@ -114,7 +116,7 @@ fun DiamondProcessTheater(
                 1.dp,
                 Brush.linearGradient(
                     listOf(
-                        PlatinumColors.Champagne.copy(alpha = 0.35f),
+                        PlatinumColors.DiamondWhite.copy(alpha = 0.35f),
                         PlatinumColors.IceBlue.copy(alpha = 0.15f),
                         PlatinumColors.SteelDark.copy(alpha = 0.4f)
                     )
@@ -135,7 +137,7 @@ fun DiamondProcessTheater(
         ) {
             Text(
                 "DIAMOND · FOLYAMAT",
-                color = PlatinumColors.Champagne,
+                color = PlatinumColors.DiamondWhite,
                 fontSize = 10.sp,
                 letterSpacing = 2.sp,
                 fontWeight = FontWeight.Medium
@@ -165,8 +167,8 @@ fun DiamondProcessTheater(
         AnimatedContent(
             targetState = active?.title to active?.detail,
             transitionSpec = {
-                (fadeIn(tween(if (reduced) 0 else 280)) + slideInVertically(tween(if (reduced) 0 else 320)) { it / 6 })
-                    .togetherWith(fadeOut(tween(if (reduced) 0 else 180)))
+                (fadeIn(tween(if (reducedMotion.value) 0 else 280)) + slideInVertically(tween(if (reducedMotion.value) 0 else 320)) { it / 6 })
+                    .togetherWith(fadeOut(tween(if (reducedMotion.value) 0 else 180)))
             },
             label = "hero"
         ) { (title, detail) ->
@@ -179,7 +181,7 @@ fun DiamondProcessTheater(
                 running = state.running && active?.status == StageStatus.RUNNING,
                 pulse = pulse,
                 sweep = sweep,
-                reduced = reduced,
+                reduced = reducedMotion.value,
                 overallPercent = state.overallPercent,
                 elapsedMs = state.elapsedMs,
                 remainingMs = state.remainingMs
@@ -188,21 +190,21 @@ fun DiamondProcessTheater(
 
         // —— Lépés sín ——
         if (stages.isNotEmpty()) {
-            StepEnergyRail(stages = stages, flow = flow, reduced = reduced)
+            StepEnergyRail(stages = stages, flow = flow, reduced = reducedMotion.value)
         }
 
         // —— Lépéslista vizualizáció ——
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             stages.forEach { stage ->
-                StageRowRich(stage = stage, isActive = stage.index == active?.index, reduced = reduced)
+                StageRowRich(stage = stage, isActive = stage.index == active?.index, reduced = reducedMotion.value)
             }
         }
 
         // —— Élő tartalom ——
         AnimatedVisibility(
             visible = state.running && (state.heard.isNotBlank() || state.translated.isNotBlank()),
-            enter = fadeIn(tween(if (reduced) 0 else 250)),
-            exit = fadeOut(tween(if (reduced) 0 else 200))
+            enter = fadeIn(tween(if (reducedMotion.value) 0 else 250)),
+            exit = fadeOut(tween(if (reducedMotion.value) 0 else 200))
         ) {
             Column(
                 Modifier
@@ -293,7 +295,7 @@ private fun HeroOperationCard(
                 if (overall > 0f) {
                     drawArc(
                         brush = Brush.sweepGradient(
-                            listOf(PlatinumColors.Champagne, PlatinumColors.IceBlue, PlatinumColors.Champagne)
+                            listOf(PlatinumColors.DiamondWhite, PlatinumColors.IceBlue, PlatinumColors.DiamondWhite)
                         ),
                         startAngle = -90f,
                         sweepAngle = 360f * overall,
@@ -320,7 +322,7 @@ private fun HeroOperationCard(
                         drawCircle(PlatinumColors.IceBlue.copy(alpha = 0.22f * pulse), glowR, style = Stroke(2.dp.toPx()))
                         val ang = Math.toRadians(0.0)
                         drawCircle(
-                            PlatinumColors.Champagne.copy(alpha = 0.9f * pulse),
+                            PlatinumColors.DiamondWhite.copy(alpha = 0.9f * pulse),
                             3.dp.toPx(),
                             Offset(center.x + glowR * cos(ang).toFloat(), center.y + glowR * sin(ang).toFloat())
                         )
@@ -392,7 +394,7 @@ private fun HeroOperationCard(
                     if (w > 0) {
                         drawRoundRect(
                             Brush.horizontalGradient(
-                                listOf(PlatinumColors.Champagne, PlatinumColors.IceBlue)
+                                listOf(PlatinumColors.DiamondWhite, PlatinumColors.IceBlue)
                             ),
                             size = Size(w, size.height),
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx())
@@ -441,7 +443,7 @@ private fun StepEnergyRail(
                 val xe = x0 + (x1 - x0) * fill
                 drawLine(
                     Brush.horizontalGradient(
-                        listOf(PlatinumColors.Champagne.copy(alpha = 0.85f), PlatinumColors.IceBlue.copy(alpha = 0.75f))
+                        listOf(PlatinumColors.DiamondWhite.copy(alpha = 0.85f), PlatinumColors.IceBlue.copy(alpha = 0.75f))
                     ),
                     Offset(x0, cy), Offset(xe, cy),
                     3.dp.toPx(), StrokeCap.Round

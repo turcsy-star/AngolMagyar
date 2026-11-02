@@ -184,6 +184,7 @@ object SrtExporter {
     }
 
     private val STAMP_LINE by lazy { Regex("""^\[(\d{2}):(\d{2}):(\d{2})\]\s?(.*)$""") }
+    private val SPEAKER_LABEL by lazy { Regex("""^(S\d{1,2}):\s+""") }
     private val SPEAKER_PREFIX by lazy { Regex("""^\{([^\}]*)\}\s*""") }
 
     /** Átirat szöveg → Cue lista (sor alapú, a {Beszélő} jelölést is érti). */
@@ -199,6 +200,12 @@ object SrtExporter {
                     m.groupValues[3].toLong()) * 1000
                 var src = m.groupValues[4].trim()
                 var spk = ""
+                // régi jegyzőkönyv-formátum: "—: szöveg" (nincs beszélő) és "S1: szöveg"
+                if (src.startsWith("—:")) src = src.removePrefix("—:").trim()
+                else SPEAKER_LABEL.find(src)?.let { lm ->
+                    spk = lm.groupValues[1]
+                    src = src.substring(lm.value.length).trim()
+                }
                 SPEAKER_PREFIX.find(src)?.let { sm ->
                     spk = sm.groupValues[1].trim()
                     src = src.substring(sm.value.length).trim()
@@ -217,7 +224,10 @@ object SrtExporter {
             }
         }
         return raws.mapIndexed { i, r ->
-            val end = if (i + 1 < raws.size) raws[i + 1].start else r.start + 3000
+            // a napló csak kezdő időt tárol: a vég a következő kezdet, de nem húzódik a szöveghez képest értelmetlenül hosszúra
+            val chars = maxOf(r.source.length, r.target.length)
+            val own = r.start + minOf(7000L, maxOf(2500L, chars * 80L))
+            val end = if (i + 1 < raws.size) minOf(raws[i + 1].start, own) else own
             Cue(r.start, end, r.source, r.target, r.speaker)
         }
     }

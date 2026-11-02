@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -72,6 +73,7 @@ fun PlatinumFlowGraph(
     state: ProcessingUiState, selected: Int?, onSelect: (Int?) -> Unit,
     reduced: Boolean, modifier: Modifier = Modifier
 ) {
+    val reducedMotion = rememberUpdatedState(reduced)
     val nodes = flowNodes(state)
     if (nodes.isEmpty()) return
     val n = nodes.size
@@ -134,20 +136,20 @@ fun PlatinumFlowGraph(
                         style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
                 }
                 // adatáramlás: fénypontok csak ott, ahol a forráslépés tényleg fut
-                if (nodes[i].status == StageStatus.RUNNING && !reduced) {
+                if (nodes[i].status == StageStatus.RUNNING && !reducedMotion.value) {
                     for (k in 0 until 3) {
                         val t = (phase + k / 3f) % 1f
                         val p = pm.getPosition(len * t)
                         val al = sin(PI.toFloat() * t)
-                        drawCircle(Brush.radialGradient(listOf(PlatinumColors.Champagne.copy(alpha = 0.9f * al), Color.Transparent), p, 7.dp.toPx()), 7.dp.toPx(), p)
+                        drawCircle(Brush.radialGradient(listOf(PlatinumColors.DiamondWhite.copy(alpha = 0.9f * al), Color.Transparent), p, 7.dp.toPx()), 7.dp.toPx(), p)
                         drawCircle(PlatinumColors.PlatinumHigh.copy(alpha = al), 1.8.dp.toPx(), p)
                     }
                 }
             }
             for (i in 0 until n) {
                 val p = nodePos(i, n, w, h)
-                if (sels[i] > 0f) drawCircle(PlatinumColors.Champagne.copy(alpha = 0.7f * sels[i]), r + (7f + 2f * sels[i]).dp.toPx(), p, style = Stroke(1.6.dp.toPx()))
-                jewel(nodes[i].status, colors[i], checks[i], p.x, p.y, r, phase, reduced)
+                if (sels[i] > 0f) drawCircle(PlatinumColors.DiamondWhite.copy(alpha = 0.7f * sels[i]), r + (7f + 2f * sels[i]).dp.toPx(), p, style = Stroke(1.6.dp.toPx()))
+                jewel(nodes[i].status, colors[i], checks[i], p.x, p.y, r, phase, reducedMotion.value)
             }
         }
         Row(Modifier.fillMaxWidth()) {
@@ -164,7 +166,7 @@ fun PlatinumFlowGraph(
                     if (nd.sub.isNotEmpty()) Text(
                         nd.sub, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 1,
                         color = when (nd.status) {
-                            StageStatus.RUNNING -> PlatinumColors.Champagne
+                            StageStatus.RUNNING -> PlatinumColors.DiamondWhite
                             StageStatus.FAILED -> PlatinumColors.Ruby
                             StageStatus.WARNING -> PlatinumColors.Amber
                             else -> PlatinumColors.TextDim

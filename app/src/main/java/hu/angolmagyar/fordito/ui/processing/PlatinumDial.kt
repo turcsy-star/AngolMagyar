@@ -61,7 +61,7 @@ fun PlatinumDial(
         failed -> PlatinumColors.Ruby
         cancelled -> PlatinumColors.Steel
         finished -> PlatinumColors.Emerald
-        else -> PlatinumColors.Champagne
+        else -> PlatinumColors.DiamondWhite
     }
     val desc = "Összesített haladás: " + (percent?.let { "$it százalék" } ?: "ismeretlen")
 

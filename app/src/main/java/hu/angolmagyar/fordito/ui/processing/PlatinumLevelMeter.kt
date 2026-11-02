@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -47,6 +49,7 @@ private const val BARS = 48
  */
 @Composable
 fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
+    val reducedMotion = rememberUpdatedState(reduced)
     val bars = remember { FloatArray(BARS) }
     var frame by remember { mutableIntStateOf(0) }
     var peak by remember { mutableIntStateOf(0) } // 0..100, lassan lecsengő csúcsjelző
@@ -62,7 +65,7 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
             val p = (v * 100).toInt()
             peak = if (p >= peak) p else (peak - 1).coerceAtLeast(0)
             frame++
-            delay(if (reduced) 90L else 40L)
+            delay(if (reducedMotion.value) 90L else 40L)
         }
     }
 
@@ -81,13 +84,13 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
     Column(
         modifier.fillMaxWidth().clip(shape)
             .background(Brush.verticalGradient(listOf(PlatinumColors.GraphiteHigh, PlatinumColors.Onyx)))
-            .border(1.dp, Brush.linearGradient(listOf(PlatinumColors.PlatinumHigh.copy(alpha = 0.45f), PlatinumColors.SteelDark.copy(alpha = 0.2f), PlatinumColors.Champagne.copy(alpha = 0.35f))), shape)
+            .border(1.dp, Brush.linearGradient(listOf(PlatinumColors.PlatinumHigh.copy(alpha = 0.45f), PlatinumColors.SteelDark.copy(alpha = 0.2f), PlatinumColors.DiamondWhite.copy(alpha = 0.35f))), shape)
             .padding(12.dp)
             .semantics { contentDescription = "Hangszint: $now százalék, $source, $state" },
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(source, color = PlatinumColors.Champagne, fontSize = 10.sp, letterSpacing = 1.8.sp, modifier = Modifier.weight(1f))
+            Text(source, color = PlatinumColors.DiamondWhite, fontSize = 10.sp, letterSpacing = 1.8.sp, modifier = Modifier.weight(1f))
             Text(state, color = if (state == "FIGYEL") PlatinumColors.Emerald else PlatinumColors.TextDim, fontSize = 10.sp, letterSpacing = 1.4.sp)
         }
         Canvas(Modifier.fillMaxWidth().height(56.dp)) {
@@ -102,7 +105,7 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
                 val half = (v * (size.height / 2f - 2.dp.toPx())).coerceAtLeast(1.2.dp.toPx())
                 val x = i * slot + (slot - bw) / 2f
                 val age = i / (BARS - 1f) // az újabb minták fényesebbek
-                val top = if (v > 0.66f) PlatinumColors.Champagne else PlatinumColors.PlatinumHigh
+                val top = if (v > 0.66f) PlatinumColors.DiamondWhite else PlatinumColors.PlatinumHigh
                 drawRoundRect(
                     Brush.verticalGradient(listOf(top.copy(alpha = 0.35f + 0.65f * age), PlatinumColors.Steel.copy(alpha = 0.25f + 0.5f * age)), mid - half, mid + half),
                     Offset(x, mid - half), Size(bw, half * 2f), CornerRadius(bw / 2f)
@@ -119,8 +122,11 @@ fun PlatinumLevelMeter(reduced: Boolean, modifier: Modifier = Modifier) {
 /** View-burkoló a View-alapú Élő fordítás képernyőhöz. */
 class PlatinumLevelView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = null) : FrameLayout(ctx, attrs) {
     init {
-        val reduced = PremiumMotion.reduced(ctx)
-        addView(ComposeView(ctx).apply { setContent { PlatinumLevelMeter(reduced) } },
-            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(
+            ComposeView(ctx).apply {
+                setContent { PlatinumLevelMeter(PremiumMotion.reduced(LocalContext.current)) }
+            },
+            LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        )
     }
 }

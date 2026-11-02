@@ -53,7 +53,7 @@ object PerformanceRegressionSuite {
         val checks = mutableListOf<Check>()
 
         // --- Smart Context ---
-        timings += time("SmartContext.suggest", 50) {
+        timings += time("SmartContext.suggest") {
             val s = SmartContextTranslation.suggest(
                 "Please check the bank balance and the light on the right.",
                 null,
@@ -73,7 +73,7 @@ object PerformanceRegressionSuite {
         )
 
         // --- Translation Quality ---
-        timings += time("TranslationQuality.analyze", 50) {
+        timings += time("TranslationQuality.analyze") {
             val empty = TranslationQuality.analyze("Hello world", "")
             checks += Check("Quality.emptyTarget", empty.needsHumanReview && empty.criticalCount >= 1, TranslationQuality.summaryLine(empty))
             val ok = TranslationQuality.analyze("There are 350 apples.", "Van 350 alma.")
@@ -83,7 +83,7 @@ object PerformanceRegressionSuite {
         }
 
         // --- Hybrid engine (offline only, identity offline) ---
-        timings += time("HybridTranslationEngine", 30) {
+        timings += time("HybridTranslationEngine") {
             val offline = HybridTranslationEngine.OfflineTranslator { srcs -> srcs.map { "[HU]$it" } }
             val req = HybridTranslationEngine.Request(
                 sourceTexts = listOf("Hello", "World", ""),
@@ -109,14 +109,14 @@ object PerformanceRegressionSuite {
         }
 
         // --- System status snapshot ---
-        timings += time("SystemStatusSnapshot", 10) {
+        timings += time("SystemStatusSnapshot") {
             val snap = SystemStatusSnapshot.build("2.67.0", 6700)
             checks += Check("Snapshot.modules", snap.modules.isNotEmpty(), "n=${snap.modules.size}")
             checks += Check("Snapshot.actions", snap.quickActions.isNotEmpty(), "n=${snap.quickActions.size}")
         }
 
         // --- TranslationCheck sanity ---
-        timings += time("TranslationCheck", 20) {
+        timings += time("TranslationCheck") {
             val issues = TranslationCheck.check("There are 500 dogs.", "Van kutya.")
             checks += Check("TranslationCheck.number", "szám eltér" in issues, issues.toString())
         }

@@ -43,7 +43,15 @@ import hu.angolmagyar.fordito.PerformanceRegressionSuite
 import hu.angolmagyar.fordito.SmartContextTranslation
 import hu.angolmagyar.fordito.TranslationQuality
 import hu.angolmagyar.fordito.TranslationQualityAudit
+import hu.angolmagyar.fordito.DualTranslation
+import hu.angolmagyar.fordito.DictionaryPro
+import hu.angolmagyar.fordito.PronunciationCoach
+import hu.angolmagyar.fordito.PhrasebookStore
+import hu.angolmagyar.fordito.ui.design.DesignAudit
+import hu.angolmagyar.fordito.ui.design.InfinityGlobalUi
 import hu.angolmagyar.fordito.ui.design.PremiumCard
+import hu.angolmagyar.fordito.ui.design.PremiumMotion
+import hu.angolmagyar.fordito.ui.design.rememberAccessibilitySnapshot
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import hu.angolmagyar.fordito.intelligence.SynonymEngine
 import hu.angolmagyar.fordito.intelligence.PronunciationAssessment
@@ -79,6 +87,8 @@ private fun NextWaveTools(onBack: () -> Unit) {
     var customDictionaryMatches by remember { mutableStateOf(emptyList<Triple<String, String, String>>()) }
     var dictionaryStatus by remember { mutableStateOf("A saját szótár még nincs betöltve.") }
     var speechMessage by remember { mutableStateOf("A beszédfelismerés eredménye itt jelenik meg.") }
+    var saveMessage by remember { mutableStateOf("") }
+    var attempts by remember { mutableStateOf(emptyList<Int>()) }
     val appContext = LocalContext.current
     val database = remember { AppDatabase.get(appContext) }
     val scope = rememberCoroutineScope()
@@ -125,40 +135,21 @@ private fun NextWaveTools(onBack: () -> Unit) {
     DisposableEffect(tts) {
         onDispose { tts.stop(); tts.shutdown() }
     }
-    val dictionaryEntries = remember {
-        listOf(
-            Triple("actually", "valójában; tulajdonképpen", "Actually, I agree. – Tulajdonképpen egyetértek."),
-            Triple("address", "cím; megszólít; kezel", "What is your address? – Mi a címed?"),
-            Triple("afford", "megengedhet magának; futja rá", "I can't afford it. – Nem engedhetem meg magamnak."),
-            Triple("appreciate", "értékel; nagyra becsül; hálás", "I appreciate your help. – Hálás vagyok a segítségedért."),
-            Triple("available", "elérhető; rendelkezésre álló; szabad", "Is this seat available? – Szabad ez a hely?"),
-            Triple("break", "szünet; eltör; megszeg", "Let's take a break. – Tartsunk szünetet."),
-            Triple("charge", "díj; tölt; megvádol", "Charge your phone. – Töltsd fel a telefonod."),
-            Triple("fair", "igazságos; vásár; szőke", "That's fair. – Ez igazságos."),
-            Triple("get", "kap; szerez; megért; válik", "I get it. – Értem."),
-            Triple("issue", "probléma; ügy; kiadás; kibocsát", "We have an issue. – Van egy problémánk."),
-            Triple("kind", "kedves; fajta; típus", "What kind? – Milyen fajta?"),
-            Triple("leave", "elmegy; otthagy; szabadság", "Leave it here. – Hagyd itt."),
-            Triple("matter", "számít; ügy; dolog; anyag", "It doesn't matter. – Nem számít."),
-            Triple("mean", "jelent; szándékozik; fukar", "What do you mean? – Mire gondolsz?"),
-            Triple("miss", "hiányol; lekésik; kisasszony", "I miss you. – Hiányzol."),
-            Triple("notice", "észrevesz; értesítés; közlemény", "Did you notice? – Észrevetted?"),
-            Triple("point", "pont; lényeg; rámutat", "What's the point? – Mi értelme?"),
-            Triple("right", "helyes; jobb; jog; azonnal", "You're right. – Igazad van."),
-            Triple("run", "fut; működtet; vezet; futás", "The app runs well. – Az alkalmazás jól működik."),
-            Triple("save", "ment; megspórol; megment", "Save the file. – Mentsd el a fájlt."),
-            Triple("since", "óta; mivel; azóta", "Since Monday. – Hétfő óta."),
-            Triple("still", "még mindig; csendes; állókép", "I still remember. – Még mindig emlékszem."),
-            Triple("support", "támogat; alátámaszt; ügyfélszolgálat", "We support the project. – Támogatjuk a projektet."),
-            Triple("turn", "fordul; fordulat; sor; bekapcsol", "Turn left. – Fordulj balra."),
-            Triple("value", "érték; értékel; fontosság", "Good value. – Jó ár-érték arány."),
-            Triple("wonder", "tűnődik; csoda; kíváncsi", "I wonder why. – Kíváncsi vagyok, miért.")
-        )
+    val speakNow: (String, Float) -> Unit = { text, rate ->
+        val languageResult = tts.setLanguage(if (accent == "UK") Locale.UK else Locale.US)
+        speechMessage = when {
+            languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED ->
+                "A kiválasztott angol hang nem érhető el. Telepíts angol beszédhangot az Android szövegfelolvasó beállításaiban."
+            text.isBlank() -> "Írj be egy angol szöveget a felolvasáshoz."
+            !ttsReady -> "A beszédmotor még nem áll készen. Próbáld újra néhány másodperc múlva."
+            else -> {
+                tts.setSpeechRate(rate)
+                tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "platinum_pronunciation")
+                "Felolvasás indítva: $accent hangbeállítás."
+            }
+        }
     }
-    val dictionaryMatches = (customDictionaryMatches + dictionaryEntries.filter {
-        dictionaryQuery.isNotBlank() && (it.first.contains(dictionaryQuery.trim(), true) ||
-            it.second.contains(dictionaryQuery.trim(), true))
-    }).distinctBy { it.first.lowercase(Locale.ROOT) }.take(25)
+    val proHits = remember(dictionaryQuery) { DictionaryPro.search(dictionaryQuery) }
     val qualityMetrics = remember(source, translation) {
         val srcWords = source.trim().split(Regex("\\s+")).count { it.isNotBlank() }
         val dstWords = translation.trim().split(Regex("\\s+")).count { it.isNotBlank() }
@@ -192,7 +183,7 @@ private fun NextWaveTools(onBack: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         OutlinedButton(onClick = onBack) { Text("← Vissza") }
-        Text("PLATINUM • NEXT WAVE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text("DIAMOND • NEXT WAVE", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Intelligens fordítási eszközök", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Két használható alapmodul: kontextus-brief és determinisztikus minőségellenőrzés.")
         PremiumCard {
@@ -246,12 +237,24 @@ private fun NextWaveTools(onBack: () -> Unit) {
                 OutlinedTextField(alternativeA, { alternativeA = it }, Modifier.fillMaxWidth(), label = { Text("A fordítás") }, minLines = 2)
                 OutlinedTextField(alternativeB, { alternativeB = it }, Modifier.fillMaxWidth(), label = { Text("B fordítás") }, minLines = 2)
                 if (alternativeA.isNotBlank() && alternativeB.isNotBlank()) {
-                    val aAudit = TranslationQualityAudit.inspect(source, alternativeA)
-                    val bAudit = TranslationQualityAudit.inspect(source, alternativeB)
-                    Text("A változat: ${aAudit.findings.size} jelzés · B változat: ${bAudit.findings.size} jelzés",
-                        fontWeight = FontWeight.SemiBold)
-                    Text("A: ${alternativeA.trim().split(Regex("\\s+")).size} szó · B: ${alternativeB.trim().split(Regex("\\s+")).size} szó",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val cmp = DualTranslation.compare(source, alternativeA, alternativeB)
+                    Text("Hasonlóság: ${cmp.similarityPercent}% · A: ${cmp.wordsA} szó · B: ${cmp.wordsB} szó", fontWeight = FontWeight.SemiBold)
+                    if (cmp.common.isNotEmpty()) Text("Közös szavak: ${cmp.common.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (cmp.onlyA.isNotEmpty()) Text("Csak az A-ban: ${cmp.onlyA.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (cmp.onlyB.isNotEmpty()) Text("Csak a B-ben: ${cmp.onlyB.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Jelzések – A: ${cmp.findingsA.size} · B: ${cmp.findingsB.size}", fontWeight = FontWeight.SemiBold)
+                    cmp.findingsA.forEach { Text("• A: ${it.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    cmp.findingsB.forEach { Text("• B: ${it.message}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    cmp.notes.forEach { Text("• $it", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            saveMessage = if (PhrasebookStore(appContext).save(source, alternativeA)) "Az A változat mentve a szókincstárba." else "Az A változat nem menthető (üres vagy már szerepel)."
+                        }) { Text("A mentése") }
+                        OutlinedButton(onClick = {
+                            saveMessage = if (PhrasebookStore(appContext).save(source, alternativeB)) "A B változat mentve a szókincstárba." else "A B változat nem menthető (üres vagy már szerepel)."
+                        }) { Text("B mentése") }
+                    }
+                    if (saveMessage.isNotBlank()) Text(saveMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("A kisebb jelzésszám önmagában nem jelenti azt, hogy a fordítás jobb. Ellenőrizd a jelentést, a hangnemet és a természetességet is.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -260,19 +263,31 @@ private fun NextWaveTools(onBack: () -> Unit) {
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("📖 Dictionary Pro • Offline", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Beépített mini-szótár gyakori többjelentésű szavakkal és példamondatokkal. A keresés helyben működik.")
+                Text("Beépített szótár szófajokkal, többjelentésű szavakkal, hamis barátokkal és példamondatokkal. Angolul és magyarul is kereshetsz, helyben, ékezet nélkül is.")
                 OutlinedTextField(dictionaryQuery, { dictionaryQuery = it }, Modifier.fillMaxWidth(),
                     label = { Text("Angol szó vagy magyar jelentés") }, singleLine = true)
                 if (dictionaryQuery.isBlank()) {
                     Text("Kezdj el gépelni a szótár kereséséhez.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else if (dictionaryMatches.isEmpty()) {
-                    Text("Nincs találat a beépített mini-szótárban. Próbálj másik kifejezést.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (proHits.isEmpty() && customDictionaryMatches.isEmpty()) {
+                    Text("Nincs találat. Próbálj másik kifejezést.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
-                    dictionaryMatches.forEach { item ->
+                    proHits.forEach { hit ->
+                        val e = hit.entry
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text(item.first, fontWeight = FontWeight.Bold)
+                            Text(e.word, fontWeight = FontWeight.Bold)
+                            e.senses.forEach { Text(it.line()) }
+                            Text("${e.example} – ${e.exampleHu}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (e.tip.isNotBlank()) Text("Tipp: ${e.tip}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                            OutlinedButton(onClick = {
+                                dictionaryStatus = if (PhrasebookStore(appContext).save(e.word, e.senses.first().meanings.first())) "„${e.word}” mentve a szókincstárba." else "„${e.word}” már szerepel a szókincstárban."
+                            }) { Text("Mentés szókincstárba") }
+                        }
+                    }
+                    customDictionaryMatches.take(10).forEach { item ->
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("${item.first} (saját)", fontWeight = FontWeight.Bold)
                             Text(item.second)
-                            Text(item.third, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (item.third.isNotBlank()) Text(item.third, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -297,21 +312,11 @@ private fun NextWaveTools(onBack: () -> Unit) {
                     if (accent == "UK") Button(onClick = { accent = "UK" }) { Text("🇬🇧 Brit") }
                     else OutlinedButton(onClick = { accent = "UK" }) { Text("🇬🇧 Brit") }
                 }
-                Button(onClick = {
-                    val locale = if (accent == "UK") Locale.UK else Locale.US
-                    val languageResult = tts.setLanguage(locale)
-                    speechMessage = when {
-                        languageResult == TextToSpeech.LANG_MISSING_DATA || languageResult == TextToSpeech.LANG_NOT_SUPPORTED ->
-                            "A kiválasztott angol hang nem érhető el. Telepíts angol beszédhangot az Android szövegfelolvasó beállításaiban."
-                        source.isBlank() -> "Írj be egy angol szöveget a felolvasáshoz."
-                        !ttsReady -> "A beszédmotor még nem áll készen. Próbáld újra néhány másodperc múlva."
-                        else -> {
-                            tts.setSpeechRate(0.88f)
-                            tts.speak(source, TextToSpeech.QUEUE_FLUSH, null, "platinum_pronunciation")
-                            "Felolvasás indítva: $accent hangbeállítás."
-                        }
-                    }
-                }, modifier = Modifier.fillMaxWidth()) { Text("▶ Kiejtés meghallgatása") }
+                Button(onClick = { speakNow(source, 0.88f) }, modifier = Modifier.fillMaxWidth()) { Text("▶ Kiejtés meghallgatása") }
+                OutlinedButton(onClick = { speakNow(source, 0.6f) }, modifier = Modifier.fillMaxWidth()) { Text("🐢 Lassú felolvasás") }
+                PronunciationCoach.slowChunks(source, 3).forEach { chunk ->
+                    OutlinedButton(onClick = { speakNow(chunk, 0.65f) }, modifier = Modifier.fillMaxWidth()) { Text("▶ $chunk") }
+                }
                 Text(speechMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("A tényleges akcentus a telefonon telepített beszédhangtól függ; ez nem fonetikai pontozó és nem beszédfelismeréses értékelés.",
                     style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -351,6 +356,38 @@ private fun NextWaveTools(onBack: () -> Unit) {
                     val assessment = PronunciationAssessment.assess(source, recognizedSpeech)
                     Text("Szövegegyezés: ${assessment.scorePercent}% ", fontWeight = FontWeight.Bold)
                     Text("Helyettesítés: ${assessment.substitutions} · Kihagyás: ${assessment.deletions} · Betoldás: ${assessment.insertions}")
+                    val coach = PronunciationCoach.analyze(source, recognizedSpeech)
+                    coach.words.forEach { w ->
+                        val mark = when (w.status) {
+                            PronunciationCoach.WordStatus.CORRECT -> "✓"
+                            PronunciationCoach.WordStatus.WRONG -> "✗"
+                            PronunciationCoach.WordStatus.MISSING -> "–"
+                        }
+                        val extra = when (w.status) {
+                            PronunciationCoach.WordStatus.WRONG -> " (hallott: ${w.heard})"
+                            PronunciationCoach.WordStatus.MISSING -> " (kimaradt)"
+                            else -> ""
+                        }
+                        Text("$mark ${w.word}$extra", style = MaterialTheme.typography.bodySmall,
+                            color = if (w.status == PronunciationCoach.WordStatus.CORRECT) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                    }
+                    if (coach.extras.isNotEmpty()) Text("Többlet szavak: ${coach.extras.joinToString(", ")}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    coach.tips.forEach { Text("💡 $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    if (coach.practiceWords.isNotEmpty()) {
+                        Text("Gyakorolj még:", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            coach.practiceWords.take(3).forEach { pw ->
+                                OutlinedButton(onClick = { speakNow(pw, 0.6f) }) { Text("▶ $pw") }
+                            }
+                        }
+                    }
+                    OutlinedButton(onClick = { attempts = (attempts + coach.scorePercent).takeLast(10) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Próbálkozás rögzítése")
+                    }
+                    if (attempts.isNotEmpty()) {
+                        Text("Próbálkozások: ${attempts.joinToString(" → ") { "$it%" }} · ${PronunciationCoach.trend(attempts)}",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
@@ -386,12 +423,25 @@ private fun NextWaveTools(onBack: () -> Unit) {
                 Text("A Hybrid Engine már biztosítja az offline tartalékútvonalat és az adatvédelmi kapcsolókat.")
             }
         }
+        val auditRows = remember { DesignAudit.paletteRows() }
+        val a11y = rememberAccessibilitySnapshot()
         PremiumCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("✨ Platinum Motion / 💎 Infinity Global UI · v2.65", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("PremiumMotion: mozgásprofilok (FULL / SUBTLE / REDUCED / NONE), skálázott időtartamok, hurok-engedélyezés.")
-                Text("InfinityGlobalUi: központi paletták (Platinum Dark, Diamond Blue) és migrációs checklist.")
-                Text("A teljes View→Compose migráció és a tokenek minden képernyőre kiterjesztése a v3.00 Diamond integrációban zárul.")
+                Text("✨ Motion Engine · Global UI · Akadálymentesség", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Mozgásprofil: ${PremiumMotion.statusLabel(appContext)} (a Beállításokban módosítható). A gombok nem animálnak: csak hullámeffekt és haptika jelez.")
+                Text("Betűméret-skála: ${"%.2f".format(Locale.ROOT, a11y.fontScale)} · TalkBack: ${if (a11y.touchExplorationEnabled) "aktív" else "inaktív"} · Min. érintési cél: 48 dp",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Kontraszt-audit: ${DesignAudit.summaryLine(auditRows)}", fontWeight = FontWeight.SemiBold)
+                auditRows.forEach { r ->
+                    Text("${if (r.passes) "✓" else "○"} ${r.title}: szöveg ${"%.1f".format(Locale.ROOT, r.textRatio)}:1 · kiemelés ${"%.1f".format(Locale.ROOT, r.accentRatio)}:1",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (r.passes) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                }
+                Text("Global UI migráció: ${InfinityGlobalUi.progressLabel()}", fontWeight = FontWeight.SemiBold)
+                InfinityGlobalUi.migrationChecklist.forEach { (title, done) ->
+                    Text("${if (done) "✓" else "○"} $title", style = MaterialTheme.typography.bodySmall,
+                        color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary)
+                }
             }
         }
         var suiteReport by remember { mutableStateOf<PerformanceRegressionSuite.Report?>(null) }

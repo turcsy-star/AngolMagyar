@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -63,16 +64,6 @@ fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
         Prefs(context).reduceMotion ||
             ((context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
     }
-    val diamondTransition = rememberInfiniteTransition(label = "diamondCardShimmer")
-    val shimmerPosition = if (reducedMotion) 0.5f else {
-        val shimmer by diamondTransition.animateFloat(
-            initialValue = -0.25f,
-            targetValue = 1.25f,
-            animationSpec = infiniteRepeatable(tween(5200, easing = LinearEasing), RepeatMode.Restart),
-            label = "diamondCardShimmerPosition"
-        )
-        shimmer
-    }
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
     val reveal by animateFloatAsState(
@@ -88,13 +79,13 @@ fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
         border = BorderStroke(1.dp, Brush.linearGradient(
             colors = listOf(
                 luxuryPalette.accent.copy(alpha = 0.30f),
-                luxuryPalette.edge.copy(alpha = if (reducedMotion) 0.42f else 0.72f),
+                luxuryPalette.edge.copy(alpha = 0.60f),
                 colors.primary.copy(alpha = 0.24f),
                 luxuryPalette.glow.copy(alpha = 0.38f),
                 luxuryPalette.accent.copy(alpha = 0.30f)
             ),
-            start = Offset(shimmerPosition * 900f, 0f),
-            end = Offset(shimmerPosition * 900f + 360f, 560f)
+            start = Offset(0f, 0f),
+            end = Offset(900f, 560f)
         )),
         tonalElevation = 2.dp,
         shadowElevation = 3.dp
@@ -127,20 +118,6 @@ fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
                         RoundedCornerShape(PremiumShapes.card)
                     )
             )
-            if (!reducedMotion) {
-                Box(
-                    Modifier
-                        .matchParentSize()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(Color.Transparent, luxuryPalette.text.copy(alpha = 0.055f), Color.Transparent),
-                                start = Offset(shimmerPosition * 1100f, 0f),
-                                end = Offset(shimmerPosition * 1100f + 180f, 520f)
-                            ),
-                            RoundedCornerShape(PremiumShapes.card)
-                        )
-                )
-            }
             Box { content() }
         }
     }
@@ -158,7 +135,8 @@ fun PremiumSectionTitle(
             text = title.uppercase(),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.semantics { heading() }
         )
         if (!subtitle.isNullOrBlank()) {
             Text(
@@ -182,7 +160,7 @@ fun StatusPill(label: String, modifier: Modifier = Modifier, accent: Color = Mat
 @Composable
 fun PrimaryAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable RowScope.() -> Unit = {}) {
     val spacing = LocalSpacing.current
-    Button(onClick = onClick, enabled = enabled, modifier = modifier, shape = RoundedCornerShape(PremiumShapes.button)) {
+    Button(onClick = onClick, enabled = enabled, modifier = modifier.accessibleTouchTarget(), shape = RoundedCornerShape(PremiumShapes.button)) {
         Row(horizontalArrangement = Arrangement.spacedBy(spacing.small), verticalAlignment = Alignment.CenterVertically) {
             content()
             Text(label, style = MaterialTheme.typography.labelLarge)

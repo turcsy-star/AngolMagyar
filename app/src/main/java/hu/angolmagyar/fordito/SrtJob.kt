@@ -253,6 +253,11 @@ object SrtJob {
     @Volatile var histMsPerWindow = 0L
     /** Az utolsó észlelt haladás ideje (a "megállt a háttérben?" jelzéshez). */
     @Volatile var lastProgressMs = 0L
+    /** A futás alatt észlelt leghosszabb szünet két haladás-jelzés között (melegedő, lassuló telefonon hosszú lehet). */
+    @Volatile var maxGapMs = 0L
+
+    /** Ennyi haladás nélküli idő után jelzünk "elakadt?": legalább az alap küszöb, de a megfigyelt szünet kétszerese. */
+    fun stallLimitMs(): Long = maxOf(SrtJobService.STALL_WARN_MS, 2 * maxGapMs)
     /** Hány darabot (részt) kellett kihagyni, mert a felismerés elakadt (elakadás-őr). */
     @Volatile var skippedParts = 0
 
@@ -310,6 +315,7 @@ object SrtJob {
         endMs = 0
         stepStartMs = startMs
         lastProgressMs = startMs
+        maxGapMs = 0L
         overall = 0
         etaAtMs = 0
         etaBasis = ""
@@ -399,6 +405,8 @@ object SrtJob {
         if (st.state != ACTIVE) return
         val p = pct.coerceIn(0, 100)
         val now = System.currentTimeMillis()
+        val gap = now - lastProgressMs
+        if (gap in 1..3_600_000L && gap > maxGapMs) maxGapMs = gap
         lastProgressMs = now
         st.pct = p
         st.comment = msg

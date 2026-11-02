@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -35,7 +36,7 @@ import kotlin.math.sin
 
 internal fun jewelColor(s: StageStatus): Color = when (s) {
     StageStatus.PENDING -> PlatinumColors.GraphiteHigh
-    StageStatus.RUNNING -> PlatinumColors.Champagne
+    StageStatus.RUNNING -> PlatinumColors.DiamondWhite
     StageStatus.COMPLETED -> PlatinumColors.Emerald
     StageStatus.WARNING -> PlatinumColors.Amber
     StageStatus.FAILED -> PlatinumColors.Ruby
@@ -60,9 +61,10 @@ internal fun subLabel(s: StageUi): String = when (s.status) {
 fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier = Modifier) {
     if (stages.isEmpty()) return
     val n = stages.size
-    val ms = if (reduced) 0 else 320
+    val reducedMotion = rememberUpdatedState(reduced)
+    val ms = if (reducedMotion.value) 0 else 320
 
-    val phase = if (reduced) 0f else {
+    val phase = if (reducedMotion.value) 0f else {
         rememberInfiniteTransition(label = "pt").animateFloat(
             0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "ph"
         ).value
@@ -70,7 +72,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
     val colors = stages.map { animateColorAsState(jewelColor(it.status), tween(ms), label = "jc").value }
     val checks = stages.map {
         animateFloatAsState(
-            if (it.status == StageStatus.COMPLETED) 1f else 0f, tween(if (reduced) 0 else 450), label = "ck"
+            if (it.status == StageStatus.COMPLETED) 1f else 0f, tween(if (reducedMotion.value) 0 else 450), label = "ck"
         ).value
     }
     val fills = stages.map {
@@ -79,7 +81,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                 StageStatus.COMPLETED, StageStatus.WARNING -> 1f
                 StageStatus.RUNNING -> it.progress ?: 0f
                 else -> 0f
-            }, tween(if (reduced) 0 else 600), label = "pf"
+            }, tween(if (reducedMotion.value) 0 else 600), label = "pf"
         ).value
     }
 
@@ -102,7 +104,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                         Brush.horizontalGradient(listOf(PlatinumColors.Steel, PlatinumColors.PlatinumHigh, PlatinumColors.Platinum), x0, xe.coerceAtLeast(x0 + 1f)),
                         Offset(x0, cy), Offset(xe, cy), 3.dp.toPx(), StrokeCap.Round
                     )
-                    if (stages[i].status == StageStatus.RUNNING && !reduced) {
+                    if (stages[i].status == StageStatus.RUNNING && !reducedMotion.value) {
                         // csillanás: fényes sáv fut végig a kitöltött szakaszon
                         val sx = x0 + (xe - x0) * phase
                         val w = 18.dp.toPx()
@@ -118,7 +120,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                     drawLine(PlatinumColors.SteelDark.copy(alpha = 0.8f), Offset(tx, cy - 6.dp.toPx()), Offset(tx, cy - 3.dp.toPx()), 1.dp.toPx())
                 }
             }
-            for (i in 0 until n) jewel(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reduced)
+            for (i in 0 until n) jewel(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reducedMotion.value)
         }
         Row(Modifier.fillMaxWidth()) {
             stages.forEach { s ->
@@ -135,7 +137,7 @@ fun PlatinumTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier
                     if (sub.isNotEmpty()) Text(
                         sub, fontSize = 10.sp, textAlign = TextAlign.Center, maxLines = 1,
                         color = when (s.status) {
-                            StageStatus.RUNNING -> PlatinumColors.Champagne
+                            StageStatus.RUNNING -> PlatinumColors.DiamondWhite
                             StageStatus.FAILED -> PlatinumColors.Ruby
                             StageStatus.WARNING -> PlatinumColors.Amber
                             else -> PlatinumColors.TextDim

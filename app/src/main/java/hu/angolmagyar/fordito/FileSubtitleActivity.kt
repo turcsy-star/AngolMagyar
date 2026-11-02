@@ -181,7 +181,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
     }
     private lateinit var engineLine: TextView
-    private lateinit var pipeline: PipelineHost
+    private lateinit var runQueueTitle: TextView
     private lateinit var wave: WaveView
     private lateinit var checkView: CheckView
     private var shownEnv: FloatArray? = null
@@ -240,27 +240,28 @@ class FileSubtitleActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = Ui.dp(ctx, 14) }
+            ).apply { topMargin = Ui.dp(ctx, 16) }
         }
         val title = TextView(ctx).apply {
-            textSize = 14f
+            textSize = 11f
+            letterSpacing = 0.16f
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Ui.color(ctx, R.color.textPrimary))
-            maxLines = 2
+            setTextColor(DC.CYAN)
+            maxLines = 1
         }
         val pct = TextView(ctx).apply {
-            textSize = 15f
+            textSize = 28f
             typeface = Typeface.MONOSPACE
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Ui.color(ctx, R.color.textPrimary))
+            setTextColor(DC.ICE)
         }
         val bar = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.color(ctx, R.color.stroke))
+            progressDrawable = DC.bar(ctx, true)
         }
         val sub = TextView(ctx).apply {
-            textSize = 13f
-            setTextColor(Ui.color(ctx, R.color.textSecondary))
+            textSize = 12f
+            setTextColor(DC.TEXT2)
         }
 
         init {
@@ -272,19 +273,16 @@ class FileSubtitleActivity : AppCompatActivity() {
             head.addView(pct)
             root.addView(head)
             root.addView(bar, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 10)
+                ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(ctx, 9)
+            ).apply { topMargin = Ui.dp(ctx, 4) })
+            root.addView(sub, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = Ui.dp(ctx, 6) })
-            root.addView(sub)
-        }
-
-        fun color(c: Int) {
-            bar.progressTintList = android.content.res.ColorStateList.valueOf(c)
-            bar.indeterminateTintList = android.content.res.ColorStateList.valueOf(c)
         }
 
         /** @param p 0–100, vagy -1 = nem ismert (pörgő sáv) */
         fun set(t: String, p: Int, s: String) {
-            title.text = t
+            title.text = t.uppercase()
             if (p < 0) {
                 bar.isIndeterminate = true
                 pct.text = "…"
@@ -1006,22 +1004,24 @@ class FileSubtitleActivity : AppCompatActivity() {
     private fun buildRun() {
         val g = runGroup
 
-        // ---------- futás: csak a folyamat (minden érték egyetlen helyen szerepel)
+        // ---------- futás: egyetlen Diamond kártya – minden érték pontosan egyszer szerepel
         progressSection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        val head = Ui.card(this)
-        val sec = Ui.color(this, R.color.textSecondary)
-        fileLabel = Ui.title(this, "", 16f)
+        val head = DC.card(this)
+        val sec = DC.TEXT2
+        fileLabel = TextView(this).apply {
+            textSize = 17f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(DC.ICE)
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+        }
         head.addView(fileLabel)
-        langLine = Ui.small(this, "")
+        langLine = TextView(this).apply {
+            textSize = 12.5f
+            setTextColor(sec)
+            setPadding(0, dp(3), 0, 0)
+        }
         head.addView(langLine)
-
-        // összesítő: egyetlen sáv + eltelt / hátra / kész (a lépés- és darab-sorok ezeket nem ismétlik)
-        val pipelineView: View = if (Prefs(this).premiumProcessingUi) CinematicPipelineView(this) else PipelineView(this)
-        pipeline = pipelineView as PipelineHost
-        pipelineView.transitionName = SHARED_PIPELINE
-        head.addView(pipelineView, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(10) })
         if (intent.getBooleanExtra(EXTRA_FROM_PORTAL, false)) {
             progressSection.post {
                 try {
@@ -1030,49 +1030,16 @@ class FileSubtitleActivity : AppCompatActivity() {
                         true
                     )
                 } catch (_: Exception) { }
-                pipelineView.animate()?.alpha(0.7f)?.setDuration(120)?.withEndAction {
-                    pipelineView.animate()?.alpha(1f)?.setDuration(280)?.start()
-                }?.start()
             }
         }
-        wave = WaveView(this)
-        head.addView(wave, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(12); bottomMargin = dp(2) })
-        // a hullám alatt: melyik hangszakaszon dolgozik éppen
-        wave.onSeek = { ms -> playAudioAt(ms) }
-        posText = Ui.small(this, "").apply { gravity = Gravity.CENTER_HORIZONTAL }
-        head.addView(posText, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(8) })
-        // élő szöveg: mit hall éppen a felismerő, és mit fordít
-        heardText = Ui.small(this, "").apply {
-            gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE
-            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
-            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
-        }
-        head.addView(heardText, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(2) })
-        transText = Ui.small(this, "").apply {
-            gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE
-            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
-            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.primary))
-        }
-        head.addView(transText, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(8) })
-        engineLine = Ui.small(this, "").apply { gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE }
-        head.addView(engineLine, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(6) })
-        // összhaladás: egyetlen csík
+
+        // összhaladás: egyetlen csík + eltelt / hátra / kész (sehol máshol nem ismétlődik)
         barTotal = BarRow(this)
-        barTotal.color(Ui.color(this, R.color.primary))
         head.addView(barTotal.root)
         val tiles = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(10), 0, 0)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            background = DC.panel(this@FileSubtitleActivity, 14, DC.PANEL_FILL, DC.PANEL_EDGE)
         }
         fun tile(caption: String, align: Int): TextView {
             val col = LinearLayout(this).apply {
@@ -1080,31 +1047,85 @@ class FileSubtitleActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             }
             col.addView(TextView(this).apply {
-                text = caption; textSize = 11f; setTextColor(sec); this.gravity = align
+                text = caption; textSize = 10f; letterSpacing = 0.14f
+                setTextColor(sec); this.gravity = align
             })
             val value = TextView(this).apply {
                 textSize = 17f
+                typeface = Typeface.MONOSPACE
                 setTypeface(typeface, Typeface.BOLD)
-                setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
+                setTextColor(DC.ICE)
                 this.gravity = align
             }
             col.addView(value)
             tiles.addView(col)
             return value
         }
-        tileElapsed = tile("Eltelt", Gravity.START)
-        tileRem = tile("Hátra", Gravity.CENTER_HORIZONTAL)
-        tileFin = tile("Kész kb.", Gravity.END)
-        head.addView(tiles)
+        tileElapsed = tile("ELTELT", Gravity.START)
+        tileRem = tile("HÁTRA", Gravity.CENTER_HORIZONTAL)
+        tileFin = tile("KÉSZ KB.", Gravity.END)
+        head.addView(tiles, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(12) })
 
-        coolBanner = Ui.body(this, "").apply {
-            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.warn))
+        // élő sáv: hullám + éppen feldolgozott szakasz + hallott / lefordított mondat
+        val live = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(10))
+            background = DC.panel(this@FileSubtitleActivity, 16, DC.PANEL_FILL, DC.PANEL_EDGE)
+        }
+        wave = WaveView(this)
+        live.addView(wave, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(2) })
+        wave.onSeek = { ms -> playAudioAt(ms) }
+        posText = TextView(this).apply {
+            textSize = 12f; setTextColor(sec); gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(0, dp(2), 0, dp(4))
+        }
+        live.addView(posText, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ))
+        heardText = TextView(this).apply {
+            textSize = 13f
+            gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE
+            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+            setTextColor(DC.ICE)
+        }
+        live.addView(heardText, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(2) })
+        transText = TextView(this).apply {
+            textSize = 13f
+            gravity = Gravity.CENTER_HORIZONTAL; visibility = View.GONE
+            maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+            setTextColor(DC.BRIGHT)
+        }
+        live.addView(transText, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(2) })
+        head.addView(live, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(14) })
+
+        engineLine = TextView(this).apply {
+            textSize = 12f; setTextColor(sec); visibility = View.GONE
+            setPadding(0, dp(8), 0, 0)
+        }
+        head.addView(engineLine)
+
+        coolBanner = TextView(this).apply {
+            textSize = 13f
+            setTextColor(DC.WARN)
             visibility = View.GONE
+            setPadding(0, dp(8), 0, 0)
         }
         head.addView(coolBanner)
-        stallBanner = Ui.small(this, "").apply {
-            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.warn))
+        stallBanner = TextView(this).apply {
+            textSize = 12.5f
+            setTextColor(DC.WARN)
             visibility = View.GONE
+            setPadding(0, dp(8), 0, 0)
         }
         head.addView(stallBanner)
         stallReport = Ui.smallButton(this, "Hibajelentés küldése (napló)") { DiagLog.share(this) }.apply {
@@ -1112,35 +1133,36 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         head.addView(stallReport)
 
-        // lépés-táblázat: Lépés | Idő | Hátra | % (a képernyő szélességéhez igazítva, nincs oldalra görgetés)
+        // lépés-táblázat (Diamond): Lépés | Idő | Hátra | % – a darabok a 4. lépés alatt, belső panelben
         stepsBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(16), 0, 0)
+            setPadding(0, dp(18), 0, 0)
         }
         var recogWrap: View? = null
-        stepsBox.addView(headerRow(20, "Lépés", "Idő" to S_TIME, "Hátra" to S_ETA, "%" to S_PCT))
+        stepsBox.addView(headerRow(30, "LÉPÉS", "IDŐ" to S_TIME, "HÁTRA" to S_ETA, "%" to S_PCT)
+            .apply { setPadding(dp(8), 0, dp(8), dp(4)) })
         tRows.clear()
         for (i in 0 until SrtJob.WEIGHTS.size) {
             val wrap = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(0, dp(5), 0, dp(5))
+                setPadding(dp(8), dp(8), dp(8), dp(8))
             }
             val line = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
             val icon = TextView(this).apply {
-                textSize = 15f; gravity = Gravity.CENTER
+                textSize = 11f; gravity = Gravity.CENTER
                 setTypeface(typeface, Typeface.BOLD)
-                layoutParams = LinearLayout.LayoutParams(dp(20), ViewGroup.LayoutParams.WRAP_CONTENT)
+                layoutParams = LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(8) }
             }
             val name = TextView(this).apply {
-                textSize = 14f
+                textSize = 14.5f
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
             }
             val note = TextView(this).apply {
-                textSize = 11f
+                textSize = 11.5f
                 setTextColor(sec)
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
@@ -1153,58 +1175,73 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
             val time = monoCell(S_TIME, sec)
             val eta = monoCell(S_ETA, sec)
-            val pct = monoCell(S_PCT, Ui.color(this, R.color.textPrimary))
+            val pct = monoCell(S_PCT, DC.ICE)
             line.addView(icon); line.addView(nameCol); line.addView(time); line.addView(eta); line.addView(pct)
             val bar = thinBar()
             wrap.addView(line)
             wrap.addView(bar, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(4)
-            ).apply { topMargin = dp(4); marginStart = dp(20) })
-            stepsBox.addView(wrap)
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(5)
+            ).apply { topMargin = dp(6); marginStart = dp(30) })
+            stepsBox.addView(wrap, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(2) })
             if (i == SrtJob.ST_RECOG) recogWrap = wrap
             tRows.add(TRow(wrap, icon, name, note, time, eta, pct, bar))
         }
         head.addView(stepsBox)
 
-        // darabok: részletes lista (beszédhossz, idő, hátra, haladás, tempó) – a darab-számlálók a Felismerés sor alatt vannak
+        // darabok: belső panel a 4. lépés alatt (beszédhossz, idő, hátra, haladás, tempó)
         chunkSection = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(2), 0, dp(6))
+            setPadding(dp(10), dp(8), dp(10), dp(6))
+            background = DC.panel(this@FileSubtitleActivity, 14, DC.PANEL_FILL, DC.PANEL_EDGE)
             visibility = View.GONE
         }
         chunkTitle = TextView(this).apply {
-            textSize = 14f
+            textSize = 12.5f
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
+            setTextColor(DC.ICE)
         }
         chunkSection.addView(chunkTitle)
         chunkSection.addView(headerRow(
-            20, "Darab", "Beszéd" to C_LEN, "Idő" to C_TIME, "Hátra" to C_ETA, "%" to C_PCT
-        ).apply { setPadding(0, dp(10), 0, dp(2)) })
+            24, "DARAB", "BESZÉD" to C_LEN, "IDŐ" to C_TIME, "HÁTRA" to C_ETA, "%" to C_PCT
+        ).apply { setPadding(0, dp(8), 0, dp(2)) })
         cRows.clear()
         for (k in 0 until CHUNK_ROWS) {
             val c = buildChunkRow(sec)
             cRows.add(c)
             chunkSection.addView(c.root)
         }
-        chunkMore = Ui.small(this, "")
+        chunkMore = TextView(this).apply { textSize = 11.5f; setTextColor(sec); setPadding(0, dp(4), 0, 0) }
         chunkSection.addView(chunkMore)
-        // a darabok a 4. lépés (Felismerés + fordítás) alatt, a lépés-táblázaton belül
-        stepsBox.addView(chunkSection, stepsBox.indexOfChild(recogWrap) + 1)
+        stepsBox.addView(chunkSection, stepsBox.indexOfChild(recogWrap) + 1,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { marginStart = dp(14); topMargin = dp(2); bottomMargin = dp(4) })
         progressSection.addView(head)
 
-        // élő előnézet: az utoljára felismert sorok (így azonnal látszik, jó nyelven halad-e)
-        previewBox = Ui.card(this).apply { visibility = View.GONE }
-        previewBox.addView(Ui.title(this, "Élő átirat – ahogy a hangból szöveg lesz", 15f))
+        // élő előnézet: az utoljára felismert sorok – közvetlenül a hullám alatt
+        previewBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = DC.panel(this@FileSubtitleActivity, 14, DC.PANEL_FILL, DC.PANEL_EDGE)
+            visibility = View.GONE
+        }
+        previewBox.addView(TextView(this).apply {
+            text = "ÉLŐ ÁTIRAT"; textSize = 10f; letterSpacing = 0.16f
+            setTypeface(typeface, Typeface.BOLD); setTextColor(DC.CYAN)
+            setPadding(0, 0, 0, dp(4))
+        })
         previewText = TextView(this).apply {
             textSize = 12.5f
-            setTextColor(Ui.color(this@FileSubtitleActivity, R.color.textPrimary))
+            setTextColor(DC.ICE)
             setTextIsSelectable(true)
         }
         previewBox.addView(previewText)
         flow = TranscriptFlow(previewText)
-        // közvetlenül a hullám pozíciója alá
-        head.addView(previewBox, head.indexOfChild(transText) + 1)
+        head.addView(previewBox, head.indexOfChild(live) + 1, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(10) })
         g.addView(progressSection)
 
         // ---------- kész: összegzés
@@ -1230,7 +1267,8 @@ class FileSubtitleActivity : AppCompatActivity() {
 
         // ---------- fájlok állapota (futás közben is bővíthető)
         val qCard = Ui.card(this)
-        qCard.addView(Ui.title(this, "Fájlok", 16f))
+        runQueueTitle = Ui.title(this, "Fájlok", 16f)
+        qCard.addView(runQueueTitle)
         runQueueBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         qCard.addView(runQueueBox)
         qCard.addView(Ui.smallButton(this, "+ Fájl hozzáadása a sorhoz") { pickFiles() }.apply {
@@ -1270,9 +1308,36 @@ class FileSubtitleActivity : AppCompatActivity() {
         layoutParams = LinearLayout.LayoutParams(dp(w), ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
+    /** Kerek állapotjelvény: 0 vár, 1 aktív, 2 kész, 3 hiba, 4 megállítva. Csak változáskor rajzol újra. */
+    private fun setBadge(icon: TextView, state: Int, color: Int) {
+        val key = "$state/$color"
+        if (icon.tag == key) return
+        icon.tag = key
+        val d = GradientDrawable().apply { shape = GradientDrawable.OVAL }
+        when (state) {
+            2, 3, 4 -> {
+                icon.text = when (state) { 2 -> "✓"; 3 -> "✗"; else -> "‖" }
+                icon.setTextColor(DC.NAVY)
+                d.setColor(color)
+            }
+            1 -> {
+                icon.text = "●"
+                icon.setTextColor(color)
+                d.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(color, 0x33))
+                d.setStroke(dp(2), color)
+            }
+            else -> {
+                icon.text = ""
+                d.setColor(0x00000000)
+                d.setStroke(dp(1), 0x66AFC4E2)
+            }
+        }
+        icon.background = d
+    }
+
     private fun thinBar() = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
         max = 100
-        progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.color(this@FileSubtitleActivity, R.color.stroke))
+        progressDrawable = DC.bar(this@FileSubtitleActivity, false)
         visibility = View.GONE
     }
 
@@ -1323,19 +1388,19 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
 
     private fun headerRow(lead: Int, first: String, vararg cols: Pair<String, Int>): LinearLayout {
-        val sec = Ui.color(this, R.color.textSecondary)
+        val cap = DC.CAPTION
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, 0, 0, dp(2))
         }
         row.addView(View(this), LinearLayout.LayoutParams(dp(lead), 1))
         row.addView(TextView(this).apply {
-            text = first; textSize = 11f; setTextColor(sec)
+            text = first; textSize = 10f; letterSpacing = 0.14f; setTextColor(cap)
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
         for ((t, w) in cols) {
             row.addView(TextView(this).apply {
-                text = t; textSize = 11f; setTextColor(sec); gravity = Gravity.END
+                text = t; textSize = 10f; letterSpacing = 0.14f; setTextColor(cap); gravity = Gravity.END
                 layoutParams = LinearLayout.LayoutParams(dp(w), ViewGroup.LayoutParams.WRAP_CONTENT)
             })
         }
@@ -1345,16 +1410,16 @@ class FileSubtitleActivity : AppCompatActivity() {
     private fun buildChunkRow(sec: Int): CRow {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(4), 0, dp(4))
+            setPadding(0, dp(5), 0, dp(5))
         }
         val line = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val icon = TextView(this).apply {
-            textSize = 14f; gravity = Gravity.CENTER
+            textSize = 9f; gravity = Gravity.CENTER
             setTypeface(typeface, Typeface.BOLD)
-            layoutParams = LinearLayout.LayoutParams(dp(20), ViewGroup.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams(dp(18), dp(18)).apply { marginEnd = dp(6) }
         }
         val name = TextView(this).apply {
             textSize = 13f
@@ -1364,7 +1429,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         val len = monoCell(C_LEN, sec)
         val time = monoCell(C_TIME, sec)
         val eta = monoCell(C_ETA, sec)
-        val pct = monoCell(C_PCT, Ui.color(this, R.color.textPrimary))
+        val pct = monoCell(C_PCT, DC.ICE)
         line.addView(icon); line.addView(name); line.addView(len); line.addView(time); line.addView(eta); line.addView(pct)
         val bar = thinBar()
         val note = TextView(this).apply {
@@ -1372,13 +1437,13 @@ class FileSubtitleActivity : AppCompatActivity() {
             setTextColor(sec)
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
-            setPadding(dp(20), 0, 0, 0)
+            setPadding(dp(24), dp(2), 0, 0)
             visibility = View.GONE
         }
         root.addView(line)
         root.addView(bar, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, dp(4)
-        ).apply { topMargin = dp(3); marginStart = dp(20) })
+        ).apply { topMargin = dp(4); marginStart = dp(24) })
         root.addView(note)
         return CRow(root, icon, name, len, time, eta, pct, bar, note)
     }
@@ -1693,6 +1758,9 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
 
         runSig = renderQueue(runQueueBox, running, runSig)
+        val singleRun = running && SrtJob.queue.size <= 1
+        runQueueBox.visibility = if (singleRun) View.GONE else View.VISIBLE
+        runQueueTitle.visibility = if (singleRun) View.GONE else View.VISIBLE
         if (running) renderProgress()
         if (results) renderResults()
     }
@@ -1701,11 +1769,11 @@ class FileSubtitleActivity : AppCompatActivity() {
         val job = SrtJob
         val now = System.currentTimeMillis()
         val cur = job.current
-        val secondary = Ui.color(this, R.color.textSecondary)
-        val primary = Ui.color(this, R.color.textPrimary)
-        val okC = Ui.color(this, R.color.ok)
-        val warnC = Ui.color(this, R.color.warn)
-        val errC = Ui.color(this, R.color.err)
+        val secondary = DC.TEXT2
+        val primary = DC.ICE
+        val okC = DC.OK
+        val warnC = DC.WARN
+        val errC = DC.ERR
         val recogC = SrtJob.COLORS[SrtJob.ST_RECOG]
 
         fileLabel.text = when {
@@ -1762,15 +1830,14 @@ class FileSubtitleActivity : AppCompatActivity() {
             transText.text = "Fordítás: „$tr”"
             transText.visibility = View.VISIBLE
         } else transText.visibility = View.GONE
-        pipeline.setLive(heard, tr)
         engineLine.text = SrtJob.engineText().let { t ->
             if (SrtJob.names.isNotEmpty()) t + (if (t.isNotEmpty()) "\n" else "") + "Nevek: " + SrtJob.names.joinToString(", ") else t
         }
         engineLine.visibility = if (engineLine.text.isNotEmpty()) View.VISIBLE else View.GONE
-        pipeline.set(IntArray(SrtJob.WEIGHTS.size) { job.steps[it].state }, job.steps.getOrNull(job.curStep)?.pct ?: 0)
         tileElapsed.text = fmtDur(elapsedAll)
         tileRem.text = if (totRem >= 0) "kb. ${fmtDur(totRem)}" else "számítás…"
         tileFin.text = if (totRem >= 0) SrtJob.fmtClock(now + totRem) else "–"
+        val chunksShown = job.chunkState.isNotEmpty()
 
         // --- lépés-táblázat (lépésenként: idő, hátra, %; a darabok külön listában vannak)
         var unitsRem = 0.0
@@ -1789,26 +1856,28 @@ class FileSubtitleActivity : AppCompatActivity() {
             val st = job.steps[i]
             val color = SrtJob.COLORS[i]
             v.name.text = "${i + 1}. ${job.label(i)}"
+            val recogChunks = i == SrtJob.ST_RECOG && chunksShown
             when (st.state) {
-                SrtJob.DONE -> { v.icon.text = "✓"; v.icon.setTextColor(okC); v.name.setTextColor(primary); v.name.setTypeface(null, Typeface.NORMAL) }
-                SrtJob.ACTIVE -> { v.icon.text = "●"; v.icon.setTextColor(color); v.name.setTextColor(primary); v.name.setTypeface(null, Typeface.BOLD) }
-                SrtJob.ERROR -> { v.icon.text = "✗"; v.icon.setTextColor(errC); v.name.setTextColor(errC); v.name.setTypeface(null, Typeface.BOLD) }
-                SrtJob.STOPPED -> { v.icon.text = "⏸"; v.icon.setTextColor(warnC); v.name.setTextColor(warnC); v.name.setTypeface(null, Typeface.NORMAL) }
-                else -> { v.icon.text = "○"; v.icon.setTextColor(secondary); v.name.setTextColor(secondary); v.name.setTypeface(null, Typeface.NORMAL) }
+                SrtJob.DONE -> { setBadge(v.icon, 2, okC); v.name.setTextColor(primary); v.name.setTypeface(null, Typeface.NORMAL) }
+                SrtJob.ACTIVE -> { setBadge(v.icon, 1, color); v.name.setTextColor(primary); v.name.setTypeface(null, Typeface.BOLD) }
+                SrtJob.ERROR -> { setBadge(v.icon, 3, errC); v.name.setTextColor(errC); v.name.setTypeface(null, Typeface.BOLD) }
+                SrtJob.STOPPED -> { setBadge(v.icon, 4, warnC); v.name.setTextColor(warnC); v.name.setTypeface(null, Typeface.NORMAL) }
+                else -> { setBadge(v.icon, 0, secondary); v.name.setTextColor(secondary); v.name.setTypeface(null, Typeface.NORMAL) }
+            }
+            // az aktív sor finoman kiemelve (csak állapotváltáskor állítjuk át)
+            if (v.root.tag != st.state) {
+                v.root.tag = st.state
+                v.root.background = if (st.state == SrtJob.ACTIVE) DC.panel(this, 14, DC.ACTIVE_FILL, DC.ACTIVE_EDGE) else null
             }
             // megjegyzés: a felismerésnél a darab-számlálók (egyetlen helyen), egyébként a lépés saját megjegyzése
             var noteTxt = if (st.state == SrtJob.DONE || st.state == SrtJob.ACTIVE) st.comment else ""
-            if (i == SrtJob.ST_RECOG && st.state == SrtJob.ACTIVE && job.chunkState.isNotEmpty()) {
-                val work = job.chunkState.count { it == 1 }
-                val wait = job.chunkState.count { it == 0 }
-                noteTxt = "kész ${job.chunkDone}/${job.chunkTotal} darab · dolgozik $work · vár $wait"
-            }
+            if (recogChunks && st.state == SrtJob.ACTIVE) noteTxt = "" // a darab-lista mutatja, egyetlen helyen
             // ugyanaz a felismerő-név már a fejlécben látszik
             if (noteTxt == job.engineLabel) noteTxt = ""
             v.note.text = noteTxt
             v.note.visibility = if (noteTxt.isBlank()) View.GONE else View.VISIBLE
             tint(v.bar, color)
-            v.bar.visibility = if (st.state == SrtJob.ACTIVE) View.VISIBLE else View.GONE
+            v.bar.visibility = if (st.state == SrtJob.ACTIVE && !recogChunks) View.VISIBLE else View.GONE
             when (st.state) {
                 SrtJob.DONE -> {
                     v.time.text = fmtDur(st.durMs)
@@ -1824,8 +1893,10 @@ class FileSubtitleActivity : AppCompatActivity() {
                         perUnit >= 0 -> (SrtJob.WEIGHTS[i] * (100 - p.coerceAtLeast(0)) / 100.0 * perUnit).toLong()
                         else -> -1L
                     }
-                    v.time.text = fmtDur(el)
-                    if (own >= 0) v.eta.text = fmtDur(own) else { finKnown = false; v.eta.text = "…" }
+                    // a darabos felismerésnél az időt / hátralévőt a darab-sorok mutatják (ne legyen kétszer)
+                    v.time.text = if (recogChunks) "" else fmtDur(el)
+                    if (own >= 0) v.eta.text = if (recogChunks) "" else fmtDur(own)
+                    else { finKnown = false; v.eta.text = if (recogChunks) "" else "…" }
                     if (p < 0) { v.bar.isIndeterminate = true; v.pct.text = "…" }
                     else { v.bar.isIndeterminate = false; v.bar.progress = p.coerceIn(0, 100); v.pct.text = "${p.coerceIn(0, 100)}%" }
                 }
@@ -1849,8 +1920,10 @@ class FileSubtitleActivity : AppCompatActivity() {
                 val inf = infos.getOrNull(k) ?: continue
                 if (job.chunkState[k] == 2 && inf.tookMs >= 2000 && inf.speechMs > 0) { sumTook += inf.tookMs; sumSpeech += inf.speechMs }
             }
-            chunkTitle.text = if (sumSpeech > 0) "Darabok · átlagos tempó: ${fmtRatio(sumTook, sumSpeech)}× a beszéd hossza"
-            else "Darabok"
+            val cWork = job.chunkState.count { it == 1 }
+            val cWait = job.chunkState.count { it == 0 }
+            chunkTitle.text = "Darabok · kész ${job.chunkDone}/${job.chunkTotal} · dolgozik $cWork · vár $cWait" +
+                (if (sumSpeech > 0) " · tempó ${fmtRatio(sumTook, sumSpeech)}×" else "")
 
             // melyik darabok látszanak: kevésnél mind, soknál az aktívak + a legutóbbi kész + a következő várakozók
             val picked: List<Int> = if (n <= CHUNK_ROWS) (0 until n).toList() else {
@@ -1870,7 +1943,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                 c.len.text = if (inf != null && inf.speechMs > 0) fmtDur(inf.speechMs) else "–"
                 when (job.chunkState[i]) {
                     2 -> {
-                        c.icon.text = "✓"; c.icon.setTextColor(okC); c.name.setTextColor(primary)
+                        setBadge(c.icon, 2, okC); c.name.setTextColor(primary)
                         c.time.text = if (inf != null && inf.tookMs > 0) fmtDur(inf.tookMs) else "–"
                         c.eta.text = "–"
                         c.pct.text = "100%"
@@ -1885,7 +1958,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                         val pc = ((inf?.frac ?: 0.0) * 100).toInt().coerceIn(0, 99)
                         val el = if (inf != null && inf.startMs > 0) now - inf.startMs else 0L
                         val rem = if (pc >= 1 && el >= 2000) smoothRem("c${i + 1}", el * (100 - pc) / pc, now) else -1L
-                        c.icon.text = "●"; c.icon.setTextColor(if (job.cooling) warnC else recogC)
+                        setBadge(c.icon, 1, if (job.cooling) warnC else recogC)
                         c.name.setTextColor(primary)
                         c.time.text = fmtDur(el)
                         c.eta.text = if (rem >= 0) fmtDur(rem) else "…"
@@ -1900,7 +1973,7 @@ class FileSubtitleActivity : AppCompatActivity() {
                         c.note.visibility = if (what.isBlank()) View.GONE else View.VISIBLE
                     }
                     else -> {
-                        c.icon.text = "○"; c.icon.setTextColor(secondary); c.name.setTextColor(secondary)
+                        setBadge(c.icon, 0, secondary); c.name.setTextColor(secondary)
                         c.time.text = ""; c.eta.text = ""; c.pct.text = ""
                         c.bar.visibility = View.GONE
                         c.note.visibility = View.GONE
@@ -1918,7 +1991,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         if (job.cooling) coolBanner.text = job.waitReason.ifBlank { "Szünet (hűtés)" }
 
         // "megállt a háttérben?" jelzés
-        val stalled = !job.cooling && job.running && now - job.lastProgressMs > SrtJobService.STALL_WARN_MS
+        val stalled = !job.cooling && job.running && now - job.lastProgressMs > SrtJob.stallLimitMs()
         stallBanner.visibility = if (stalled) View.VISIBLE else View.GONE
         stallReport.visibility = if (stalled || job.running) View.VISIBLE else View.GONE
         if (stalled) {
@@ -1930,8 +2003,8 @@ class FileSubtitleActivity : AppCompatActivity() {
         // élő előnézet
         val shownFlow = flow.update(
             job.previewCues,
-            Ui.color(this, R.color.textPrimary),
-            Ui.color(this, R.color.primary)
+            DC.ICE,
+            DC.BRIGHT
         )
         previewBox.visibility = if (shownFlow) View.VISIBLE else View.GONE
     }
@@ -2052,5 +2125,62 @@ class FileSubtitleActivity : AppCompatActivity() {
         main.removeCallbacks(tick)
         main.post(tick)
         render()
+    }
+}
+
+
+/** Diamond Blue színek és rajzelemek a feldolgozó képernyő táblázatához (a témától függetlenül sötét kártya). */
+private object DC {
+    val NAVY = 0xFF0C1830.toInt()
+    val DEEP = 0xFF050A18.toInt()
+    val SAPPHIRE = 0xFF123B78.toInt()
+    val ELECTRIC = 0xFF2878F0.toInt()
+    val BRIGHT = 0xFF78B8FF.toInt()
+    val CYAN = 0xFF53E7FF.toInt()
+    val ICE = 0xFFF1F8FF.toInt()
+    val TEXT2 = 0xFFAFC4E2.toInt()
+    val EDGE = 0xFFB9E8FF.toInt()
+    val OK = 0xFF34D399.toInt()
+    val WARN = 0xFFFBBF24.toInt()
+    val ERR = 0xFFF87171.toInt()
+    val CAPTION = 0xFF7FA6D6.toInt()
+    val PANEL_FILL = 0x1AFFFFFF
+    val PANEL_EDGE = 0x24B9E8FF
+    val ACTIVE_FILL = 0x332878F0
+    val ACTIVE_EDGE = 0x6653E7FF
+
+    fun card(ctx: Context): LinearLayout = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        val pad = Ui.dp(ctx, 16)
+        setPadding(pad, pad, pad, pad)
+        background = GradientDrawable(GradientDrawable.Orientation.TL_BR, intArrayOf(NAVY, DEEP, (0x6B000000 or (SAPPHIRE and 0xFFFFFF)).toInt())).apply {
+            cornerRadius = Ui.dp(ctx, 22).toFloat()
+            setStroke(Ui.dp(ctx, 1), 0x66B9E8FF)
+        }
+        elevation = Ui.dp(ctx, 3).toFloat()
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = Ui.dp(ctx, 12) }
+    }
+
+    fun panel(ctx: Context, radiusDp: Int, fill: Int, edge: Int): GradientDrawable = GradientDrawable().apply {
+        cornerRadius = Ui.dp(ctx, radiusDp).toFloat()
+        setColor(fill)
+        setStroke(Ui.dp(ctx, 1), edge)
+    }
+
+    /** Lekerekített sáv: sötét sín + kitöltés (gradient vagy a progressTint által színezett fehér). */
+    fun bar(ctx: Context, gradient: Boolean): android.graphics.drawable.Drawable {
+        val r = Ui.dp(ctx, 6).toFloat()
+        val track = GradientDrawable().apply { cornerRadius = r; setColor(0x33AFC4E2) }
+        val fill = GradientDrawable(
+            GradientDrawable.Orientation.LEFT_RIGHT,
+            if (gradient) intArrayOf(ELECTRIC, CYAN) else intArrayOf(-1, -1)
+        ).apply { cornerRadius = r }
+        val clip = android.graphics.drawable.ClipDrawable(fill, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL)
+        return android.graphics.drawable.LayerDrawable(arrayOf<android.graphics.drawable.Drawable>(track, clip)).apply {
+            setId(0, android.R.id.background)
+            setId(1, android.R.id.progress)
+        }
     }
 }

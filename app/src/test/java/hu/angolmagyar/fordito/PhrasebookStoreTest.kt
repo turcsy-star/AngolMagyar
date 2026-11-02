@@ -37,7 +37,8 @@ class PhrasebookStoreTest {
         assertTrue(first.nextReviewAt > System.currentTimeMillis())
         assertTrue(store.due().isEmpty())
         assertTrue(store.review(entry.id, true))
-        assertEquals(3, store.all().first().intervalDays)
+        // SM-2 schedule: first successful review = 1 day, second = 6 days.
+        assertEquals(6, store.all().first().intervalDays)
     }
 
     @Test fun refusesBlankPhrasesAndClearsLocally() {

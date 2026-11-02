@@ -77,7 +77,7 @@ private fun ReviewCoachScreen(onBack: () -> Unit) {
     val current = cards.getOrNull(index)
     Column(Modifier.fillMaxSize().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         OutlinedButton(onClick = onBack) { Text("← Vissza") }
-        Text("PLATINUM • MEMORY COACH", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text("DIAMOND • MEMORY COACH", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Text("Intelligens ismétlő", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (current != null) {

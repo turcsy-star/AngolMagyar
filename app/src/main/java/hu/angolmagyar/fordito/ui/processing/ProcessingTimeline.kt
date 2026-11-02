@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -62,10 +63,11 @@ private fun statusWord(s: StageStatus) = when (s) {
 fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifier = Modifier) {
     if (stages.isEmpty()) return
     val n = stages.size
+    val reducedMotion = rememberUpdatedState(reduced)
     val ctx = LocalContext.current
-    val stateMs = if (reduced) 0 else PremiumMotion.STATE_CHANGE
+    val stateMs = if (reducedMotion.value) 0 else PremiumMotion.STATE_CHANGE
 
-    val phase = if (reduced) 0f else {
+    val phase = if (reducedMotion.value) 0f else {
         val t = rememberInfiniteTransition(label = "flow")
         t.animateFloat(
             initialValue = 0f, targetValue = 1f,
@@ -78,7 +80,7 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
     val checks = stages.map {
         animateFloatAsState(
             if (it.status == StageStatus.COMPLETED || it.status == StageStatus.WARNING) 1f else 0f,
-            tween(if (reduced) 0 else PremiumMotion.NODE_ACTIVATE), label = "chk"
+            tween(if (reducedMotion.value) 0 else PremiumMotion.NODE_ACTIVATE), label = "chk"
         ).value
     }
     val fills = stages.map {
@@ -88,7 +90,7 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
                 StageStatus.RUNNING -> it.progress ?: 0f
                 else -> 0f
             },
-            tween(if (reduced) 0 else 600), label = "fill"
+            tween(if (reducedMotion.value) 0 else 600), label = "fill"
         ).value
     }
 
@@ -113,11 +115,11 @@ fun ProcessingTimeline(stages: List<StageUi>, reduced: Boolean, modifier: Modifi
                     drawLine(col, Offset(x0, cy), Offset(x0 + (x1 - x0) * f, cy),
                         strokeWidth = 4.dp.toPx(), cap = StrokeCap.Round)
                 }
-                if (st == StageStatus.RUNNING && !reduced) comet(x0, x1, cy, phase)
+                if (st == StageStatus.RUNNING && !reducedMotion.value) comet(x0, x1, cy, phase)
             }
 
             // csomópontok
-            for (i in 0 until n) drawNode(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reduced)
+            for (i in 0 until n) drawNode(stages[i].status, colors[i], checks[i], cx(i), cy, r, phase, reducedMotion.value)
         }
 
         Row(Modifier.fillMaxWidth()) {

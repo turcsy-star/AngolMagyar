@@ -219,7 +219,8 @@ object OutputWriter {
      */
     fun saveBesideVideo(ctx: Context, video: Uri, name: String, mime: String, bytes: ByteArray): String? {
         val dir = parentDir(ctx, video) ?: return null
-        if (hasAllFiles() || dir.canWrite()) {
+        // Android 11+ alatt a File.canWrite() igazat mondhat akkor is, ha a megnyitás EPERM-mel elbukik: ott csak teljes hozzáféréssel írunk közvetlenül
+        if (hasAllFiles() || (Build.VERSION.SDK_INT < 30 && dir.canWrite())) {
             try {
                 if (dir.isDirectory) {
                     val f = uniqueFile(dir, name)

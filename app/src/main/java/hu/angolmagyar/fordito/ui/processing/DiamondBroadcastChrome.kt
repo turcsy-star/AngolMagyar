@@ -74,14 +74,14 @@ fun DiamondLowerThird(
                     .clip(RoundedCornerShape(2.dp))
                     .background(
                         Brush.verticalGradient(
-                            listOf(PlatinumColors.Champagne, PlatinumColors.IceBlue)
+                            listOf(PlatinumColors.DiamondWhite, PlatinumColors.IceBlue)
                         )
                     )
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     phaseLabel.uppercase(),
-                    color = PlatinumColors.Champagne,
+                    color = PlatinumColors.DiamondWhite,
                     fontSize = 9.sp,
                     letterSpacing = 1.6.sp,
                     fontWeight = FontWeight.SemiBold

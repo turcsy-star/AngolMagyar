@@ -84,7 +84,7 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
     }
 
     val rim = Brush.linearGradient(
-        listOf(PlatinumColors.PlatinumHigh.copy(alpha = 0.55f), PlatinumColors.SteelDark.copy(alpha = 0.25f), PlatinumColors.Champagne.copy(alpha = 0.40f))
+        listOf(PlatinumColors.PlatinumHigh.copy(alpha = 0.55f), PlatinumColors.SteelDark.copy(alpha = 0.25f), PlatinumColors.DiamondWhite.copy(alpha = 0.40f))
     )
 
     AnimatedVisibility(
@@ -104,7 +104,7 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
                 .padding(16.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("PLATINUM · FELDOLGOZÁS", color = PlatinumColors.Champagne, fontSize = 10.5.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Medium)
+                Text("DIAMOND · FELDOLGOZÁS", color = PlatinumColors.DiamondWhite, fontSize = 10.5.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Medium)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     PlatinumDial(
                         percent = state.overallPercent, chunksDone = state.chunksDone, chunksTotal = state.chunksTotal,
@@ -152,7 +152,7 @@ fun PlatinumPanel(state: ProcessingUiState, reduced: Boolean, modifier: Modifier
             }
             if (seal) CompletionBurst(
                 Modifier.size(170.dp).align(Alignment.TopStart).padding(top = 0.dp),
-                colors = listOf(PlatinumColors.Champagne, PlatinumColors.PlatinumHigh, PlatinumColors.Emerald)
+                colors = listOf(PlatinumColors.DiamondWhite, PlatinumColors.PlatinumHigh, PlatinumColors.Emerald)
             ) { seal = false }
         }
     }

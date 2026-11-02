@@ -274,7 +274,7 @@ class SrtJobService : Service() {
         val eta = if (SrtJob.etaAtMs > 0)
             "Várhatóan kész: ${SrtJob.fmtClock(SrtJob.etaAtMs)} körül (hátra kb. ${SrtJob.fmtDur(SrtJob.etaMs)})"
         else "Várható befejezés: az első darab után"
-        val stalled = SrtJob.running && !SrtJob.cooling && now - SrtJob.lastProgressMs > STALL_WARN_MS
+        val stalled = SrtJob.running && !SrtJob.cooling && now - SrtJob.lastProgressMs > SrtJob.stallLimitMs()
         val warn = if (stalled) "⚠ Nincs új haladás ${SrtJob.fmtDur(now - SrtJob.lastProgressMs)} ideje – ellenőrizd az akkumulátor-beállítást.\n" else ""
         val text = "$step · ${SrtJob.message}"
         return NotificationCompat.Builder(this, CH_RUN)
@@ -368,8 +368,15 @@ class SrtJobService : Service() {
         needTranslate: Boolean, rec: FileRecognizer
     ): List<SrtExporter.Cue> {
         val flags = try { LineQuality.summarize(input) } catch (_: Exception) { emptyList() }
-        val bad = input.indices.filter { input[it].lp < -0.9f || flags.getOrNull(it)?.contains("töredék") == true }
-        if (bad.isEmpty()) return input
+        // a 60 mp-nél hosszabb blokk nem beszéd (csendbe nyúló hallucináció): nem érdemes újrafuttatni
+        val bad = input.indices.filter {
+            (input[it].lp < -0.9f || flags.getOrNull(it)?.contains("töredék") == true) &&
+                input[it].endMs - input[it].startMs <= 60_000L
+        }
+        if (bad.isEmpty()) {
+            DiagLog.log("MÁSODIK MENET: nincs újrafuttatandó szakasz")
+            return input
+        }
         // egymás melletti rossz sorok egy szakaszba (legfeljebb 25 mp)
         val groups = ArrayList<IntRange>()
         var gs = bad[0]; var ge = bad[0]

@@ -56,9 +56,13 @@ object InfinityGlobalUi {
     val migrationChecklist: List<Pair<String, Boolean>> = listOf(
         "Színsémák központi tokenekbe szervezve" to true,
         "PremiumCard / PremiumMotion egységes használata" to true,
-        "Klasszikus View képernyők teljes Compose-migrációja" to false,
+        "Adatvédelem + Intelligence hub + Dokumentum/Kamera Compose-ban" to true,
+        "Klasszikus View képernyők teljes Compose-migrációja (Beállítások, Feliratfeldolgozás, SRT-szerkesztő, Élő fordítás stb.)" to false,
         "Egységes navigációs átmenetek (NavTransitions)" to true,
-        "Akadálymentességi audit (kontraszt, focus)" to false,
+        "Kontraszt-audit minden palettán (DesignAudit)" to true,
+        "TalkBack: címsorok, 48 dp célok, összevont leírások (hub, adatvédelem, dokumentum)" to true,
+        "TalkBack / fókuszsorrend kézi eszközteszt (TALKBACK_TESZT_HU.md)" to false,
+        "Gombanimáció nélküli interakció (hullámeffekt + haptika)" to true,
         "Dark / OLED / csökkentett mozgás protokoll" to true,
         "Intelligence hub + Global Dashboard Compose" to true,
         "Diamond kiadási kapu (checklist + regresszió)" to true

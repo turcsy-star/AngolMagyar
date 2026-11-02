@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,10 +49,11 @@ internal fun safeProgressPercent(pct: Int): Int = pct.coerceIn(0, 100)
 
 @Composable
 fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: Modifier = Modifier) {
+    val reducedMotion = rememberUpdatedState(reduced)
     val known = pct >= 0
     val safePct = safeProgressPercent(pct)
-    val frac by animateFloatAsState(safePct / 100f, tween(if (reduced) 0 else 500), label = "pf")
-    val sweep = if (reduced) 0.5f else rememberInfiniteTransition(label = "pb").animateFloat(
+    val frac by animateFloatAsState(safePct / 100f, tween(if (reducedMotion.value) 0 else 500), label = "pf")
+    val sweep = if (reducedMotion.value) 0.5f else rememberInfiniteTransition(label = "pb").animateFloat(
         0f, 1f, infiniteRepeatable(tween(1500, easing = LinearEasing)), label = "sw"
     ).value
 
@@ -68,7 +70,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(Modifier.fillMaxWidth()) {
-            Text("LETÖLTÉS", color = PlatinumColors.Champagne, fontSize = 10.sp, letterSpacing = 1.8.sp, modifier = Modifier.weight(1f))
+            Text("LETÖLTÉS", color = PlatinumColors.DiamondWhite, fontSize = 10.sp, letterSpacing = 1.8.sp, modifier = Modifier.weight(1f))
             Text(if (known) "$safePct%" else "…", color = PlatinumColors.Text, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
         }
         Canvas(Modifier.fillMaxWidth().height(16.dp)) {
@@ -84,7 +86,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
                     Brush.verticalGradient(listOf(PlatinumColors.PlatinumHigh, PlatinumColors.Platinum, PlatinumColors.Steel), pad, pad + h),
                     Offset(pad, pad), Size(w, h), CornerRadius(h / 2f)
                 )
-                if (!reduced && frac < 1f) { // csillanás a kitöltésen
+                if (!reducedMotion.value && frac < 1f) { // csillanás a kitöltésen
                     val cx = pad + w * sweep; val bw = 26.dp.toPx()
                     drawRoundRect(
                         Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.8f), Color.Transparent), cx - bw, cx + bw),
@@ -95,7 +97,7 @@ fun PlatinumProgressBar(pct: Int, message: String, reduced: Boolean, modifier: M
                 val bw = inner * 0.22f
                 val x = pad + (inner - bw) * sweep
                 drawRoundRect(
-                    Brush.horizontalGradient(listOf(Color.Transparent, PlatinumColors.Champagne.copy(alpha = 0.85f), Color.Transparent), x, x + bw),
+                    Brush.horizontalGradient(listOf(Color.Transparent, PlatinumColors.DiamondWhite.copy(alpha = 0.85f), Color.Transparent), x, x + bw),
                     Offset(x, pad), Size(bw, h), CornerRadius(h / 2f)
                 )
             }
