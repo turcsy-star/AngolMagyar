@@ -772,8 +772,7 @@ private fun FuturisticWelcomePanel(
                     Text("EN  ⇄  HU", style = MaterialTheme.typography.labelMedium, color = palette.text.copy(alpha = 0.78f))
                 }
                 Text(
-                    "A nyelvi akadályok
-eltűnnek.",
+                    "A nyelvi akadályok\neltűnnek.",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold,
                     color = palette.text,
