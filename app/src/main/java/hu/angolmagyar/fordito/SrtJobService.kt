@@ -237,6 +237,16 @@ class SrtJobService : Service() {
         val stalled = SrtJob.running && !SrtJob.cooling && now - SrtJob.lastProgressMs > SrtJob.stallLimitMs()
         val warn = if (stalled) "⚠ Nincs új haladás ${SrtJob.fmtDur(now - SrtJob.lastProgressMs)} ideje – ellenőrizd az akkumulátor-beállítást.\n" else ""
         val text = "$step · ${SrtJob.message}"
+        if (Build.VERSION.SDK_INT >= 36) {
+            val plan = NotificationPlan.build(SrtJob.WEIGHTS, SrtJob.COLORS, pct, SrtJob.chunkTotal)
+            val sub = if (SrtJob.etaAtMs > 0) "kész ~${SrtJob.fmtClock(SrtJob.etaAtMs)}" else null
+            LiveProgress.build(
+                this, CH_RUN, plan, "SRT készül… $pct%$files",
+                (if (stalled) "⚠ nincs haladás · " else "") + text.take(90), sub,
+                if (SrtJob.batchStartMs > 0) SrtJob.batchStartMs else now,
+                R.drawable.ic_subtitles, openPi(), cancelPi()
+            )?.let { return it }
+        }
         return NotificationCompat.Builder(this, CH_RUN)
             .setSmallIcon(R.drawable.ic_subtitles)
             .setContentTitle("SRT készül… $pct%$files")
@@ -525,6 +535,8 @@ class SrtJobService : Service() {
                 try {
                     val env = Envelope.compute(totalSamples, 240) { st, en -> ParallelChunker.readPcmRange(pcmTmp, st, en) }
                     SrtJob.waveEnv = env
+                    SrtJob.changed(false)
+                    SrtJob.waveSpec = Spectrogram.compute(totalSamples, 240, 24) { st, en -> ParallelChunker.readPcmRange(pcmTmp, st, en) }
                     SrtJob.changed(false)
                 } catch (_: Throwable) {
                 }

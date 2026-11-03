@@ -170,6 +170,7 @@ object SrtJob {
     @Volatile var waveEnv: FloatArray = FloatArray(0)
     @Volatile var waveTotalMs = 0L
     @Volatile var waveRanges: LongArray = LongArray(0)
+    @Volatile var waveSpec: Spectrogram.Grid? = null
     @Synchronized fun chunkFracCopy(): DoubleArray = chunkFrac.copyOf()
     @Volatile var savedWhere: String? = null
     @Volatile var partialWhere: String? = null
@@ -257,6 +258,7 @@ object SrtJob {
         waveEnv = FloatArray(0)
         waveTotalMs = 0L
         waveRanges = LongArray(0)
+        waveSpec = null
         savedWhere = null
         partialWhere = null
         histEstMs = 0

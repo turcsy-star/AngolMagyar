@@ -138,6 +138,10 @@ class FileSubtitleActivity : AppCompatActivity() {
     private lateinit var engineLine: TextView
     private lateinit var runQueueTitle: TextView
     private lateinit var wave: WaveView
+    private lateinit var spec: SpectrogramView
+    private var shownSpec: Spectrogram.Grid? = null
+    private lateinit var ambient: AmbientBackdropView
+    private val phaseTracker = PhasePalette.Tracker(1500)
     private lateinit var checkView: CheckView
     private var shownEnv: FloatArray? = null
     private var shownRanges: LongArray? = null
@@ -622,7 +626,16 @@ class FileSubtitleActivity : AppCompatActivity() {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
         val scroll = Ui.scrollOf(this, column)
-        setContentView(scroll)
+        // Az alapszín a gyökérre kerül, hogy az ambient fény a görgetős tartalom mögött látsszon.
+        scroll.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        ambient = AmbientBackdropView(this)
+        val rootFrame = android.widget.FrameLayout(this)
+        rootFrame.setBackgroundColor(Ui.color(this, R.color.bg))
+        rootFrame.addView(ambient, android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        rootFrame.addView(scroll, android.widget.FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        setContentView(rootFrame)
         ViewCompat.setOnApplyWindowInsetsListener(scroll) { v, insets ->
             val b = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(b.left, b.top, b.right, b.bottom)
@@ -959,6 +972,11 @@ class FileSubtitleActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(2) })
         wave.onSeek = { ms -> playAudioAt(ms) }
+        spec = SpectrogramView(this).apply { visibility = View.GONE }
+        live.addView(spec, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(2) })
+        spec.onSeek = { ms -> playAudioAt(ms) }
         posText = TextView(this).apply {
             textSize = 12f; setTextColor(sec); gravity = Gravity.CENTER_HORIZONTAL
             setPadding(0, dp(2), 0, dp(4))
@@ -1543,6 +1561,15 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         return sig
     }
+    private fun updateAmbient(running: Boolean, results: Boolean) {
+        if (!::ambient.isInitialized) return
+        val job = SrtJob
+        val failed = results && job.error != null
+        val observed = PhasePalette.phaseOf(
+            job.curStep, running, results && !failed, failed, job.withTranslation, job.message, job.cooling
+        )
+        ambient.setPhase(phaseTracker.update(System.currentTimeMillis(), observed), running)
+    }
     private fun render() {
         if (!::runGroup.isInitialized) return
         val job = SrtJob
@@ -1550,6 +1577,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         val results = !running && job.queue.any { it.state != SrtJob.Q_WAIT && it.state != SrtJob.Q_RUN }
         val showRun = running || results
         if (running) watchedRun = true
+        updateAmbient(running, results)
         setupGroup.visibility = if (showRun) View.GONE else View.VISIBLE
         runGroup.visibility = if (showRun) View.VISIBLE else View.GONE
         progressSection.visibility = if (running) View.VISIBLE else View.GONE
@@ -1629,6 +1657,14 @@ class FileSubtitleActivity : AppCompatActivity() {
         }
         val wr = job.waveRanges
         if (shownRanges !== wr) { wave.setRanges(wr); shownRanges = wr }
+        val grid = job.waveSpec
+        if (grid != null && !grid.isEmpty) {
+            if (shownSpec !== grid) { spec.setGrid(grid, job.waveTotalMs); shownSpec = grid }
+            spec.visibility = View.VISIBLE
+            spec.setProgress(ProgressCursor.fraction(job.chunkState.copyOf(), job.chunkFracCopy(), wr, job.waveTotalMs))
+        } else {
+            spec.visibility = View.GONE
+        }
         if (job.chunkState.isNotEmpty()) {
             wave.setProgress(job.chunkState.copyOf(), job.chunkFracCopy())
         }

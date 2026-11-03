@@ -17,8 +17,8 @@ android {
         applicationId = "hu.angolmagyar.fordito"
         minSdk = 29
         targetSdk = 35
-        versionCode = 40700
-        versionName = "4.5.0"
+        versionCode = 40800
+        versionName = "4.6.0"
 
         // A telefon (Honor PGT-N19) arm64; így kisebb az APK.
         ndk {
@@ -122,6 +122,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
     // Jetpack Compose + Material 3
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")

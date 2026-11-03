@@ -29,40 +29,48 @@ fun AngolMagyarTheme(
     val stroke = colorResource(R.color.stroke)
     val err = colorResource(R.color.err)
     val scheme = if (prefs.platinumTheme && darkTheme) {
+        // A kiválasztott paletta a teljes Compose-felületet vezérli; az OLED mód csak a felületeket sötétíti.
         darkColorScheme(
             primary = luxury.accent,
             secondary = luxury.glow,
             tertiary = luxury.edge,
             background = if (isTrueBlack) Color.Black else luxury.background,
-            surface = if (isTrueBlack) Color(0xFF050505) else luxury.surface,
-            surfaceVariant = if (isTrueBlack) Color(0xFF101010) else luxury.surface.copy(alpha = 0.92f),
+            surface = if (isTrueBlack) Color(0xFF05070B) else luxury.surface,
+            surfaceVariant = if (isTrueBlack) Color(0xFF10141B) else luxury.surface.copy(alpha = 0.96f),
             primaryContainer = luxury.accent.copy(alpha = 0.20f),
             onPrimaryContainer = luxury.text,
-            onPrimary = Color(0xFF07130F),
-            onSecondary = Color(0xFF07130F),
+            onPrimary = Color(0xFF06111B),
+            onSecondary = Color(0xFF06111B),
             onBackground = luxury.text,
             onSurface = luxury.text,
-            onSurfaceVariant = luxury.text.copy(alpha = 0.72f),
+            onSurfaceVariant = luxury.text.copy(alpha = 0.76f),
             outline = luxury.edge.copy(alpha = 0.58f),
             error = Color(0xFFFF7777)
         )
     } else if (prefs.platinumTheme) {
-        val lightPrimary = if (prefs.luxuryThemeId == "forest") Color(0xFF286448) else Color(0xFF34536B)
+        // Világos módban is megmarad a választott neon/cyber akcentus, de a felületek olvashatóak maradnak.
+        val lightPrimary = when (prefs.luxuryThemeId) {
+            "forest", "matrix" -> Color(0xFF176B4B)
+            "violet", "neon" -> Color(0xFF5140A8)
+            "cyber", "arctic" -> Color(0xFF176B82)
+            "gold" -> Color(0xFF80601D)
+            else -> Color(0xFF245B91)
+        }
         lightColorScheme(
             primary = lightPrimary,
-            secondary = if (prefs.luxuryThemeId == "forest") Color(0xFF4E8066) else Color(0xFF587D9D),
-            tertiary = if (prefs.luxuryThemeId == "forest") Color(0xFF7BA88D) else Color(0xFF7897B4),
-            background = Color(0xFFF3F7F4),
+            secondary = lightPrimary.copy(red = (lightPrimary.red * 0.78f).coerceIn(0f, 1f), green = (lightPrimary.green * 0.92f).coerceIn(0f, 1f)),
+            tertiary = luxury.glow,
+            background = Color(0xFFF4F7FC),
             surface = Color(0xFFFFFFFF),
-            surfaceVariant = Color(0xFFE8EFEA),
+            surfaceVariant = Color(0xFFEAF0F8),
             primaryContainer = lightPrimary.copy(alpha = 0.12f),
-            onPrimaryContainer = Color(0xFF183A29),
+            onPrimaryContainer = Color(0xFF14243B),
             onPrimary = Color.White,
             onSecondary = Color.White,
-            onBackground = Color(0xFF17231C),
-            onSurface = Color(0xFF17231C),
-            onSurfaceVariant = Color(0xFF4D5E53),
-            outline = Color(0xFFB7C7BC),
+            onBackground = Color(0xFF101B2B),
+            onSurface = Color(0xFF101B2B),
+            onSurfaceVariant = Color(0xFF4D5D73),
+            outline = Color(0xFFB8C7D9),
             error = Color(0xFFB3261E)
         )
     } else if (darkTheme) {

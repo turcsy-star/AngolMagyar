@@ -16,7 +16,10 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 class LivePanels(private val ctx: Context, private val prefs: Prefs, private val full: Boolean = false) {
-    val root = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    val root = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(2), dp(8), dp(2), dp(2))
+    }
     private val origText: TextView
     private val trText: TextView
     private val origScroll: ScrollView
@@ -34,12 +37,27 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
     private var lastTr = ""
     private fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).toInt()
     private fun panel(title: TextView, body: TextView): ScrollView {
+        title.apply {
+            textSize = 11f
+            letterSpacing = 0.10f
+            setTextColor(Ui.color(ctx, R.color.primary))
+            setPadding(dp(4), dp(4), dp(4), dp(7))
+        }
         root.addView(title)
         panelViews.add(title)
         val sv = ScrollView(ctx).apply {
             isVerticalScrollBarEnabled = true
-            setPadding(dp(10), dp(8), dp(10), dp(8))
-            setBackgroundColor(Color.argb(28, 128, 128, 128))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    androidx.core.graphics.ColorUtils.blendARGB(Ui.color(ctx, R.color.card), Ui.color(ctx, R.color.primary), 0.10f),
+                    Ui.color(ctx, R.color.card)
+                )
+            ).apply {
+                cornerRadius = dp(16).toFloat()
+                setStroke(dp(1), androidx.core.graphics.ColorUtils.setAlphaComponent(Ui.color(ctx, R.color.accentGlow), 72))
+            }
             setOnTouchListener { v, _ -> v.parent?.requestDisallowInterceptTouchEvent(true); false }
             addView(body)
         }
@@ -52,8 +70,8 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
     }
     private val bars = LevelBars(ctx)
     init {
-        root.addView(bars, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(36)).apply {
-            bottomMargin = dp(6)
+        root.addView(bars, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(42)).apply {
+            bottomMargin = dp(10)
         })
         origText = Ui.body(ctx, "").apply { textSize = if (full) 22f else 16f }
         trText = Ui.body(ctx, "").apply { textSize = if (full) 28f else 18f }
@@ -77,9 +95,15 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
             try { prefs.raw().edit().putBoolean("liveBubbles", bubbleMode).apply() } catch (_: Exception) {}
             applyMode()
         }
+        modeBtn.background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(Ui.color(ctx, R.color.primary), 24))
+            setStroke(dp(1), androidx.core.graphics.ColorUtils.setAlphaComponent(Ui.color(ctx, R.color.primary), 110))
+        }
+        modeBtn.setTextColor(Ui.color(ctx, R.color.primary))
         root.addView(modeBtn, 1)
         applyMode()
-        root.addView(Ui.small(ctx, "🎯 Fordítás nyelve (a beszélőt automatikusan felismerem):"))
+        root.addView(Ui.sectionLabel(ctx, "Fordítási cél / automatikus beszélőfelismerés"))
         val spin = Spinner(ctx)
         val items = LangCatalog.ALL
         spin.adapter = ArrayAdapter(
@@ -125,18 +149,34 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
         val maxW = (ctx.resources.displayMetrics.widthPixels * 0.78f).toInt()
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = android.graphics.drawable.GradientDrawable().apply {
+            setPadding(dp(14), dp(11), dp(14), dp(11))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(
+                    androidx.core.graphics.ColorUtils.setAlphaComponent(col, 48),
+                    androidx.core.graphics.ColorUtils.blendARGB(Ui.color(ctx, R.color.card), col, 0.12f)
+                )
+            ).apply {
                 cornerRadius = dp(18).toFloat()
-                setColor((col and 0x00FFFFFF) or (0x2E shl 24))
-                setStroke(dp(1), (col and 0x00FFFFFF) or (0x90 shl 24))
+                setStroke(dp(1), androidx.core.graphics.ColorUtils.setAlphaComponent(col, 150))
             }
+            elevation = dp(2).toFloat()
         }
         val header = Ui.small(ctx, speakerHeader(lines, i)).apply {
             setTextColor(col); setTypeface(typeface, Typeface.BOLD); textSize = 12f; maxWidth = maxW
         }
-        val tr = Ui.body(ctx, "").apply { textSize = if (full) 24f else 17f; setTypeface(typeface, Typeface.BOLD); maxWidth = maxW }
-        val orig = Ui.small(ctx, l.original).apply { textSize = if (full) 16f else 13f; maxWidth = maxW }
+        val tr = Ui.body(ctx, "").apply {
+            textSize = if (full) 24f else 17f
+            setTextColor(Ui.color(ctx, R.color.textPrimary))
+            setTypeface(typeface, Typeface.BOLD)
+            maxWidth = maxW
+            setPadding(0, dp(5), 0, dp(3))
+        }
+        val orig = Ui.small(ctx, l.original).apply {
+            textSize = if (full) 16f else 13f
+            setTextColor(Ui.color(ctx, R.color.textSecondary))
+            maxWidth = maxW
+        }
         box.addView(header); box.addView(tr); box.addView(orig)
         val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             gravity = if (right) android.view.Gravity.END else android.view.Gravity.START
@@ -168,7 +208,7 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
         if (changed) bubbleScroll.post { bubbleScroll.fullScroll(View.FOCUS_DOWN) }
     }
     private fun refreshTitle() {
-        trTitle.text = "🌍 Fordítás – ${LangCatalog.nameHu(prefs.polyTarget)}"
+        trTitle.text = "🌍  FORDÍTÁS  ·  ${LangCatalog.nameHu(prefs.polyTarget).uppercase()}"
     }
     fun update(lines: List<LiveLine>) {
         if (lines === shown) return
@@ -228,6 +268,10 @@ class LivePanels(private val ctx: Context, private val prefs: Prefs, private val
     }
 }
 private class LevelBars(ctx: Context) : View(ctx) {
+    private val animateBars = try {
+        !Prefs(ctx).reduceMotion &&
+            !(ctx.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode
+    } catch (_: Exception) { false }
     private val n = 28
     private val h = FloatArray(n) { 0.06f }
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
@@ -246,18 +290,23 @@ private class LevelBars(ctx: Context) : View(ctx) {
             invalidate()
         }
     }
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); anim.start() }
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (animateBars) anim.start() else invalidate()
+    }
     override fun onDetachedFromWindow() { anim.cancel(); super.onDetachedFromWindow() }
     override fun onDraw(c: Canvas) {
         val w = width.toFloat(); val hh = height.toFloat()
         val slot = w / n
         val bw = slot * 0.6f
         val col = Ui.color(context, R.color.primary)
+        val staticLevel = AppState.level.coerceIn(0f, 1f)
         for (i in 0 until n) {
-            val bh = h[i] * hh
+            val value = if (animateBars) h[i] else (0.10f + staticLevel * (0.35f + 0.25f * kotlin.math.sin(i * 0.42f))).coerceIn(0.08f, 0.72f)
+            val bh = value * hh
             val x = i * slot + (slot - bw) / 2f
             rect.set(x, (hh - bh) / 2f, x + bw, (hh + bh) / 2f)
-            paint.color = (col and 0x00FFFFFF) or ((80 + (175 * h[i]).toInt().coerceAtMost(175)) shl 24)
+            paint.color = (col and 0x00FFFFFF) or ((80 + (175 * value).toInt().coerceAtMost(175)) shl 24)
             c.drawRoundRect(rect, bw / 2f, bw / 2f, paint)
         }
     }

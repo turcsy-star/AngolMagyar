@@ -27,8 +27,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -100,6 +102,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import hu.angolmagyar.fordito.Accent
 import hu.angolmagyar.fordito.App
 import hu.angolmagyar.fordito.AppState
@@ -201,7 +204,17 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
             .show()
     }
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+        splash.setOnExitAnimationListener { provider ->
+            val v = provider.view
+            if (hu.angolmagyar.fordito.ui.design.PremiumMotion.reduced(this)) {
+                provider.remove()
+            } else {
+                v.animate().alpha(0f).scaleX(1.12f).scaleY(1.12f).setDuration(280L)
+                    .withEndAction { provider.remove() }.start()
+            }
+        }
         enableEdgeToEdge()
         prefs = Prefs(this)
         appliedThemeSignature = themeSignature()
@@ -339,6 +352,13 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Staggered(0, shown) { Header(running = snap.running || jobRunning, error = snap.lastError != null) }
+            Staggered(1, shown) {
+                FuturisticWelcomePanel(
+                    active = snap.running || jobRunning,
+                    onLive = onLive,
+                    onSubtitles = onSubtitles
+                )
+            }
             Staggered(1, shown) { DiamondExperiencePanel(active = snap.running || jobRunning) }
             Staggered(2, shown) {
                 PlatinumUltraConsole(
@@ -708,6 +728,93 @@ private fun PlatinumMetric(
     }
 }
 @Composable
+private fun FuturisticWelcomePanel(
+    active: Boolean,
+    onLive: () -> Unit,
+    onSubtitles: () -> Unit
+) {
+    val palette = hu.angolmagyar.fordito.ui.design.LuxuryPalettes.byId(
+        hu.angolmagyar.fordito.Prefs(LocalContext.current).luxuryThemeId
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Box(
+            Modifier
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            palette.background,
+                            palette.surface,
+                            palette.accent.copy(alpha = 0.34f),
+                            palette.glow.copy(alpha = 0.16f)
+                        )
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        Modifier.size(8.dp).clip(CircleShape).background(if (active) Color(0xFF4DE2C1) else palette.glow)
+                    )
+                    Text(
+                        if (active) "AI CORE · AKTÍV" else "AI LANGUAGE CORE",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.edge,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.4.sp
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text("EN  ⇄  HU", style = MaterialTheme.typography.labelMedium, color = palette.text.copy(alpha = 0.78f))
+                }
+                Text(
+                    "A nyelvi akadályok
+eltűnnek.",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = palette.text,
+                    lineHeight = 34.sp
+                )
+                Text(
+                    "Fordítás, beszédfelismerés és feliratkészítés – egyetlen intelligens munkakörnyezetben.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.text.copy(alpha = 0.78f)
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    androidx.compose.material3.Button(
+                        onClick = onLive,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(15.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = palette.accent,
+                            contentColor = Color(0xFF06111B)
+                        )
+                    ) {
+                        Icon(Icons.Rounded.Mic, contentDescription = null)
+                        Spacer(Modifier.size(7.dp))
+                        Text("Élő fordítás", fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onSubtitles,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(15.dp),
+                        border = BorderStroke(1.dp, palette.edge.copy(alpha = 0.62f))
+                    ) {
+                        Icon(Icons.Rounded.Movie, contentDescription = null, tint = palette.edge)
+                        Spacer(Modifier.size(7.dp))
+                        Text("Felirat", color = palette.text, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun DiamondExperiencePanel(active: Boolean) {
     val context = LocalContext.current
     val reducedMotion = remember(context) {
@@ -964,7 +1071,7 @@ private fun Header(running: Boolean, error: Boolean) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             StatusPill(label = "✦ GYÉMÁNT")
-            StatusPill(label = "v3.13")
+            StatusPill(label = "v4.6.0")
         }
         Text(
             text = "INTELLIGENS ÁTIRAT  ·  AI FORDÍTÁS  ·  OFFLINE KÉSZENLÉT",
@@ -1397,6 +1504,63 @@ fun ThemePicker() {
                         },
                     contentAlignment = Alignment.Center
                 ) { if (sel) Text("✓", color = Color.White, fontWeight = FontWeight.Bold) }
+            }
+        }
+        Text("FUTURISZTIKUS SZÍNVILÁG", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
+        val selectedPalette = hu.angolmagyar.fordito.ui.design.LuxuryPalettes.byId(prefs.luxuryThemeId)
+        Text(
+            "AKTÍV TÉMA · ${selectedPalette.title.uppercase()}",
+            style = MaterialTheme.typography.labelSmall,
+            color = selectedPalette.edge,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.0.sp
+        )
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            hu.angolmagyar.fordito.ui.design.LuxuryPalettes.all.forEach { palette ->
+                val selected = prefs.luxuryThemeId == palette.id
+                Column(
+                    Modifier
+                        .size(width = 148.dp, height = 94.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(palette.background, palette.surface, palette.accent.copy(alpha = 0.48f))
+                            )
+                        )
+                        .then(
+                            if (selected) Modifier.border(
+                                BorderStroke(2.dp, palette.edge.copy(alpha = 0.95f)), RoundedCornerShape(16.dp)
+                            ) else Modifier.border(
+                                BorderStroke(1.dp, palette.edge.copy(alpha = 0.24f)), RoundedCornerShape(16.dp)
+                            )
+                        )
+                        .clickable {
+                            prefs.luxuryThemeId = palette.id
+                            activity?.recreate()
+                        }
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(9.dp).clip(CircleShape).background(palette.accent))
+                        Spacer(Modifier.size(5.dp))
+                        Box(Modifier.size(9.dp).clip(CircleShape).background(palette.glow))
+                        Spacer(Modifier.weight(1f))
+                        if (selected) Text("✓", color = palette.text, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Text(
+                        palette.title,
+                        color = palette.text,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

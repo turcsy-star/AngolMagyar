@@ -253,7 +253,11 @@ class SettingsActivity : AppCompatActivity() {
             Triple("obsidian", "Obsidian Black", intArrayOf(0xFF030405.toInt(), 0xFFB6BEC8.toInt(), 0xFF737F8C.toInt())),
             Triple("gold", "Royal Gold", intArrayOf(0xFF100D08.toInt(), 0xFFD6B36A.toInt(), 0xFF9F7A36.toInt())),
             Triple("arctic", "Arctic Diamond", intArrayOf(0xFF071018.toInt(), 0xFF8ADCF2.toInt(), 0xFF4FAFCB.toInt())),
-            Triple("sapphire", "Midnight Sapphire", intArrayOf(0xFF050A18.toInt(), 0xFF78B8FF.toInt(), 0xFF53E7FF.toInt()))
+            Triple("sapphire", "Midnight Sapphire", intArrayOf(0xFF050A18.toInt(), 0xFF78B8FF.toInt(), 0xFF53E7FF.toInt())),
+            Triple("neon", "Neon Pulse", intArrayOf(0xFF08091B.toInt(), 0xFF8B7CFF.toInt(), 0xFF36D9FF.toInt())),
+            Triple("cyber", "Cyber Horizon", intArrayOf(0xFF06131A.toInt(), 0xFF35C9D0.toInt(), 0xFF4D8DFF.toInt())),
+            Triple("violet", "Cosmic Violet", intArrayOf(0xFF10091D.toInt(), 0xFFB18CFF.toInt(), 0xFFEC79D8.toInt())),
+            Triple("matrix", "Matrix Emerald", intArrayOf(0xFF04130F.toInt(), 0xFF48D597.toInt(), 0xFF39C9B0.toInt()))
         )
         paletteRows.forEach { (key, title, swatchColors) ->
             luxuryThemes.addView(RadioButton(this).apply {
