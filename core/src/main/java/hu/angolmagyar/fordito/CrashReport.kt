@@ -35,11 +35,23 @@ object CrashReport {
 
     /** Hozzáfűz, és a legrégebbi bejegyzések elhagyásával a korlát alatt tartja. */
     fun append(existing: String, entry: String, maxChars: Int = MAX_CHARS): String {
+        if (maxChars <= 0) return ""
         val all = if (existing.isBlank()) entry else existing.trimEnd() + "\n" + entry
         if (all.length <= maxChars) return all
-        val cut = all.length - maxChars
-        val next = all.indexOf(SEPARATOR, cut)
-        return if (next >= 0) all.substring(next) else all.takeLast(maxChars)
+
+        // Teljes bejegyzéseket dobunk el, nem egy karakterpozícióból vágunk.
+        // Így a megmaradó napló mindig a legfrissebb teljes bejegyzésekkel kezdődik.
+        var start = all.indexOf(SEPARATOR)
+        if (start < 0) return all.takeLast(maxChars)
+
+        while (true) {
+            val next = all.indexOf(SEPARATOR, start + SEPARATOR.length)
+            if (next < 0 || all.length - start <= maxChars) break
+            start = next
+        }
+
+        val retained = all.substring(start)
+        return if (retained.length <= maxChars) retained else retained.takeLast(maxChars)
     }
 
     fun entryCount(log: String): Int = log.split(SEPARATOR).size - 1
