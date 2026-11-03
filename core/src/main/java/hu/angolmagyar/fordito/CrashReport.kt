@@ -51,7 +51,10 @@ object CrashReport {
         }
 
         val retained = all.substring(start)
-        return if (retained.length <= maxChars) retained else retained.takeLast(maxChars)
+        // Ha már az egyetlen megmaradó (legfrissebb) bejegyzés önmagában is
+        // nagyobb a keretnél, annak elejét tartjuk meg: az időbélyeg és a
+        // kivétel típusa fontosabb, mint a stack trace vége.
+        return if (retained.length <= maxChars) retained else retained.take(maxChars)
     }
 
     fun entryCount(log: String): Int = log.split(SEPARATOR).size - 1
