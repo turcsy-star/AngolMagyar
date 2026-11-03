@@ -1,7 +1,0 @@
-1
-00:00:00,000 --> 00:00:04,000
-I did not agree with the decision, but Anna from London
-
-2
-00:00:04,100 --> 00:00:08,000
-said that we have no other choice. We can try again on Monday if the whether is fine.
