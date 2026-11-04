@@ -214,10 +214,12 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         Provider.GEMINI -> mapOf("content-type" to "application/json", "x-goog-api-key" to cfg.apiKey)
     }
     private var netDown = 0
+    @Volatile private var testMode = false
     private fun call(system: String, user: String, cancel: () -> Boolean): String? {
         var attempt = 0
         var netError: Throwable? = null
-        while (attempt < 4 && !cancel()) {
+        val maxAttempts = if (testMode) 1 else 4
+        while (attempt < maxAttempts && !cancel()) {
             attempt++
             try {
                 val (code, body) = http.post(endpoint(), headers(), requestBody(system, user), cfg.timeoutMs)
@@ -253,7 +255,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                     }
                     code >= 500 -> {
                         lastError = "A szolgáltató átmenetileg nem elérhető (HTTP $code)."
-                        if (attempt < 4) {
+                        if (attempt < maxAttempts) {
                             try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) { return null }
                         } else {
                             fatal = true
@@ -265,12 +267,13 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             } catch (e: Exception) {
                 netError = e
                 lastError = netErrorText(e)
-                if (attempt < 4) {
+                if (attempt < maxAttempts) {
                     try { Thread.sleep(1000L * attempt) } catch (_: InterruptedException) { return null }
                 }
             }
         }
         // Két egymás utáni, teljesen sikertelen (hálózati) hívás után nem várunk tovább: az offline tartalék azonnal indulhat.
+        if (testMode && netError != null) fatal = true
         if (netError != null && ++netDown >= 2) {
             lastError = "Nincs kapcsolat a szolgáltatóhoz – ${lastError}"
             fatal = true
@@ -371,9 +374,16 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         return failed
     }
     fun test(): String? {
-        val hu = mutableListOf("")
-        val failed = translate(listOf("Hello, how are you today?"), hu, listOf(0))
-        return if (failed.isEmpty() && hu[0].isNotBlank()) null else lastError.ifBlank { "Nem érkezett fordítás." }
+        // A kapcsolatpróba ne használja a normál fordítás hosszú újrapróbálkozásait.
+        // Legfeljebb egy rövid hálózati kérés legyen, hogy hibás/néma hálózatnál se tűnjön végtelennek.
+        testMode = true
+        return try {
+            val hu = mutableListOf("")
+            val failed = translate(listOf("Hello, how are you today?"), hu, listOf(0))
+            if (failed.isEmpty() && hu[0].isNotBlank()) null else lastError.ifBlank { "Nem érkezett fordítás." }
+        } finally {
+            testMode = false
+        }
     }
 }
 object UrlHttp : OnlineTranslator.Http {
@@ -381,7 +391,7 @@ object UrlHttp : OnlineTranslator.Http {
         val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
         try {
             c.requestMethod = "POST"
-            c.connectTimeout = 20_000
+            c.connectTimeout = timeoutMs.coerceAtMost(12_000).coerceAtLeast(3_000)
             c.readTimeout = timeoutMs
             c.doOutput = true
             for ((k, v) in headers) c.setRequestProperty(k, v)
