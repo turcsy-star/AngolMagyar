@@ -1010,10 +1010,14 @@ private fun TranslationComfortCard() {
 }
 @Composable
 private fun Staggered(index: Int, shown: Boolean, content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val fadeDuration = PremiumMotion.fade(context)
+    val slideDuration = PremiumMotion.stateChange(context)
+    val delay = if (fadeDuration == 0 && slideDuration == 0) 0 else index * 45
     AnimatedVisibility(
         visible = shown,
-        enter = fadeIn(tween(420, delayMillis = index * 80)) +
-            slideInVertically(tween(480, delayMillis = index * 80, easing = FastOutSlowInEasing)) { it / 5 }
+        enter = fadeIn(tween(fadeDuration, delayMillis = delay)) +
+            slideInVertically(tween(slideDuration, delayMillis = delay, easing = FastOutSlowInEasing)) { it / 5 }
     ) { content() }
 }
 @Composable
@@ -1024,7 +1028,7 @@ private fun AuroraBackground(active: Boolean) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     val powerSave = remember { (ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true }
-    val animate = !prefs.reduceMotion && !powerSave
+    val animate = active && PremiumMotion.allowLoops(ctx) && !powerSave
     val p = MaterialTheme.colorScheme.primary
     val s = MaterialTheme.colorScheme.tertiary
     if (animate) {
