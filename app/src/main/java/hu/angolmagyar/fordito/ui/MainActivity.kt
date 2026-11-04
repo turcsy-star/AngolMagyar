@@ -1177,12 +1177,8 @@ private fun JobFinishedCard(message: String, onOpen: () -> Unit, onDismiss: () -
         onDismiss()
     }
     Box(Modifier.fillMaxWidth()) {
-        Card(
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        PremiumCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("DIAMOND · END CARD", color = Color(0xFF5FD3A0), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
                 Text("Feldolgozás befejezve", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -1229,12 +1225,8 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
         pct >= 18 -> 1
         else -> 0
     }
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    PremiumCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("DIAMOND · FOLYAMATBAN", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
@@ -1284,12 +1276,8 @@ private fun LiveCard(
     snap: hu.angolmagyar.fordito.AppSnapshot, elapsed: String, amplitudes: List<Float>,
     onPause: () -> Unit, onStop: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
-    ) {
-        Column(Modifier.padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
                     if (snap.paused) "Szünet" else "Élő fordítás",
