@@ -16,6 +16,7 @@ import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.ui.graphics.toArgb
 import android.widget.Toast
 import java.io.File
 import java.util.concurrent.Executors
@@ -247,18 +248,13 @@ class SettingsActivity : AppCompatActivity() {
         })
         dirCard.addView(Ui.small(this, "Globális Infinity Luxury téma — a kiválasztott paletta a Compose Material 3 felület színeit is vezérli."))
         val luxuryThemes = android.widget.RadioGroup(this).apply { orientation = android.widget.RadioGroup.VERTICAL }
-        val paletteRows = listOf(
-            Triple("forest", "Forest Graphite", intArrayOf(0xFF07130F.toInt(), 0xFF62A982.toInt(), 0xFF2F7657.toInt())),
-            Triple("platinum", "Platinum Silver", intArrayOf(0xFF080B10.toInt(), 0xFFC8D0DA.toInt(), 0xFF8EA6C0.toInt())),
-            Triple("obsidian", "Obsidian Black", intArrayOf(0xFF030405.toInt(), 0xFFB6BEC8.toInt(), 0xFF737F8C.toInt())),
-            Triple("gold", "Royal Gold", intArrayOf(0xFF100D08.toInt(), 0xFFD6B36A.toInt(), 0xFF9F7A36.toInt())),
-            Triple("arctic", "Arctic Diamond", intArrayOf(0xFF071018.toInt(), 0xFF8ADCF2.toInt(), 0xFF4FAFCB.toInt())),
-            Triple("sapphire", "Midnight Sapphire", intArrayOf(0xFF050A18.toInt(), 0xFF78B8FF.toInt(), 0xFF53E7FF.toInt())),
-            Triple("neon", "Neon Pulse", intArrayOf(0xFF08091B.toInt(), 0xFF8B7CFF.toInt(), 0xFF36D9FF.toInt())),
-            Triple("cyber", "Cyber Horizon", intArrayOf(0xFF06131A.toInt(), 0xFF35C9D0.toInt(), 0xFF4D8DFF.toInt())),
-            Triple("violet", "Cosmic Violet", intArrayOf(0xFF10091D.toInt(), 0xFFB18CFF.toInt(), 0xFFEC79D8.toInt())),
-            Triple("matrix", "Matrix Emerald", intArrayOf(0xFF04130F.toInt(), 0xFF48D597.toInt(), 0xFF39C9B0.toInt()))
-        )
+        val paletteRows = hu.angolmagyar.fordito.ui.design.LuxuryPalettes.ultimate.map { palette ->
+            Triple(
+                palette.id,
+                palette.title,
+                intArrayOf(palette.background.toArgb(), palette.accent.toArgb(), palette.glow.toArgb())
+            )
+        }
         paletteRows.forEach { (key, title, swatchColors) ->
             luxuryThemes.addView(RadioButton(this).apply {
                 id = View.generateViewId()
@@ -274,11 +270,11 @@ class SettingsActivity : AppCompatActivity() {
                 setCompoundDrawables(null, null, swatch, null)
                 compoundDrawablePadding = dp(12)
                 contentDescription = "$title színpaletta előnézettel"
-                setOnClickListener { prefs.luxuryThemeId = key }
+                setOnClickListener { prefs.platinumTheme = true; prefs.luxuryThemeId = key }
             })
         }
         dirCard.addView(luxuryThemes)
-        dirCard.addView(Ui.small(this, "A színcsíkok a háttér, a fő kiemelőszín és a másodlagos fény színét mutatják. A módosítás a fő Compose-felületen a Beállításokból visszatérve frissül; a klasszikus View-képernyők külön témázása későbbi migráció."))
+        dirCard.addView(Ui.small(this, "A kilenc Ultimate paletta a Compose- és a hagyományos Android-képernyők közös színrendszerét vezérli. A korábbi palettaazonosítók kompatibilitás miatt megmaradnak."))
         dirCard.addView(switchRow("Csökkentett animáció", prefs.reduceMotion) {
             prefs.reduceMotion = it
         })
