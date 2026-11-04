@@ -1,6 +1,6 @@
 package hu.angolmagyar.fordito
 class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp) {
-    enum class Provider { ANTHROPIC, OPENAI, DEEPL }
+    enum class Provider { ANTHROPIC, OPENAI, DEEPL, GEMINI, MISTRAL }
     data class Config(
         val provider: Provider,
         val apiKey: String,
@@ -25,6 +25,9 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     companion object {
         const val DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5"
         const val DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
+        const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_MISTRAL_MODEL = "mistral-small-latest"
+        const val DEFAULT_MISTRAL_BASE = "https://api.mistral.ai/v1"
         private const val CTX_BEFORE = 4
         private const val CTX_AFTER = 3
         fun systemPrompt(cfg: Config): String {
@@ -95,9 +98,15 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                         .joinToString("") { it["text"]?.toString() ?: "" }.ifBlank { null }
                 }
                 Provider.DEEPL -> body
-                Provider.OPENAI -> {
+                Provider.OPENAI, Provider.MISTRAL -> {
                     val ch = (root["choices"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: return null
                     ((ch["message"] as? Map<*, *>)?.get("content") as? String)?.ifBlank { null }
+                }
+                Provider.GEMINI -> {
+                    val candidate = (root["candidates"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: return null
+                    val content = candidate["content"] as? Map<*, *> ?: return null
+                    val parts = content["parts"] as? List<*> ?: return null
+                    parts.filterIsInstance<Map<*, *>>().joinToString("") { it["text"]?.toString() ?: "" }.ifBlank { null }
                 }
             }
         }
@@ -172,16 +181,22 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         Provider.ANTHROPIC -> (cfg.baseUrl.ifBlank { "https://api.anthropic.com" }).trimEnd('/') + "/v1/messages"
         Provider.OPENAI -> (cfg.baseUrl.ifBlank { DEFAULT_OPENAI_BASE }).trimEnd('/') + "/chat/completions"
         Provider.DEEPL -> deeplEndpoint(cfg.apiKey, cfg.baseUrl)
+        Provider.GEMINI -> "https://generativelanguage.googleapis.com/v1beta/models/${cfg.model.ifBlank { DEFAULT_GEMINI_MODEL }}:generateContent"
+        Provider.MISTRAL -> (cfg.baseUrl.ifBlank { DEFAULT_MISTRAL_BASE }).trimEnd('/') + "/chat/completions"
     }
     private fun requestBody(system: String, user: String): String = when (cfg.provider) {
         Provider.ANTHROPIC ->
             "{\"model\":${MiniJson.quote(cfg.model)},\"max_tokens\":4096,\"system\":${MiniJson.quote(system)}," +
                 "\"messages\":[{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
         Provider.DEEPL -> user
-        Provider.OPENAI ->
+        Provider.OPENAI, Provider.MISTRAL ->
             "{\"model\":${MiniJson.quote(cfg.model)},\"temperature\":0.2,\"messages\":[" +
                 "{\"role\":\"system\",\"content\":${MiniJson.quote(system)}}," +
                 "{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
+        Provider.GEMINI ->
+            "{\"systemInstruction\":{\"parts\":[{\"text\":${MiniJson.quote(system)}}]}," +
+                "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":${MiniJson.quote(user)}}]}]," +
+                "\"generationConfig\":{\"temperature\":0.2,\"maxOutputTokens\":4096,\"responseMimeType\":\"application/json\"}}"
     }
     private fun headers(): Map<String, String> = when (cfg.provider) {
         Provider.ANTHROPIC -> mapOf(
@@ -190,12 +205,13 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         Provider.DEEPL -> mapOf(
             "content-type" to "application/json", "authorization" to "DeepL-Auth-Key ${cfg.apiKey.trim()}"
         )
-        Provider.OPENAI -> {
+        Provider.OPENAI, Provider.MISTRAL -> {
             val h = LinkedHashMap<String, String>()
             h["content-type"] = "application/json"
             if (cfg.apiKey.isNotBlank()) h["authorization"] = "Bearer ${cfg.apiKey}"
             h
         }
+        Provider.GEMINI -> mapOf("content-type" to "application/json", "x-goog-api-key" to cfg.apiKey)
     }
     private var netDown = 0
     private fun call(system: String, user: String, cancel: () -> Boolean): String? {
@@ -230,8 +246,13 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                         return null
                     }
                     code == 429 || code >= 500 -> {
-                        lastError = "A szolgáltató elfoglalt (HTTP $code), újrapróbálom…"
-                        try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) { return null }
+                        lastError = if (code == 429) "A szolgáltató kvótája vagy sebességkorlátja elérve (HTTP 429)." else "A szolgáltató átmenetileg nem elérhető (HTTP $code)."
+                        if (attempt < 4) {
+                            try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) { return null }
+                        } else {
+                            fatal = true
+                            return null
+                        }
                     }
                     else -> { lastError = "HTTP $code: ${errorMessage(body)}"; return null }
                 }
