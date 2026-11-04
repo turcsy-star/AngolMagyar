@@ -90,7 +90,8 @@ object Ui {
             )
         }
     fun heroHeader(ctx: Context, eyebrow: String, heading: String, detail: String): LinearLayout {
-        val palette = LuxuryPalettes.byId(Prefs(ctx).luxuryThemeId)
+        val themePrefs = Prefs(ctx)
+        val palette = LuxuryPalettes.byId(if (themePrefs.platinumTheme) themePrefs.luxuryThemeId else "premium")
         val motionMs = hu.angolmagyar.fordito.ui.design.PremiumMotion.cardEnter(ctx)
         val wrap = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -148,7 +149,7 @@ object Ui {
             text = label.uppercase()
             textSize = 11f
             letterSpacing = 0.14f
-            setTextColor(LuxuryPalettes.byId(Prefs(ctx).luxuryThemeId).accent.toArgb())
+            setTextColor(LuxuryPalettes.byId(if (Prefs(ctx).platinumTheme) Prefs(ctx).luxuryThemeId else "premium").accent.toArgb())
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(ctx, 2), dp(ctx, 18), 0, dp(ctx, 5))
         }
