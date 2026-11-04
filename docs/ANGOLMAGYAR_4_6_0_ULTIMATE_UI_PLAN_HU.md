@@ -111,6 +111,9 @@ A korábbi palettaazonosítók kompatibilitási okból megmaradnak, így a felha
 - [x] Ultimate témaválasztó beépítése a Megjelenés & kényelem képernyőre.
 - [x] Balanced mozgásprofil alapértelmezése új telepítésnél.
 - [x] Animációcsökkentési kapcsoló és rendszerbeállítás tiszteletben tartása.
+- [x] A főképernyő témaválasztója pontosan a kilenc Ultimate palettát mutatja.
+- [x] A klasszikus és Compose megjelenési beállítások ugyanazt a kilenc palettát használják.
+- [x] A Compose megjelenési beállítások Premium Design System kártyákat használnak; a Balanced animáció profil helyes állapotból indul.
 - [ ] Minden további képernyő vizuális auditja és egységesítése.
 - [ ] Teljes regressziós teszt és sikeres CI build.
 - [ ] APK és teljes forráscsomag ellenőrzött kiadása.
