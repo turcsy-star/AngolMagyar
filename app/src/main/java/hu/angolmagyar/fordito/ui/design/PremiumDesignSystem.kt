@@ -55,7 +55,7 @@ fun ProvidePremiumDesignSystem(spacing: PremiumSpacing = PremiumSpacing(), motio
 fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
-    val luxuryPalette = remember(context) { LuxuryPalettes.byId(Prefs(context).luxuryThemeId) }
+    val luxuryPalette = remember(context) { val prefs = Prefs(context); LuxuryPalettes.byId(if (prefs.platinumTheme) prefs.luxuryThemeId else "premium") }
     val powerSave = remember(context) {
         (context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true
     }
