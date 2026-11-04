@@ -476,11 +476,18 @@ private fun PlatinumUltraConsole(
     level: Float,
     jobPct: Int
 ) {
-    val onyx = Color(0xFF090B10)
-    val graphite = Color(0xFF171B23)
-    val platinum = Color(0xFFF0EFEA)
-    val steel = Color(0xFF9CA6B5)
-    val iceWhite = Color(0xFFD6E9FF)
+    val themeContext = LocalContext.current
+    val themePrefs = remember(themeContext) { hu.angolmagyar.fordito.Prefs(themeContext) }
+    val palette = remember(themeContext, themePrefs.luxuryThemeId, themePrefs.platinumTheme) {
+        hu.angolmagyar.fordito.ui.design.LuxuryPalettes.byId(
+            if (themePrefs.platinumTheme) themePrefs.luxuryThemeId else "premium"
+        )
+    }
+    val onyx = palette.background
+    val graphite = palette.surface
+    val platinum = palette.text
+    val steel = palette.text.copy(alpha = 0.68f)
+    val iceWhite = palette.edge
     val mint = Color(0xFF72D6AD)
     val status = when {
         active -> "ÉLŐ FORDÍTÁS AKTÍV"
@@ -520,7 +527,7 @@ private fun PlatinumUltraConsole(
                 .fillMaxWidth()
                 .background(
                     Brush.linearGradient(
-                        listOf(Color(0xFF252B36), graphite, Color(0xFF0B0D12))
+                        listOf(palette.surface, graphite, palette.background)
                     )
                 )
                 .padding(18.dp),
@@ -552,7 +559,7 @@ private fun PlatinumUltraConsole(
                         .clip(CircleShape)
                         .background(
                             Brush.linearGradient(
-                                listOf(Color(0xFFFAF7ED), Color(0xFF9DA6B3), Color(0xFF4B5360))
+                                listOf(palette.edge, palette.accent, palette.surface)
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -560,7 +567,7 @@ private fun PlatinumUltraConsole(
                     Canvas(Modifier.size(27.dp)) {
                         val c = center
                         val r = size.minDimension * 0.42f
-                        drawLine(Color(0xFF171B23), Offset(c.x, c.y - r), Offset(c.x + r, c.y + r * 0.72f), 2.dp.toPx())
+                        drawLine(palette.background, Offset(c.x, c.y - r), Offset(c.x + r, c.y + r * 0.72f), 2.dp.toPx())
                         drawLine(Color(0xFF171B23), Offset(c.x + r, c.y + r * 0.72f), Offset(c.x - r, c.y + r * 0.72f), 2.dp.toPx())
                         drawLine(Color(0xFF171B23), Offset(c.x - r, c.y + r * 0.72f), Offset(c.x, c.y - r), 2.dp.toPx())
                         drawLine(Color(0xFF171B23), Offset(c.x, c.y - r), Offset(c.x, c.y + r * 0.72f), 1.dp.toPx())
@@ -618,7 +625,7 @@ private fun PlatinumUltraConsole(
                         val barHeight = (size.height * normalized).coerceAtLeast(2.dp.toPx())
                         val x = i * (barWidth + gap)
                         drawRoundRect(
-                            color = if (active) Color(0xFF9CCDF5).copy(alpha = 0.45f + normalized * 0.55f) else iceWhite.copy(alpha = 0.3f + normalized * 0.6f),
+                            color = if (active) palette.accent.copy(alpha = 0.45f + normalized * 0.55f) else iceWhite.copy(alpha = 0.3f + normalized * 0.6f),
                             topLeft = Offset(x, (size.height - barHeight) / 2f),
                             size = Size(barWidth, barHeight),
                             cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
