@@ -740,6 +740,7 @@ class FileSubtitleActivity : AppCompatActivity() {
     }
     private fun buildSetup(meeting: Boolean) {
         val g = setupGroup
+        g.addView(Ui.sectionLabel(this, "FELDOLGOZÁSI BEÁLLÍTÁSOK"))
         quickBtn = Ui.button(this, "Fájlok kiválasztása…", true) {
             if (SrtJob.queue.any { it.state == SrtJob.Q_WAIT }) startProcess() else pickFiles()
         }
@@ -824,6 +825,7 @@ class FileSubtitleActivity : AppCompatActivity() {
             }
         }
         refreshEngineInfo()
+        g.addView(Ui.sectionLabel(this, "BEMENETI FÁJLOK ÉS MENTÉS"))
         val filesCard = Ui.card(this)
         filesCard.addView(Ui.title(this, "1. Fájlok", 16f))
         setupQueueBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -845,6 +847,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         })
         g.addView(whereCard)
         refreshWhere()
+        g.addView(Ui.sectionLabel(this, "HALADÓ BEÁLLÍTÁSOK ÉS PROFIL"))
         g.addView(makeTranslateModeCard())
         val projCard = makeProjectCard()
         val profCard = makeProfileCard()
@@ -1132,7 +1135,9 @@ class FileSubtitleActivity : AppCompatActivity() {
         head.addView(previewBox, head.indexOfChild(live) + 1, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { topMargin = dp(10) })
+        g.addView(Ui.sectionLabel(this, "FELDOLGOZÁS ÁLLAPOTA"))
         g.addView(progressSection)
+        g.addView(Ui.sectionLabel(this, "EREDMÉNY ÉS ELLENŐRZÉS"))
         resultSection = Ui.card(this)
         checkView = CheckView(this)
         resultSection.addView(checkView, LinearLayout.LayoutParams(
@@ -1152,6 +1157,7 @@ class FileSubtitleActivity : AppCompatActivity() {
         resultSection.addView(Ui.smallButton(this, "Hibajelentés / napló küldése…") { DiagLog.share(this) })
         resultSection.addView(Ui.button(this, "Bezárás", false) { finish() })
         g.addView(resultSection)
+        g.addView(Ui.sectionLabel(this, "FELDOLGOZÁSI SOR"))
         val qCard = Ui.card(this)
         runQueueTitle = Ui.title(this, "Fájlok", 16f)
         qCard.addView(runQueueTitle)
