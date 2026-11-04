@@ -109,7 +109,8 @@ object OnlinePrefs {
     fun missing(ctx: Context): List<String> {
         val out = ArrayList<String>()
         val prov = provider(ctx)
-        if (!EndpointPolicy.isAllowed(baseUrl(ctx)))
+        // A Gemini a Google rögzített HTTPS-végpontját használja; az egyéni végpont mező nem vonatkozik rá.
+        if (prov != OnlineTranslator.Provider.GEMINI && !EndpointPolicy.isAllowed(baseUrl(ctx)))
             out.add("biztonságos végpont (távoli szerverhez HTTPS kell; HTTP csak helyi hálózaton engedélyezett)")
         if (apiKey(ctx).isBlank() && !(prov == OnlineTranslator.Provider.OPENAI && baseUrl(ctx).isNotBlank()))
             out.add("API-kulcs")
@@ -119,8 +120,9 @@ object OnlinePrefs {
     }
 
     fun usable(ctx: Context): Boolean {
-        if (!consent(ctx) || !EndpointPolicy.isAllowed(baseUrl(ctx))) return false
+        if (!consent(ctx)) return false
         val prov = provider(ctx)
+        if (prov != OnlineTranslator.Provider.GEMINI && !EndpointPolicy.isAllowed(baseUrl(ctx))) return false
         val keyOk = apiKey(ctx).isNotBlank() || (prov == OnlineTranslator.Provider.OPENAI && baseUrl(ctx).isNotBlank())
         val modelOk = model(ctx).isNotBlank() || prov == OnlineTranslator.Provider.DEEPL
         return keyOk && modelOk
