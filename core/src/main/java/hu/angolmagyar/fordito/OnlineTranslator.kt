@@ -218,7 +218,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     private fun call(system: String, user: String, cancel: () -> Boolean): String? {
         var attempt = 0
         var netError: Throwable? = null
-        val maxAttempts = if (testMode) 1 else 4
+        val maxAttempts = if (testMode) 3 else 4
         while (attempt < maxAttempts && !cancel()) {
             attempt++
             try {
@@ -254,9 +254,18 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                         return null
                     }
                     code >= 500 -> {
-                        lastError = "A szolgáltató átmenetileg nem elérhető (HTTP $code)."
+                        val detail = errorMessage(body).trim().take(240)
+                        lastError = "A Gemini/szolgáltató átmenetileg nem elérhető (HTTP $code)." +
+                            if (detail.isNotBlank() && detail != body.take(160)) " Részlet: $detail" else ""
                         if (attempt < maxAttempts) {
-                            try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) { return null }
+                            // Exponenciális visszavárakozás: kapcsolatpróbánál rövidebb,
+                            // normál fordításnál legfeljebb 8 másodperc két kérés között.
+                            val delayMs = if (testMode) {
+                                if (attempt == 1) 1_500L else 3_000L
+                            } else {
+                                (2_000L shl (attempt - 1)).coerceAtMost(8_000L)
+                            }
+                            try { Thread.sleep(delayMs) } catch (_: InterruptedException) { return null }
                         } else {
                             fatal = true
                             return null
