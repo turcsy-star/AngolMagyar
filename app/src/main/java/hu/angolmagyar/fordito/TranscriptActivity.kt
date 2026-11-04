@@ -80,6 +80,7 @@ class TranscriptActivity : AppCompatActivity() {
         )
         content.addView(header)
         content.addView(Ui.heroHeader(this, "LIBRARY", "Mentett átiratok", "Keresd vissza, szűrd és kezeld a korábbi beszélgetéseidet."), LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(4), dp(16), dp(8)) })
+        content.addView(Ui.sectionLabel(this, "KERESÉS ÉS SZŰRÉS"), LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(4), dp(16), 0) })
         searchBox = AppCompatEditText(this).apply {
             hint = getString(R.string.tr_search_hint)
             setSingleLine(true)
@@ -123,6 +124,7 @@ class TranscriptActivity : AppCompatActivity() {
             kindRow,
             LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(2), dp(16), dp(6)) }
         )
+        content.addView(Ui.sectionLabel(this, "MENTETT ÁTIRATOK"), LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(2), dp(16), 0) })
         emptyView = Ui.body(this, getString(R.string.tr_empty)).apply {
             setPadding(dp(20), dp(24), dp(20), dp(24))
             visibility = View.GONE
