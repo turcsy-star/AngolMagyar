@@ -245,8 +245,14 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                         fatal = true
                         return null
                     }
-                    code == 429 || code >= 500 -> {
-                        lastError = if (code == 429) "A szolgáltató kvótája vagy sebességkorlátja elérve (HTTP 429)." else "A szolgáltató átmenetileg nem elérhető (HTTP $code)."
+                    code == 429 -> {
+                        // Kvóta-/sebességkorlát esetén az ismétlés csak késlelteti a tartalék szolgáltatót.
+                        lastError = "A szolgáltató kvótája vagy sebességkorlátja elérve (HTTP 429)."
+                        fatal = true
+                        return null
+                    }
+                    code >= 500 -> {
+                        lastError = "A szolgáltató átmenetileg nem elérhető (HTTP $code)."
                         if (attempt < 4) {
                             try { Thread.sleep(1500L * attempt) } catch (_: InterruptedException) { return null }
                         } else {
