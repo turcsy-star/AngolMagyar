@@ -54,7 +54,7 @@ object PremiumMotion {
         val p = profile(ctx)
         return when (p) {
             Profile.FULL -> "Teljes mozgásprofil"
-            Profile.SUBTLE -> "Diszkrét mozgás"
+            Profile.SUBTLE -> "Balanced mozgás"
             Profile.REDUCED -> "Csökkentett animáció"
             Profile.NONE -> "Animációk kikapcsolva"
         }
