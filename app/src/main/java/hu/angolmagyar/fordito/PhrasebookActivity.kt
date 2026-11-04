@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import hu.angolmagyar.fordito.ui.design.PremiumCard
+import hu.angolmagyar.fordito.ui.design.PremiumSectionTitle
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import java.text.DateFormat
 import java.util.Date
@@ -73,7 +74,13 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Saját szótár", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                PremiumSectionTitle(
+                    title = "MY VOCABULARY",
+                    subtitle = "Személyes kifejezéstár és ismétlési központ"
+                )
+                Text("Saját szótár", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            }
             TextButton(onClick = onBack) { Text("Vissza") }
         }
         if (reviewMode) {
@@ -176,12 +183,8 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(filtered, key = { it.id }) { entry ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                PremiumCard(modifier = Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(entry.source, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text(entry.translation, style = MaterialTheme.typography.bodyLarge)
                         Text(
