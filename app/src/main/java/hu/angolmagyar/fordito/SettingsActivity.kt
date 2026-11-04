@@ -293,7 +293,7 @@ class SettingsActivity : AppCompatActivity() {
             })
         }
         motionChip("Teljes", "full")
-        motionChip("Diszkrét", "subtle")
+        motionChip("Balanced", "subtle")
         motionChip("Minimal", "reduced")
         motionChip("Ki", "none")
         dirCard.addView(motionRow)
