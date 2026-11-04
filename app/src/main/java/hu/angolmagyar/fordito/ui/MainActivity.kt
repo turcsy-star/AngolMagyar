@@ -1519,7 +1519,7 @@ fun ThemePicker() {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            hu.angolmagyar.fordito.ui.design.LuxuryPalettes.all.forEach { palette ->
+            hu.angolmagyar.fordito.ui.design.LuxuryPalettes.ultimate.forEach { palette ->
                 val selected = prefs.luxuryThemeId == palette.id
                 Column(
                     Modifier
@@ -1538,6 +1538,7 @@ fun ThemePicker() {
                             )
                         )
                         .clickable {
+                            prefs.platinumTheme = true
                             prefs.luxuryThemeId = palette.id
                             activity?.recreate()
                         }
