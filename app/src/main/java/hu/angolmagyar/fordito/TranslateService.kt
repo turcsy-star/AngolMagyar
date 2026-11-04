@@ -87,6 +87,7 @@ class TranslateService : Service(), Overlay.Callbacks {
     @Volatile private var conversationHuToEn = false
     @Volatile private var autoDual = false
     private val asrExec = Executors.newSingleThreadExecutor()
+    private val onlineExec = Executors.newSingleThreadExecutor()
     private val delayQueue = ArrayDeque<Triple<Long, String, String>>()
     private var sentenceBuf: SentenceBuffer? = null
     private val delayRunnable = object : Runnable {
@@ -436,13 +437,59 @@ class TranslateService : Service(), Overlay.Callbacks {
         val id = reqCounter.incrementAndGet()
         if (isFinal) lastFinalId = id
         val t = translator
+        if (isFinal && OnlinePrefs.mode(this) == OnlinePrefs.AUTO && OnlinePrefs.consent(this)) {
+            try {
+                onlineExec.execute {
+                    val src = if (conversationHuToEn) "magyar" else "angol"
+                    val tgt = if (conversationHuToEn) "angol" else "magyar"
+                    val configs = listOfNotNull(
+                        OnlinePrefs.config(this, src, tgt),
+                        OnlinePrefs.fallbackConfig(this, src, tgt)
+                    )
+                    var onlineResult: String? = null
+                    for (cfg in configs) {
+                        if (!active || id != lastFinalId) return@execute
+                        val output = mutableListOf("")
+                        val failed = try {
+                            OnlineTranslator(cfg).translate(listOf(en), output, listOf(0))
+                        } catch (_: Exception) {
+                            listOf(0)
+                        }
+                        if (failed.isEmpty() && output[0].isNotBlank()) {
+                            onlineResult = output[0]
+                            break
+                        }
+                    }
+                    if (!active || id != lastFinalId) return@execute
+                    if (onlineResult != null) {
+                        main.post {
+                            if (!active || id != lastFinalId) return@post
+                            val tgtRules = if (conversationHuToEn) enRules else huRules
+                            var polished = Fixes.apply(onlineResult!!, tgtRules)
+                            polished = if (conversationHuToEn) TextPolish.polishEnglish(polished, vocabExtra)
+                            else TextPolish.polishHungarian(polished, vocabExtra)
+                            pushFinal(en, polished)
+                        }
+                    } else {
+                        translateOffline(en, isFinal, id, t)
+                    }
+                }
+            } catch (_: Exception) {
+                translateOffline(en, isFinal, id, t)
+            }
+            return
+        }
+        translateOffline(en, isFinal, id, t)
+    }
+
+    private fun translateOffline(en: String, isFinal: Boolean, id: Int, t: Translator?) {
         if (!translatorReady || t == null) {
-            if (isFinal) pushFinal(en, en)
+            if (isFinal) main.post { if (active && id == lastFinalId) pushFinal(en, en) }
             return
         }
         t.translate(en)
             .addOnSuccessListener { raw ->
-                if (!active) return@addOnSuccessListener
+                if (!active || (isFinal && id != lastFinalId)) return@addOnSuccessListener
                 val tgtRules = if (conversationHuToEn) enRules else huRules
                 var hu = Fixes.apply(raw, tgtRules)
                 hu = if (conversationHuToEn) TextPolish.polishEnglish(hu, vocabExtra)
@@ -454,7 +501,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                     render()
                 }
             }
-            .addOnFailureListener {   }
+            .addOnFailureListener { }
     }
     private fun asrFinal(isHu: Boolean, text: String) {
         if (!autoDual) {
@@ -992,6 +1039,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         sentenceBuf?.reset()
         sentenceBuf = null
         try { asrExec.shutdownNow() } catch (_: Exception) {}
+        try { onlineExec.shutdownNow() } catch (_: Exception) {}
         overlay?.remove()
         overlay = null
         translator?.close()
