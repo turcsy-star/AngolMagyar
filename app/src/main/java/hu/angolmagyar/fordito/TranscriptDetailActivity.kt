@@ -119,6 +119,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         root.addView(header)
         infoView = Ui.small(this, "").apply { setPadding(dp(20), 0, dp(20), dp(4)) }
         root.addView(infoView)
+        root.addView(Ui.sectionLabel(this, "ÁTIRAT KERESÉSE"), LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(4), dp(16), 0) })
         searchBox = AppCompatEditText(this).apply {
             hint = getString(R.string.td_search_hint)
             setSingleLine(true)
@@ -139,6 +140,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
             searchBox,
             LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(2), dp(16), dp(4)) }
         )
+        root.addView(Ui.sectionLabel(this, "IDŐZÍTETT SZÖVEGBLOKKOK"), LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(16), dp(2), dp(16), 0) })
         listView = ListView(this).apply {
             divider = android.graphics.drawable.ColorDrawable(Ui.color(this@TranscriptDetailActivity, R.color.stroke))
             dividerHeight = 1
