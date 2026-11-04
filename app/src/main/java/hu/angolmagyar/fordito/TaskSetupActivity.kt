@@ -83,6 +83,7 @@ class TaskSetupActivity : AppCompatActivity() {
     private fun buildLive() {
         column.addView(Ui.title(this, "Élő fordítás"))
         column.addView(Ui.small(this, "A hang élő felirata és fordítása a képernyőn."))
+        column.addView(Ui.sectionLabel(this, "FORDÍTÁSI IRÁNY ÉS HANGFORRÁS"))
         val pairs = listOf(
             Pair2("Angol → Magyar", "en", "hu", Prefs.DIR_EN_HU),
             Pair2("Magyar → Angol", "hu", "en", Prefs.DIR_HU_EN),
@@ -128,6 +129,7 @@ class TaskSetupActivity : AppCompatActivity() {
     private fun buildInterpreter() {
         column.addView(Ui.title(this, "Tolmács"))
         column.addView(Ui.small(this, "Kétirányú beszélgetés: angol ⇄ magyar, felolvasással."))
+        column.addView(Ui.sectionLabel(this, "BESZÉLGETÉS BEÁLLÍTÁSAI"))
         val c1 = Ui.card(this)
         val auto = switchRow("Automatikus irányváltás", prefs.autoLangSwitch)
         c1.addView(auto)
@@ -175,6 +177,7 @@ class TaskSetupActivity : AppCompatActivity() {
                 "3. Kell-e fordítás / beszélők.\n" +
                 "4. Fájl vagy élő felvétel → részletes folyamat (chunk, ETA)."
         ))
+        column.addView(Ui.sectionLabel(this, "HANGFORRÁS ÉS NYELV"))
         val c0 = Ui.card(this)
         c0.addView(Ui.title(this, "Honnan?", 16f))
         val gSrc = radios(listOf("Fájlból (hang vagy videó)", "Élő felvétel (mikrofon)"), 0)
@@ -319,6 +322,7 @@ class TaskSetupActivity : AppCompatActivity() {
     }
     private fun buildSubtitle() {
         column.addView(Ui.title(this, "Felirat videóhoz"))
+        column.addView(Ui.sectionLabel(this, "FELIRAT ÉS FORDÍTÁSI BEÁLLÍTÁSOK"))
         column.addView(Ui.small(this,
             "1. Válaszd ki a videó nyelvét.\n" +
                 "2. Jelöld be, mi kerüljön a feliratba.\n" +
