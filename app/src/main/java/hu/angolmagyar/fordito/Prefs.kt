@@ -67,13 +67,13 @@ class Prefs(ctx: Context) {
         get() = p.getBoolean("platinumTheme", true)
         set(v) { p.edit().putBoolean("platinumTheme", v).apply() }
     var luxuryThemeId: String
-        get() = p.getString("luxuryThemeId", "sapphire") ?: "sapphire"
+        get() = p.getString("luxuryThemeId", "ultimate") ?: "ultimate"
         set(v) { p.edit().putString("luxuryThemeId", v).apply() }
     var reduceMotion: Boolean
         get() = p.getBoolean("reduceMotion", false)
         set(v) { p.edit().putBoolean("reduceMotion", v).apply() }
     var motionProfile: String
-        get() = p.getString("motionProfile", "full") ?: "full"
+        get() = p.getString("motionProfile", "subtle") ?: "subtle"
         set(v) { p.edit().putString("motionProfile", v).apply() }
     var diamondCinemaMode: Boolean
         get() = p.getBoolean("diamondCinemaMode", true)
