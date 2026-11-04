@@ -115,6 +115,10 @@ A korábbi palettaazonosítók kompatibilitási okból megmaradnak, így a felha
 - [x] A klasszikus és Compose megjelenési beállítások ugyanazt a kilenc palettát használják.
 - [x] A Compose megjelenési beállítások Premium Design System kártyákat használnak; a Balanced animáció profil helyes állapotból indul.
 - [x] A közös hagyományos Android View-kártyák, fejlécpanelek és szekciócímkék a kiválasztott Ultimate palettát és Balanced mozgásprofilt használják.
+- [x] A kilenc Ultimate paletta világos módú akcentusszínei is a kiválasztott témából származnak, kontraszttartó sötétítéssel.
+- [x] A Material 3 felületi rétegek (surface container szintek) egységes színértékeket kapnak sötét, világos és OLED Ultimate módban.
+- [x] A saját szótár/kifejezéstár listakártyái PremiumCard megjelenésre kerültek, a meglévő keresés, másolás, törlés és ismétlés logika megtartásával.
+- [x] A PremiumCard a globális prémium témakapcsolót is tiszteletben tartja.
 - [ ] Minden további képernyő vizuális auditja és egységesítése.
 - [ ] Teljes regressziós teszt és sikeres CI build.
 - [ ] APK és teljes forráscsomag ellenőrzött kiadása.
