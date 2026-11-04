@@ -56,15 +56,15 @@ fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
     val colors = MaterialTheme.colorScheme
     val context = LocalContext.current
     val luxuryPalette = remember(context) { LuxuryPalettes.byId(Prefs(context).luxuryThemeId) }
-    val reducedMotion = remember(context) {
-        Prefs(context).reduceMotion ||
-            ((context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
+    val powerSave = remember(context) {
+        (context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true
     }
+    val revealDuration = if (powerSave) 0 else PremiumMotion.cardEnter(context)
     var entered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { entered = true }
     val reveal by animateFloatAsState(
-        targetValue = if (entered || reducedMotion) 1f else 0f,
-        animationSpec = tween(if (reducedMotion) 0 else 360, easing = FastOutSlowInEasing),
+        targetValue = if (entered || revealDuration == 0) 1f else 0f,
+        animationSpec = tween(revealDuration, easing = FastOutSlowInEasing),
         label = "premiumCardReveal"
     )
     Surface(
