@@ -263,7 +263,11 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                             val delayMs = if (testMode) {
                                 if (attempt == 1) 1_500L else 3_000L
                             } else {
-                                (2_000L shl (attempt - 1)).coerceAtMost(8_000L)
+                                when (attempt) {
+                                    1 -> 2_000L
+                                    2 -> 4_000L
+                                    else -> 8_000L
+                                }
                             }
                             try { Thread.sleep(delayMs) } catch (_: InterruptedException) { return null }
                         } else {
