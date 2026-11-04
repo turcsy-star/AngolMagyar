@@ -258,7 +258,13 @@ class LiveTranslateActivity : AppCompatActivity() {
             if (prefs.eco) add("eco")
             if (prefs.meetingMode) add(getString(R.string.m_extra_meeting))
         }.joinToString(" · ").let { if (it.isBlank()) "" else " · $it" }
-        column.addView(Ui.small(this, "$dirLabel  ·  $modelLabel  ·  ${prefs.delayMs} ms$extras"))
+        val sessionInfo = Ui.card(this).apply {
+            addView(Ui.sectionLabel(this@LiveTranslateActivity, "Aktív fordítási profil"))
+            addView(Ui.title(this@LiveTranslateActivity, dirLabel, 19f))
+            addView(Ui.body(this@LiveTranslateActivity, modelLabel))
+            addView(Ui.small(this@LiveTranslateActivity, "${prefs.delayMs} ms késleltetés$extras"))
+        }
+        column.addView(sessionInfo)
         if (prefs.tipsSeenVersion < TIPS_VERSION && !AppState.running) {
             val tip = Ui.card(this)
             tip.addView(Ui.title(this, getString(R.string.m_tip_title), 16f))
@@ -358,9 +364,7 @@ class LiveTranslateActivity : AppCompatActivity() {
     }
     private fun readyCards() {
         val last = prefs.lastMode
-        column.addView(Ui.small(this, getString(R.string.m_profiles)).apply {
-            setPadding(0, dp(14), 0, dp(2))
-        })
+        column.addView(Ui.sectionLabel(this, getString(R.string.m_profiles)))
         val chipRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         for (p in Profiles.all(this, prefs)) {
             val b = Ui.smallButton(this, p.name) {
@@ -412,7 +416,7 @@ class LiveTranslateActivity : AppCompatActivity() {
             card.addView(Ui.button(this, "Modellek kiválasztása", false) { startDownload() })
             column.addView(card)
         }
-        column.addView(Ui.small(this, "Mit szeretnél?").apply { setPadding(0, dp(14), 0, dp(2)) })
+        column.addView(Ui.sectionLabel(this, "Mit szeretnél?"))
         column.addView(Ui.tileRow(
             this,
             Ui.tile(this, R.drawable.ic_play, "Élő fordítás", "film, videó, előadás felirata", modelsOk) { open(TaskSetupActivity.TASK_LIVE) },
@@ -423,7 +427,7 @@ class LiveTranslateActivity : AppCompatActivity() {
             Ui.tile(this, R.drawable.ic_clipboard, "Átirat", "fájlból vagy felvételből", modelsOk) { open(TaskSetupActivity.TASK_TRANSCRIBE) },
             Ui.tile(this, R.drawable.ic_subtitles, "Film felirat", "fájlból .srt felirat (több nyelv)", modelsOk) { open(TaskSetupActivity.TASK_SUBTITLE) }
         ))
-        column.addView(Ui.small(this, "Élő indítás (nem fájl-SRT – az a Film felirat csempe)").apply { setPadding(0, dp(16), 0, dp(2)) })
+        column.addView(Ui.sectionLabel(this, "Élő indítás · hangforrás"))
         column.addView(Ui.modeCard(
             this, R.drawable.ic_play, getString(R.string.m_card_internal), getString(R.string.m_card_internal_sub),
             last == TranslateService.MODE_INTERNAL
