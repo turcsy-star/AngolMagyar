@@ -82,8 +82,17 @@ object OnlinePrefs {
 
     fun model(ctx: Context): String {
         val prov = provider(ctx)
-        val stored = p(ctx).getString("trModel_${prov.name.lowercase()}", null)
-            ?: p(ctx).getString("trModel", "") ?: ""
+        val prefs = p(ctx)
+        val modelKey = "trModel_${prov.name.lowercase()}"
+        val stored = prefs.getString(modelKey, null)
+            ?: prefs.getString("trModel", "") ?: ""
+        // A Gemini 2.5 Flash már nem érhető el új API-felhasználóknak.
+        // A korábban elmentett értéket is automatikusan migráljuk, nem csak az alapértéket.
+        if (prov == OnlineTranslator.Provider.GEMINI &&
+            stored.trim().removePrefix("models/") == "gemini-2.5-flash") {
+            prefs.edit().putString(modelKey, OnlineTranslator.DEFAULT_GEMINI_MODEL).apply()
+            return OnlineTranslator.DEFAULT_GEMINI_MODEL
+        }
         return stored.ifBlank {
             when (prov) {
                 OnlineTranslator.Provider.GEMINI -> OnlineTranslator.DEFAULT_GEMINI_MODEL
