@@ -216,6 +216,7 @@ class ModelsActivity : AppCompatActivity() {
         root.addView(Ui.title(this, "Modellek"))
         root.addView(Ui.heroHeader(this, "AI MODEL CENTER", "Felismerő modellek", "Offline beszédfelismerés és fordítás. Válassz modellt a készüléked teljesítményéhez igazítva."))
         root.addView(Ui.sectionLabel(this, "Elérhető motorok"))
+        root.addView(Ui.sectionLabel(this, "VOSK · ANGOL ÉS TOVÁBBI NYELVEK"))
         val vCard = Ui.card(this)
         vCard.addView(Ui.title(this, "Felismerők (offline)", 17f))
         vCard.addView(Ui.small(this, "Jelöld be, amit használni szeretnél, majd nyomj az OK gombra."))
@@ -278,6 +279,7 @@ class ModelsActivity : AppCompatActivity() {
             vCard.addView(g)
         }
         root.addView(vCard)
+        root.addView(Ui.sectionLabel(this, "WHISPER · MAGYAR ÉS TÖBBNYELVŰ FELISMERÉS"))
         val wCard = Ui.card(this)
         wCard.addView(Ui.title(this, "Whisper felismerő (offline, magyarul is)", 17f))
         if (!WhisperNative.available()) {
@@ -359,6 +361,7 @@ class ModelsActivity : AppCompatActivity() {
             }
         }
         root.addView(wCard)
+        root.addView(Ui.sectionLabel(this, "MAGYAR BESZÉDFELISMERÉS"))
         val hCard = Ui.card(this)
         hCard.addView(Ui.title(this, "Magyar felismerő", 17f))
         val whisperOk = try { Engines.whisperSpec(this) != null } catch (_: Exception) { false }
@@ -396,6 +399,7 @@ class ModelsActivity : AppCompatActivity() {
             })
         }
         root.addView(hCard)
+        root.addView(Ui.sectionLabel(this, "OFFLINE FORDÍTÁS"))
         val tCard = Ui.card(this)
         tCard.addView(Ui.title(this, "Fordítás (ML Kit)", 17f))
         val tcb = CheckBox(this).apply {
@@ -410,6 +414,7 @@ class ModelsActivity : AppCompatActivity() {
         }
         tCard.addView(tcb)
         root.addView(tCard)
+        root.addView(Ui.sectionLabel(this, if (downloading) "LETÖLTÉS FOLYAMATA" else "LETÖLTÉS ÉS TELEPÍTÉS"))
         val dCard = Ui.card(this)
         if (!downloading) {
             val unmetered = Engines.onUnmeteredNetwork(this)
