@@ -416,6 +416,93 @@ class TranscriptDetailActivity : AppCompatActivity() {
         }
     }
 
+
+    private fun improveWholeTranscriptOnline() {
+        if (rawMode || cues.isEmpty()) return
+        if (!OnlinePrefs.consent(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Teljes átirat online javítása")
+                .setMessage("A teljes átirat forrásszövege elküldésre kerül a kiválasztott online szolgáltatónak (Gemini, szükség esetén Mistral). Az eredeti fordítások csak a javaslatok elfogadása után változnak meg.")
+                .setPositiveButton("Beállítások") { _, _ -> OnlineSettingsDialog.show(this) {} }
+                .setNegativeButton("Mégse", null)
+                .show()
+            return
+        }
+        val source = cues.map { it.source }
+        val before = cues.map { it.target }
+        val indices = cues.indices.filter { source[it].isNotBlank() && source[it] != "…" }
+        if (indices.isEmpty()) {
+            Toast.makeText(this, "Nincs javítható forrásszöveg.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Teljes átirat online javítása")
+            .setMessage("A(z) ${indices.size} fordítható sor elküldése online szolgáltatónak. A javítás több csomagban történik. Az eredeti szöveg változatlan marad, amíg el nem fogadod az eredményt. Folytatod?")
+            .setPositiveButton("Javítás indítása") { _, _ ->
+                val srcLang = if (prefs.isHuToEn()) "magyar" else "angol"
+                val tgtLang = if (prefs.isHuToEn()) "angol" else "magyar"
+                val cfg = OnlinePrefs.config(this, srcLang, tgtLang)
+                if (cfg == null) {
+                    Toast.makeText(this, "Előbb add meg az online szolgáltató API-kulcsát.", Toast.LENGTH_LONG).show()
+                    OnlineSettingsDialog.show(this) {}
+                    return@setPositiveButton
+                }
+                Toast.makeText(this, "Teljes átirat javítása folyamatban…", Toast.LENGTH_LONG).show()
+                bg.execute {
+                    val proposed = before.toMutableList()
+                    var providerUsed = cfg.provider.name
+                    var failed = OnlineTranslator(cfg).translate(source, proposed, indices)
+                    if (failed.isNotEmpty()) {
+                        val fallback = OnlinePrefs.fallbackConfig(this, srcLang, tgtLang)
+                        if (fallback != null) {
+                            val retry = OnlineTranslator(fallback)
+                            val stillFailed = retry.translate(source, proposed, failed)
+                            if (stillFailed.size < failed.size) providerUsed += " + " + fallback.provider.name
+                            failed = stillFailed
+                        }
+                    }
+                    val changed = indices.filter { proposed[it].isNotBlank() && proposed[it] != before[it] }
+                    ui.post {
+                        if (isFinishing || isDestroyed) return@post
+                        if (changed.isEmpty()) {
+                            Toast.makeText(this, "Nem készült elfogadható új fordítás. Ellenőrizd a kulcsot, a kvótát és a hálózatot.", Toast.LENGTH_LONG).show()
+                            return@post
+                        }
+                        val preview = changed.take(12).joinToString("\n\n") { i ->
+                            "#${i + 1}\nEredeti: ${before[i].ifBlank { "—" }}\nJavaslat: ${proposed[i]}"
+                        } + if (changed.size > 12) "\n\n… és további ${changed.size - 12} módosítás" else ""
+                        val status = "Elkészült: ${changed.size} sor. Sikertelen sorok: ${failed.size}. Szolgáltató: $providerUsed."
+                        AlertDialog.Builder(this)
+                            .setTitle("Online javítás – ellenőrzés")
+                            .setMessage(status + "\n\n" + preview + "\n\nAz elfogadás minden elkészült javaslatot alkalmaz. A korábbi fordítások a verziótörténetben megmaradnak.")
+                            .setPositiveButton("Összes javaslat elfogadása") { _, _ ->
+                                val revision = File(file.parentFile, file.name + ".revisions.jsonl")
+                                val now = System.currentTimeMillis()
+                                val history = changed.joinToString("") { i ->
+                                    "{\"time\":$now,\"cue\":$i,\"provider\":${MiniJson.quote(providerUsed)},\"source\":${MiniJson.quote(source[i])},\"before\":${MiniJson.quote(cues.getOrNull(i)?.target ?: before[i])},\"after\":${MiniJson.quote(proposed[i])}}\n"
+                                }
+                                for (i in changed) {
+                                    if (i in cues.indices && cues[i].source == source[i]) {
+                                        cues[i] = cues[i].copy(target = proposed[i])
+                                    }
+                                }
+                                bg.execute {
+                                    try { revision.appendText(history, Charsets.UTF_8) } catch (_: Exception) {}
+                                }
+                                persist()
+                                applyFilter()
+                                updateInfo()
+                                Toast.makeText(this, "Az elfogadott javítások mentése elindult.", Toast.LENGTH_SHORT).show()
+                            }
+                            .setNegativeButton("Eredetik megtartása", null)
+                            .show()
+                    }
+                }
+            }
+            .setNegativeButton("Mégse", null)
+            .show()
+    }
+
     private fun copyCue(idx: Int) {
         val c = cues[idx]
         val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -649,6 +736,8 @@ class TranscriptDetailActivity : AppCompatActivity() {
         add(R.string.td_clean, !rawMode) { cleanAll() }
         add(R.string.td_speaker_rename_all, !rawMode) { renameSpeakerEverywhere() }
         add(R.string.td_edit_all) { editAll() }
+        pm.menu.add(0, id++, 0, "Teljes átirat online javítása").isEnabled = !rawMode
+        actions.add { improveWholeTranscriptOnline() }
         add(R.string.tr_rename_tag) { renameDialog() }
         add(R.string.common_delete) { confirmDelete() }
         pm.setOnMenuItemClickListener { mi ->
