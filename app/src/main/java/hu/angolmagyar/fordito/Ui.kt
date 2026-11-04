@@ -90,23 +90,25 @@ object Ui {
             )
         }
     fun heroHeader(ctx: Context, eyebrow: String, heading: String, detail: String): LinearLayout {
+        val palette = LuxuryPalettes.byId(Prefs(ctx).luxuryThemeId)
+        val motionMs = hu.angolmagyar.fordito.ui.design.PremiumMotion.cardEnter(ctx)
         val wrap = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(ctx, 20), dp(ctx, 20), dp(ctx, 20), dp(ctx, 20))
             background = GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(0xFF10284B.toInt(), 0xFF0B1730.toInt(), 0xFF101827.toInt())
+                intArrayOf(palette.surface.toArgb(), palette.background.toArgb(), palette.accent.copy(alpha = 0.12f).toArgb())
             ).apply {
                 cornerRadius = dp(ctx, 24).toFloat()
-                setStroke(dp(ctx, 1), 0x665AA9FF)
+                setStroke(dp(ctx, 1), palette.edge.copy(alpha = 0.62f).toArgb())
             }
             elevation = dp(ctx, 5).toFloat()
-            alpha = 0f
-            translationY = dp(ctx, 12).toFloat()
+            alpha = if (motionMs == 0) 1f else 0f
+            translationY = if (motionMs == 0) 0f else dp(ctx, 12).toFloat()
         }
         wrap.addView(View(ctx).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF22D3EE.toInt(), 0xFF60A5FA.toInt(), 0x0022D3EE))
+                intArrayOf(palette.accent.toArgb(), palette.glow.toArgb(), palette.glow.copy(alpha = 0f).toArgb()))
             layoutParams = LinearLayout.LayoutParams(dp(ctx, 76), dp(ctx, 3)).apply {
                 bottomMargin = dp(ctx, 13)
             }
@@ -115,28 +117,30 @@ object Ui {
             text = eyebrow.uppercase()
             textSize = 10f
             letterSpacing = 0.18f
-            setTextColor(0xFF67D8FF.toInt())
+            setTextColor(palette.accent.toArgb())
             setTypeface(typeface, Typeface.BOLD)
         })
         wrap.addView(TextView(ctx).apply {
             text = heading
             textSize = 25f
             letterSpacing = -0.025f
-            setTextColor(0xFFF1F7FF.toInt())
+            setTextColor(palette.text.toArgb())
             setTypeface(typeface, Typeface.BOLD)
             setPadding(0, dp(ctx, 7), 0, dp(ctx, 4))
         })
         wrap.addView(TextView(ctx).apply {
             text = detail
             textSize = 13f
-            setTextColor(0xFFB7C9E4.toInt())
+            setTextColor(palette.text.copy(alpha = 0.76f).toArgb())
             setLineSpacing(dp(ctx, 2).toFloat(), 1f)
         })
         wrap.layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = dp(ctx, 8) }
-        wrap.animate().alpha(1f).translationY(0f).setStartDelay(45)
-            .setDuration(520).setInterpolator(DecelerateInterpolator(1.7f)).start()
+        if (motionMs > 0) {
+            wrap.animate().alpha(1f).translationY(0f).setStartDelay(45)
+                .setDuration(motionMs.toLong()).setInterpolator(DecelerateInterpolator(1.7f)).start()
+        }
         return wrap
     }
     fun sectionLabel(ctx: Context, label: String): TextView =
@@ -144,7 +148,7 @@ object Ui {
             text = label.uppercase()
             textSize = 11f
             letterSpacing = 0.14f
-            setTextColor(0xFF60A5FA.toInt())
+            setTextColor(LuxuryPalettes.byId(Prefs(ctx).luxuryThemeId).accent.toArgb())
             setTypeface(typeface, Typeface.BOLD)
             setPadding(dp(ctx, 2), dp(ctx, 18), 0, dp(ctx, 5))
         }
@@ -164,16 +168,12 @@ object Ui {
                 setStroke(dp(ctx, 1), androidx.core.graphics.ColorUtils.setAlphaComponent(color(ctx, R.color.accentGlow), 76))
             }
             elevation = dp(ctx, 3).toFloat()
-            val reducedMotion = try {
-                Prefs(ctx).reduceMotion || android.provider.Settings.Global.getFloat(
-                    ctx.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f
-                ) == 0f
-            } catch (_: Exception) { false }
-            alpha = if (reducedMotion) 1f else 0f
-            translationY = if (reducedMotion) 0f else dp(ctx, 9).toFloat()
-            if (!reducedMotion) post {
+            val motionMs = hu.angolmagyar.fordito.ui.design.PremiumMotion.cardEnter(ctx)
+            alpha = if (motionMs == 0) 1f else 0f
+            translationY = if (motionMs == 0) 0f else dp(ctx, 9).toFloat()
+            if (motionMs > 0) post {
                 if (isAttachedToWindow) animate().alpha(1f).translationY(0f)
-                    .setDuration(360).setInterpolator(DecelerateInterpolator(1.5f)).start()
+                    .setDuration(motionMs.toLong()).setInterpolator(DecelerateInterpolator(1.5f)).start()
             }
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
