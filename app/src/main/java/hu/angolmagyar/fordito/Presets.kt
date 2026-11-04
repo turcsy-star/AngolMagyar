@@ -30,40 +30,82 @@ object OnlinePrefs {
     const val ONLINE = 1
     const val AUTO = 2
     private fun p(ctx: Context) = Prefs(ctx).raw()
-    fun mode(ctx: Context): Int = p(ctx).getInt("trMode", AUTO)
-    fun setMode(ctx: Context, v: Int) { p(ctx).edit().putInt("trMode", v).apply() }
+    private fun keyName(provider: OnlineTranslator.Provider): String = "trKey_${provider.name.lowercase()}"
+
+    fun mode(ctx: Context): Int = p(ctx).getInt("trMode", AUTO).coerceIn(OFF, AUTO)
+    fun setMode(ctx: Context, v: Int) { p(ctx).edit().putInt("trMode", v.coerceIn(OFF, AUTO)).apply() }
     fun translationStyle(ctx: Context): TranslationStyle =
         TranslationStyle.fromStorage(p(ctx).getString("trStyle", TranslationStyle.NATURAL.storageKey))
     fun setTranslationStyle(ctx: Context, style: TranslationStyle) {
         p(ctx).edit().putString("trStyle", style.storageKey).apply()
     }
+
     fun provider(ctx: Context): OnlineTranslator.Provider =
-        when (p(ctx).getString("trProvider", "deepl")) {
+        when (p(ctx).getString("trProvider", "gemini")) {
+            "gemini" -> OnlineTranslator.Provider.GEMINI
+            "mistral" -> OnlineTranslator.Provider.MISTRAL
             "openai" -> OnlineTranslator.Provider.OPENAI
             "deepl" -> OnlineTranslator.Provider.DEEPL
             else -> OnlineTranslator.Provider.ANTHROPIC
         }
+
     fun setProvider(ctx: Context, v: OnlineTranslator.Provider) {
-        p(ctx).edit().putString("trProvider", when (v) {
+        val value = when (v) {
+            OnlineTranslator.Provider.GEMINI -> "gemini"
+            OnlineTranslator.Provider.MISTRAL -> "mistral"
             OnlineTranslator.Provider.OPENAI -> "openai"
             OnlineTranslator.Provider.DEEPL -> "deepl"
-            else -> "anthropic"
-        }).apply()
+            OnlineTranslator.Provider.ANTHROPIC -> "anthropic"
+        }
+        p(ctx).edit().putString("trProvider", value).apply()
     }
-    fun apiKey(ctx: Context): String = SecretStore.get(p(ctx), "trKey")
-    fun setApiKey(ctx: Context, v: String): Boolean = SecretStore.set(p(ctx), "trKey", v)
-    fun model(ctx: Context): String = p(ctx).getString("trModel", "") ?: ""
-    fun setModel(ctx: Context, v: String) { p(ctx).edit().putString("trModel", v.trim()).apply() }
+
+    fun apiKey(ctx: Context): String = apiKeyFor(ctx, provider(ctx))
+    fun apiKeyFor(ctx: Context, provider: OnlineTranslator.Provider): String {
+        val prefs = p(ctx)
+        val saved = SecretStore.get(prefs, keyName(provider))
+        if (saved.isNotBlank()) return saved
+        // A korábbi verzió egyetlen trKey mezőt használt; első olvasáskor migráljuk a kiválasztott szolgáltatóhoz.
+        if (provider == provider(ctx)) {
+            val legacy = SecretStore.get(prefs, "trKey")
+            if (legacy.isNotBlank()) {
+                SecretStore.set(prefs, keyName(provider), legacy)
+                SecretStore.set(prefs, "trKey", "")
+                return legacy
+            }
+        }
+        return ""
+    }
+    fun setApiKey(ctx: Context, v: String): Boolean = setApiKeyFor(ctx, provider(ctx), v)
+    fun setApiKeyFor(ctx: Context, provider: OnlineTranslator.Provider, v: String): Boolean =
+        SecretStore.set(p(ctx), keyName(provider), v)
+
+    fun model(ctx: Context): String {
+        val prov = provider(ctx)
+        val stored = p(ctx).getString("trModel_${prov.name.lowercase()}", null)
+            ?: p(ctx).getString("trModel", "") ?: ""
+        return stored.ifBlank {
+            when (prov) {
+                OnlineTranslator.Provider.GEMINI -> OnlineTranslator.DEFAULT_GEMINI_MODEL
+                OnlineTranslator.Provider.MISTRAL -> OnlineTranslator.DEFAULT_MISTRAL_MODEL
+                OnlineTranslator.Provider.OPENAI -> ""
+                OnlineTranslator.Provider.ANTHROPIC -> OnlineTranslator.DEFAULT_ANTHROPIC_MODEL
+                OnlineTranslator.Provider.DEEPL -> ""
+            }
+        }
+    }
+    fun setModel(ctx: Context, v: String) {
+        p(ctx).edit().putString("trModel_${provider(ctx).name.lowercase()}", v.trim()).apply()
+    }
     fun baseUrl(ctx: Context): String = p(ctx).getString("trBase", "") ?: ""
     fun setBaseUrl(ctx: Context, v: String) { p(ctx).edit().putString("trBase", v.trim()).apply() }
     fun hint(ctx: Context): String = p(ctx).getString("trHint", "") ?: ""
     fun setHint(ctx: Context, v: String) { p(ctx).edit().putString("trHint", v.trim()).apply() }
     fun consent(ctx: Context): Boolean = p(ctx).getBoolean("trConsent", false)
     fun setConsent(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("trConsent", v).apply() }
-    /** Online szótár a szöveghibák javításához (csak a gyanús szavak mennek ki, mondat nem). Alapból kikapcsolt. */
     fun dictEnabled(ctx: Context): Boolean = p(ctx).getBoolean("onlineDict", false)
     fun setDictEnabled(ctx: Context, v: Boolean) { p(ctx).edit().putBoolean("onlineDict", v).apply() }
-    /** Mi hiányzik az online fordításhoz (üres lista = minden rendben). */
+
     fun missing(ctx: Context): List<String> {
         val out = ArrayList<String>()
         val prov = provider(ctx)
@@ -75,22 +117,34 @@ object OnlinePrefs {
         if (!consent(ctx)) out.add("tudomásulvétel (kapcsoló)")
         return out
     }
+
     fun usable(ctx: Context): Boolean {
-        if (!consent(ctx)) return false
+        if (!consent(ctx) || !EndpointPolicy.isAllowed(baseUrl(ctx))) return false
         val prov = provider(ctx)
         val keyOk = apiKey(ctx).isNotBlank() || (prov == OnlineTranslator.Provider.OPENAI && baseUrl(ctx).isNotBlank())
-        val modelOk = model(ctx).isNotBlank() || prov == OnlineTranslator.Provider.ANTHROPIC || prov == OnlineTranslator.Provider.DEEPL
+        val modelOk = model(ctx).isNotBlank() || prov == OnlineTranslator.Provider.DEEPL
         return keyOk && modelOk
     }
-    fun config(ctx: Context, srcName: String, tgtName: String): OnlineTranslator.Config? {
-        if (!usable(ctx) || !EndpointPolicy.isAllowed(baseUrl(ctx))) return null
-        val prov = provider(ctx)
+
+    private fun configFor(ctx: Context, prov: OnlineTranslator.Provider, srcName: String, tgtName: String): OnlineTranslator.Config? {
+        val key = apiKeyFor(ctx, prov)
+        if (key.isBlank()) return null
         val vocab = TextPolish.parseVocab(Prefs(ctx).customVocab)
+        val modelName = when (prov) {
+            OnlineTranslator.Provider.GEMINI -> OnlineTranslator.DEFAULT_GEMINI_MODEL
+            OnlineTranslator.Provider.MISTRAL -> OnlineTranslator.DEFAULT_MISTRAL_MODEL
+            OnlineTranslator.Provider.ANTHROPIC -> OnlineTranslator.DEFAULT_ANTHROPIC_MODEL
+            else -> model(ctx)
+        }
+        val endpoint = when (prov) {
+            OnlineTranslator.Provider.MISTRAL -> baseUrl(ctx).ifBlank { OnlineTranslator.DEFAULT_MISTRAL_BASE }
+            else -> baseUrl(ctx)
+        }
         return OnlineTranslator.Config(
             provider = prov,
-            apiKey = apiKey(ctx),
-            model = model(ctx).ifBlank { OnlineTranslator.DEFAULT_ANTHROPIC_MODEL },
-            baseUrl = baseUrl(ctx),
+            apiKey = key,
+            model = modelName,
+            baseUrl = endpoint,
             srcLang = srcName,
             tgtLang = tgtName,
             informal = SubPrefs.informalHu(ctx),
@@ -98,6 +152,21 @@ object OnlinePrefs {
             hint = listOf(hint(ctx), Projects.contextHint(ctx)).filter { it.isNotBlank() }.joinToString("\n"),
             style = translationStyle(ctx)
         )
+    }
+
+    fun config(ctx: Context, srcName: String, tgtName: String): OnlineTranslator.Config? {
+        if (!usable(ctx)) return null
+        return configFor(ctx, provider(ctx), srcName, tgtName)
+    }
+
+    fun fallbackConfig(ctx: Context, srcName: String, tgtName: String): OnlineTranslator.Config? {
+        if (!consent(ctx)) return null
+        val fallback = when (provider(ctx)) {
+            OnlineTranslator.Provider.GEMINI -> OnlineTranslator.Provider.MISTRAL
+            OnlineTranslator.Provider.MISTRAL -> OnlineTranslator.Provider.GEMINI
+            else -> return null
+        }
+        return configFor(ctx, fallback, srcName, tgtName)
     }
 }
 object Presets {
