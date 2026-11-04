@@ -49,17 +49,26 @@ fun AngolMagyarTheme(
         )
     } else if (prefs.platinumTheme) {
         // Világos módban is megmarad a választott neon/cyber akcentus, de a felületek olvashatóak maradnak.
-        val lightPrimary = when (prefs.luxuryThemeId) {
-            "forest", "matrix" -> Color(0xFF176B4B)
-            "violet", "neon" -> Color(0xFF5140A8)
-            "cyber", "arctic" -> Color(0xFF176B82)
-            "gold" -> Color(0xFF80601D)
-            else -> Color(0xFF245B91)
-        }
+        // A világos változat is a kiválasztott kilenc paletta akcentusából épül fel.
+        // A sötétítés biztosítja a megfelelő kontrasztot fehér felületen is.
+        val lightPrimary = luxury.accent.copy(
+            red = (luxury.accent.red * 0.68f).coerceIn(0f, 1f),
+            green = (luxury.accent.green * 0.68f).coerceIn(0f, 1f),
+            blue = (luxury.accent.blue * 0.68f).coerceIn(0f, 1f)
+        )
+        val lightSecondary = luxury.glow.copy(
+            red = (luxury.glow.red * 0.72f).coerceIn(0f, 1f),
+            green = (luxury.glow.green * 0.72f).coerceIn(0f, 1f),
+            blue = (luxury.glow.blue * 0.72f).coerceIn(0f, 1f)
+        )
         lightColorScheme(
             primary = lightPrimary,
-            secondary = lightPrimary.copy(red = (lightPrimary.red * 0.78f).coerceIn(0f, 1f), green = (lightPrimary.green * 0.92f).coerceIn(0f, 1f)),
-            tertiary = luxury.glow,
+            secondary = lightSecondary,
+            tertiary = luxury.edge.copy(
+                red = (luxury.edge.red * 0.72f).coerceIn(0f, 1f),
+                green = (luxury.edge.green * 0.72f).coerceIn(0f, 1f),
+                blue = (luxury.edge.blue * 0.72f).coerceIn(0f, 1f)
+            ),
             background = Color(0xFFF4F7FC),
             surface = Color(0xFFFFFFFF),
             surfaceVariant = Color(0xFFEAF0F8),
