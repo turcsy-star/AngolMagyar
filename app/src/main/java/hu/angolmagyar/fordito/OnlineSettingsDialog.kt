@@ -32,7 +32,7 @@ object OnlineSettingsDialog {
                 "A végleges beszédfelismerési szöveg csak a hozzájárulásod után kerül online fordításra; hiba vagy kvótakorlát esetén a rendszer a következő szolgáltatót, majd az offline fordítót próbálja."))
         col.addView(label("Szolgáltató"))
         val provSpin = Spinner(ctx)
-        val provNames = listOf("Gemini (elsődleges)", "Mistral AI (tartalék)", "Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
+        val provNames = listOf("Google AI – Gemini (elsődleges)", "Mistral AI (tartalék)", "Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
         provSpin.adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, provNames)
         fun providerAt(pos: Int) = when (pos) {
             1 -> OnlineTranslator.Provider.MISTRAL
@@ -51,18 +51,62 @@ object OnlineSettingsDialog {
         var loadedProvider = OnlinePrefs.provider(ctx)
         provSpin.setSelection(positionOf(loadedProvider))
         col.addView(provSpin)
-        col.addView(label("API-kulcs"))
-        val key = field("API-kulcs", OnlinePrefs.apiKeyFor(ctx, loadedProvider), true)
+        val keyLabel = label("Google AI Studio API-kulcs (Gemini)")
+        col.addView(keyLabel)
+        val key = field("Illeszd be a Google AI Studio API-kulcsot", OnlinePrefs.apiKeyFor(ctx, loadedProvider), true)
         col.addView(key)
+        val keyHelp = Ui.small(ctx, "A Google AI-kulcsot a Google AI Studio oldalán tudod létrehozni. Ez nem a Google-fiókod jelszava.")
+        col.addView(keyHelp)
+        col.addView(Ui.smallButton(ctx, "Google AI Studio – API-kulcs létrehozása") {
+            try {
+                ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://aistudio.google.com/apikey")))
+            } catch (_: Exception) {
+                Toast.makeText(ctx, "Nem sikerült megnyitni a Google AI Studio oldalát.", Toast.LENGTH_LONG).show()
+            }
+        })
         val advBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        advBox.addView(label("Modell"))
-        val model = field("üresen: ${OnlineTranslator.DEFAULT_ANTHROPIC_MODEL}", OnlinePrefs.model(ctx))
+        val modelLabel = label("Gemini modell")
+        advBox.addView(modelLabel)
+        val model = field("alapértelmezett: ${OnlineTranslator.DEFAULT_GEMINI_MODEL}", OnlinePrefs.model(ctx))
         advBox.addView(model)
-        advBox.addView(label("Végpont (OpenAI-kompatibilisnél; üresen: ${OnlineTranslator.DEFAULT_OPENAI_BASE})"))
+        advBox.addView(label("Egyéni végpont (OpenAI-kompatibilis szolgáltatóhoz)"))
         val base = field("http://192.168.1.10:11434/v1", OnlinePrefs.baseUrl(ctx))
         advBox.addView(base)
         col.addView(advBox)
-        fun syncAdv() { advBox.visibility = if (provSpin.selectedItemPosition == 4) View.GONE else View.VISIBLE }
+        fun syncAdv() {
+            val pos = provSpin.selectedItemPosition
+            val prov = providerAt(pos)
+            keyLabel.text = when (prov) {
+                OnlineTranslator.Provider.GEMINI -> "Google AI Studio API-kulcs (Gemini)"
+                OnlineTranslator.Provider.MISTRAL -> "Mistral AI API-kulcs"
+                OnlineTranslator.Provider.ANTHROPIC -> "Anthropic API-kulcs"
+                OnlineTranslator.Provider.OPENAI -> "OpenAI-kompatibilis API-kulcs"
+                OnlineTranslator.Provider.DEEPL -> "DeepL API-kulcs"
+            }
+            key.hint = when (prov) {
+                OnlineTranslator.Provider.GEMINI -> "Google AI Studio API-kulcs"
+                OnlineTranslator.Provider.MISTRAL -> "Mistral API-kulcs"
+                OnlineTranslator.Provider.ANTHROPIC -> "Anthropic API-kulcs"
+                OnlineTranslator.Provider.OPENAI -> "API-kulcs"
+                OnlineTranslator.Provider.DEEPL -> "DeepL API-kulcs"
+            }
+            keyHelp.visibility = if (prov == OnlineTranslator.Provider.GEMINI) View.VISIBLE else View.GONE
+            modelLabel.text = when (prov) {
+                OnlineTranslator.Provider.GEMINI -> "Gemini modell"
+                OnlineTranslator.Provider.MISTRAL -> "Mistral modell"
+                OnlineTranslator.Provider.ANTHROPIC -> "Claude modell"
+                OnlineTranslator.Provider.OPENAI -> "Modellnév"
+                OnlineTranslator.Provider.DEEPL -> "DeepL modell (nem szükséges)"
+            }
+            model.hint = when (prov) {
+                OnlineTranslator.Provider.GEMINI -> OnlineTranslator.DEFAULT_GEMINI_MODEL
+                OnlineTranslator.Provider.MISTRAL -> OnlineTranslator.DEFAULT_MISTRAL_MODEL
+                OnlineTranslator.Provider.ANTHROPIC -> OnlineTranslator.DEFAULT_ANTHROPIC_MODEL
+                else -> "alapértelmezett"
+            }
+            advBox.visibility = if (prov == OnlineTranslator.Provider.DEEPL) View.GONE else View.VISIBLE
+        }
         syncAdv()
         provSpin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
