@@ -161,6 +161,7 @@ class DiagnosticsActivity : AppCompatActivity() {
         column.addView(Ui.button(this, "← Vissza", false) { finish() })
         column.addView(Ui.title(this, "Előkészítés"))
         column.addView(Ui.heroHeader(this, "SYSTEM CHECK", "Minden készen áll?", "Ellenőrizd az engedélyeket, a modelleket és a háttérben futáshoz szükséges beállításokat."))
+        column.addView(Ui.sectionLabel(this, "RENDSZERÁLLAPOT ÉS ENGEDÉLYEK"))
         val rows = rows()
         val bad = rows.count { it.ok == false }
         column.addView(
@@ -194,6 +195,7 @@ class DiagnosticsActivity : AppCompatActivity() {
             }
             column.addView(card)
         }
+        column.addView(Ui.sectionLabel(this, "HASZNÁLHATÓSÁG ÉS MINŐSÉG"))
         run {
             val a11yCard = Ui.card(this)
             a11yCard.addView(TextView(this).apply {
@@ -216,6 +218,7 @@ class DiagnosticsActivity : AppCompatActivity() {
             featCard.addView(Ui.small(this, lines))
             column.addView(featCard)
         }
+        column.addView(Ui.sectionLabel(this, "ADATVÉDELEM"))
         column.addView(Ui.button(this, "Adatvédelem és mentés", false) {
             startActivity(Intent(this, PrivacyActivity::class.java))
         })
