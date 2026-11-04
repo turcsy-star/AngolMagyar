@@ -331,6 +331,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         val items = mutableListOf<Pair<String, () -> Unit>>()
         if (!rawMode) {
             items.add(getString(R.string.td_action_edit) to { editCue(idx) })
+            if (cues[idx].source.isNotBlank()) items.add("Online javítás (Gemini → Mistral)" to { improveCueOnline(idx) })
             items.add(getString(R.string.td_action_speaker_one) to { pickSpeaker(idx, false) })
             items.add(getString(R.string.td_action_speaker_from) to { pickSpeaker(idx, true) })
         }
@@ -340,6 +341,81 @@ class TranscriptDetailActivity : AppCompatActivity() {
             .setItems(items.map { it.first }.toTypedArray()) { _, which -> items[which].second() }
             .show()
     }
+    private fun improveCueOnline(idx: Int) {
+        if (rawMode || idx !in cues.indices) return
+        if (!OnlinePrefs.consent(this)) {
+            AlertDialog.Builder(this)
+                .setTitle("Online javítás")
+                .setMessage("Ehhez a funkcióhoz engedélyezni kell az online szövegküldést az Online fordítás beállításaiban. A kijelölt sor szövege elküldésre kerül a kiválasztott szolgáltatónak.")
+                .setPositiveButton("Beállítások") { _, _ -> OnlineSettingsDialog.show(this) {} }
+                .setNegativeButton("Mégse", null)
+                .show()
+            return
+        }
+        val cfg = OnlinePrefs.config(
+            this,
+            if (prefs.isHuToEn()) "magyar" else "angol",
+            if (prefs.isHuToEn()) "angol" else "magyar"
+        )
+        if (cfg == null) {
+            Toast.makeText(this, "Előbb add meg az online szolgáltató API-kulcsát.", Toast.LENGTH_LONG).show()
+            OnlineSettingsDialog.show(this) {}
+            return
+        }
+        val original = cues[idx]
+        Toast.makeText(this, "Online javítás folyamatban…", Toast.LENGTH_SHORT).show()
+        bg.execute {
+            var candidate: String? = null
+            var usedProvider = cfg.provider.name
+            val configs = listOfNotNull(
+                cfg,
+                OnlinePrefs.fallbackConfig(
+                    this,
+                    if (prefs.isHuToEn()) "magyar" else "angol",
+                    if (prefs.isHuToEn()) "angol" else "magyar"
+                )
+            )
+            for (providerConfig in configs) {
+                val out = mutableListOf("")
+                val failed = try {
+                    OnlineTranslator(providerConfig).translate(listOf(original.source), out, listOf(0))
+                } catch (_: Exception) {
+                    listOf(0)
+                }
+                if (failed.isEmpty() && out[0].isNotBlank()) {
+                    candidate = out[0]
+                    usedProvider = providerConfig.provider.name
+                    break
+                }
+            }
+            ui.post {
+                if (isFinishing || isDestroyed || idx !in cues.indices) return@post
+                val proposed = candidate
+                if (proposed.isNullOrBlank()) {
+                    Toast.makeText(this, "Az online javítás nem sikerült. Ellenőrizd a kulcsot és a kvótát.", Toast.LENGTH_LONG).show()
+                    return@post
+                }
+                val current = cues[idx]
+                val message = "FORRÁSSZÖVEG\n${original.source}\n\nEREDETI FORDÍTÁS\n${original.target.ifBlank { "—" }}\n\nJAVASOLT FORDÍTÁS · $usedProvider\n$proposed"
+                AlertDialog.Builder(this)
+                    .setTitle("Fordítás összehasonlítása")
+                    .setMessage(message)
+                    .setPositiveButton("Javaslat elfogadása") { _, _ ->
+                        val revision = File(file.parentFile, file.name + ".revisions.jsonl")
+                        val entry = "{\"time\":${System.currentTimeMillis()},\"cue\":$idx,\"provider\":${MiniJson.quote(usedProvider)},\"source\":${MiniJson.quote(original.source)},\"before\":${MiniJson.quote(current.target)},\"after\":${MiniJson.quote(proposed)}}\n"
+                        bg.execute {
+                            try { revision.appendText(entry, Charsets.UTF_8) } catch (_: Exception) {}
+                        }
+                        cues[idx] = current.copy(target = proposed)
+                        persist()
+                        applyFilter()
+                    }
+                    .setNegativeButton("Eredeti megtartása", null)
+                    .show()
+            }
+        }
+    }
+
     private fun copyCue(idx: Int) {
         val c = cues[idx]
         val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
