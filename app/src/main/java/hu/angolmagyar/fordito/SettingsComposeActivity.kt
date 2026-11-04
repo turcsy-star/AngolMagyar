@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import hu.angolmagyar.fordito.ui.design.LuxuryPalettes
+import hu.angolmagyar.fordito.ui.design.PremiumCard
+import hu.angolmagyar.fordito.ui.design.ProvidePremiumDesignSystem
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 
 class SettingsComposeActivity : ComponentActivity() {
@@ -62,11 +64,13 @@ class SettingsComposeActivity : ComponentActivity() {
                     android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                     android.content.res.Configuration.UI_MODE_NIGHT_YES)
             AngolMagyarTheme(darkTheme = dark, isTrueBlack = prefs.oledBlack) {
+                ProvidePremiumDesignSystem {
                 SettingsComposeScreen(
                     prefs = prefs,
                     onBack = { NavTransitions.finishWithSlide(this) },
                     onThemeChanged = { recreate() }
                 )
+                }
             }
         }
     }
@@ -85,7 +89,7 @@ private fun SettingsComposeScreen(
     var oled by remember { mutableStateOf(prefs.oledBlack) }
     var haptics by remember { mutableStateOf(prefs.haptics) }
     var keepScreen by remember { mutableStateOf(prefs.keepScreenOn) }
-    var balancedMotion by remember { mutableStateOf(prefs.motionProfile == "subtle" && !prefs.reduceMotion) }
+    var balancedMotion by remember { mutableStateOf(prefs.motionProfile != "reduced" && prefs.motionProfile != "none" && !prefs.reduceMotion) }
     var reduceMotion by remember { mutableStateOf(prefs.reduceMotion) }
 
     Scaffold(
@@ -157,8 +161,8 @@ private fun SettingsComposeScreen(
 
             SectionCard(title = "Animáció", icon = Icons.Default.Palette) {
                 SwitchRow(
-                    title = "Balanced mozgás",
-                    subtitle = "Finom átmenetek, visszafogott fényhatások és animációk",
+                    title = "Balanced animáció",
+                    subtitle = "160–320 ms közötti finom átmenetek, aktív állapotjelzések és visszafogott fényhatások",
                     checked = balancedMotion
                 ) {
                     balancedMotion = it
@@ -200,7 +204,7 @@ private fun SettingsComposeScreen(
                 }
             }
             Text(
-                "A felismerő, fordítási, modell- és adatkezelési beállítások változatlanul a klasszikus Beállításokban érhetők el.",
+                "A fordítási, beszédfelismerési, modell-, online szolgáltatói és adatkezelési beállítások változatlanul a teljes Beállítások felületen érhetők el.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp)
@@ -211,17 +215,13 @@ private fun SettingsComposeScreen(
 
 @Composable
 private fun SectionCard(title: String, icon: ImageVector, content: @Composable () -> Unit) {
-    Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
                 Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 10.dp))
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             content()
         }
     }
