@@ -720,7 +720,7 @@ private fun PlatinumMetric(
         )
         Text(
             detail,
-            color = Color(0xFF9CA6B5),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -734,7 +734,7 @@ private fun FuturisticWelcomePanel(
     onSubtitles: () -> Unit
 ) {
     val palette = hu.angolmagyar.fordito.ui.design.LuxuryPalettes.byId(
-        hu.angolmagyar.fordito.Prefs(LocalContext.current).luxuryThemeId
+        if (hu.angolmagyar.fordito.Prefs(LocalContext.current).platinumTheme) hu.angolmagyar.fordito.Prefs(LocalContext.current).luxuryThemeId else "premium"
     )
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1173,17 +1173,17 @@ private fun JobFinishedCard(message: String, onOpen: () -> Unit, onDismiss: () -
         Card(
             modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
             shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1116).copy(alpha = 0.98f))
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("DIAMOND · END CARD", color = Color(0xFF5FD3A0), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.4.sp)
-                Text("Feldolgozás befejezve", color = Color(0xFFF0EFEA), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(message, color = Color(0xFF9EA4AF), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text("Cinema ceremony · eredmény megnyitása egy koppintással", color = Color(0xFF6B7280), style = MaterialTheme.typography.labelSmall)
+                Text("Feldolgozás befejezve", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text("Cinema ceremony · eredmény megnyitása egy koppintással", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Eredmény megnyitása", color = Color(0xFFBFD7EA), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Eredmény megnyitása", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                     TextButton(onClick = onDismiss) {
-                        Text("Elrejt", color = Color(0xFF9CA6B5))
+                        Text("Elrejt", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -1225,16 +1225,16 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1116).copy(alpha = 0.98f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text("DIAMOND · FOLYAMATBAN", color = Color(0xFFD6E9FF), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                    Text("Intelligens feldolgozás", color = Color(0xFFF0EFEA), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("DIAMOND · FOLYAMATBAN", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
+                    Text("Intelligens feldolgozás", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 }
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(58.dp).clip(CircleShape).background(Color(0xFFBFD7EA).copy(alpha = 0.15f))) {
-                    Text("$pct%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFFBFD7EA))
+                    Text("$pct%", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                 }
             }
             if (ui.stages.isNotEmpty()) {
@@ -1263,10 +1263,10 @@ private fun JobCard(pct: Int, message: String, onOpen: () -> Unit) {
                 }
             }
             if (message.isNotBlank()) {
-                Text(message, color = Color(0xFF9EA4AF), style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Task portal · részletes folyamat", color = Color(0xFFBFD7EA), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                Text("Task portal · részletes folyamat", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
                 Icon(Icons.Rounded.PlayArrow, contentDescription = "Részletek", tint = Color(0xFFBFD7EA))
             }
         }
