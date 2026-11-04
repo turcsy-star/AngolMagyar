@@ -290,7 +290,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         netDown = 0
         var failed = pass(en, hu, indices, cfg.batchSize, onDone, cancel)
         // Átmeneti hiba (megszakadó net, túl hosszú válasz) esetén a hibás sorokat kisebb csomagokban még egyszer megpróbáljuk.
-        if (failed.isNotEmpty() && !fatal && !cancel()) {
+        if (failed.isNotEmpty() && !fatal && !testMode && !cancel()) {
             try { Thread.sleep(2000) } catch (_: InterruptedException) { return failed }
             val firstError = lastError
             val again = pass(en, hu, failed, (cfg.batchSize / 3).coerceIn(3, 10), { _, _ -> }, cancel)
@@ -322,7 +322,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             if (real.isEmpty()) { done += batch.size; onDone(done, indices.size); continue }
             var res: List<String>? = null
             var tries = 0
-            while (res == null && tries < 2 && !fatal && !cancel()) {
+            while (res == null && tries < (if (testMode) 1 else 2) && !fatal && !cancel()) {
                 tries++
                 val text = call(system, userPayload(en, hu, real), cancel) ?: break
                 res = parseTranslations(text, real.size)
