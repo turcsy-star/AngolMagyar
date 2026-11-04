@@ -437,7 +437,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         val id = reqCounter.incrementAndGet()
         if (isFinal) lastFinalId = id
         val t = translator
-        if (isFinal && OnlinePrefs.mode(this) == OnlinePrefs.AUTO && OnlinePrefs.consent(this)) {
+        if (isFinal && OnlinePrefs.mode(this) != OnlinePrefs.OFF && OnlinePrefs.consent(this)) {
             try {
                 onlineExec.execute {
                     val src = if (conversationHuToEn) "magyar" else "angol"
