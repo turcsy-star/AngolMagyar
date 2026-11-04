@@ -62,7 +62,7 @@ object OnlineSettingsDialog {
         val base = field("http://192.168.1.10:11434/v1", OnlinePrefs.baseUrl(ctx))
         advBox.addView(base)
         col.addView(advBox)
-        fun syncAdv() { advBox.visibility = if (provSpin.selectedItemPosition == 2) View.GONE else View.VISIBLE }
+        fun syncAdv() { advBox.visibility = if (provSpin.selectedItemPosition == 4) View.GONE else View.VISIBLE }
         syncAdv()
         provSpin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
@@ -70,9 +70,9 @@ object OnlineSettingsDialog {
                 if (next != loadedProvider) {
                     OnlinePrefs.setApiKeyFor(ctx, loadedProvider, key.text.toString())
                     loadedProvider = next
+                    OnlinePrefs.setProvider(ctx, loadedProvider)
                     key.setText(OnlinePrefs.apiKeyFor(ctx, loadedProvider))
                     model.setText(OnlinePrefs.model(ctx))
-                    OnlinePrefs.setProvider(ctx, loadedProvider)
                 }
                 syncAdv()
             }
