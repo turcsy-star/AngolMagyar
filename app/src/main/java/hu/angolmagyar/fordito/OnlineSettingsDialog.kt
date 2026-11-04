@@ -28,8 +28,8 @@ object OnlineSettingsDialog {
             setTextColor(Ui.color(ctx, R.color.textPrimary))
         }
         col.addView(Ui.small(ctx,
-            "Ajánlott: DeepL – csak egy kulcs kell hozzá. Ingyenes kulcs (500 000 karakter/hó, kb. 25–40 film): " +
-                "deepl.com/pro-api → „DeepL API Free” – a kulcs végén :fx áll. Másold be ide, kapcsold be a tudomásulvételt, kész."))
+            "Ajánlott sorrend: Gemini elsődleges szolgáltató, Mistral AI tartalék. Mindkét szolgáltató kulcsát külön válaszd ki és mentsd el. " +
+                "A végleges beszédfelismerési szöveg csak a hozzájárulásod után kerül online fordításra; hiba vagy kvótakorlát esetén a rendszer a következő szolgáltatót, majd az offline fordítót próbálja."))
         col.addView(label("Szolgáltató"))
         val provSpin = Spinner(ctx)
         val provNames = listOf("Gemini (elsődleges)", "Mistral AI (tartalék)", "Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
