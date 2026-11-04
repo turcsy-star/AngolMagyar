@@ -25,7 +25,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     companion object {
         const val DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5"
         const val DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
-        const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+        const val DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
         const val DEFAULT_MISTRAL_MODEL = "mistral-small-latest"
         const val DEFAULT_MISTRAL_BASE = "https://api.mistral.ai/v1"
         private const val CTX_BEFORE = 4
