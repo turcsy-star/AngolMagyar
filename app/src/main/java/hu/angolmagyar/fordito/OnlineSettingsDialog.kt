@@ -57,14 +57,15 @@ object OnlineSettingsDialog {
         col.addView(key)
         val keyHelp = Ui.small(ctx, "A Google AI-kulcsot a Google AI Studio oldalán tudod létrehozni. Ez nem a Google-fiókod jelszava.")
         col.addView(keyHelp)
-        col.addView(Ui.smallButton(ctx, "Google AI Studio – API-kulcs létrehozása") {
+        val keySetupButton = Ui.smallButton(ctx, "Google AI Studio – API-kulcs létrehozása") {
             try {
                 ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://aistudio.google.com/apikey")))
             } catch (_: Exception) {
                 Toast.makeText(ctx, "Nem sikerült megnyitni a Google AI Studio oldalát.", Toast.LENGTH_LONG).show()
             }
-        })
+        }
+        col.addView(keySetupButton)
         val advBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         val modelLabel = label("Gemini modell")
         advBox.addView(modelLabel)
@@ -92,6 +93,7 @@ object OnlineSettingsDialog {
                 OnlineTranslator.Provider.DEEPL -> "DeepL API-kulcs"
             }
             keyHelp.visibility = if (prov == OnlineTranslator.Provider.GEMINI) View.VISIBLE else View.GONE
+            keySetupButton.visibility = if (prov == OnlineTranslator.Provider.GEMINI) View.VISIBLE else View.GONE
             modelLabel.text = when (prov) {
                 OnlineTranslator.Provider.GEMINI -> "Gemini modell"
                 OnlineTranslator.Provider.MISTRAL -> "Mistral modell"
