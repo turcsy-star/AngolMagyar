@@ -130,11 +130,12 @@ object OnlinePrefs {
         val key = apiKeyFor(ctx, prov)
         if (key.isBlank()) return null
         val vocab = TextPolish.parseVocab(Prefs(ctx).customVocab)
-        val modelName = when (prov) {
+        val modelName = if (prov == provider(ctx)) model(ctx) else when (prov) {
             OnlineTranslator.Provider.GEMINI -> OnlineTranslator.DEFAULT_GEMINI_MODEL
             OnlineTranslator.Provider.MISTRAL -> OnlineTranslator.DEFAULT_MISTRAL_MODEL
             OnlineTranslator.Provider.ANTHROPIC -> OnlineTranslator.DEFAULT_ANTHROPIC_MODEL
-            else -> model(ctx)
+            OnlineTranslator.Provider.OPENAI -> ""
+            OnlineTranslator.Provider.DEEPL -> ""
         }
         val endpoint = when (prov) {
             OnlineTranslator.Provider.MISTRAL -> baseUrl(ctx).ifBlank { OnlineTranslator.DEFAULT_MISTRAL_BASE }
