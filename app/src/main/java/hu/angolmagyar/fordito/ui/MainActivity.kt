@@ -1462,14 +1462,17 @@ fun DownloadBanner(onClick: () -> Unit) {
         enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { -it / 3 },
         exit = fadeOut(tween(250))
     ) {
-        androidx.compose.material3.Card(
-            onClick = onClick,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp)
+        PremiumCard(
+            modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("⬇ Modellek letöltése – a háttérben folyik", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                if (msg.isNotBlank()) Text(msg, style = MaterialTheme.typography.bodySmall)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Rounded.CloudDownload, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Text("Modellek letöltése", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    Spacer(Modifier.weight(1f))
+                    StatusPill(if (pct in 1..100) "$pct%" else "Folyamatban")
+                }
+                if (msg.isNotBlank()) Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (pct in 1..100) {
                     androidx.compose.material3.LinearProgressIndicator(
                         progress = { pct / 100f }, modifier = Modifier.fillMaxWidth()
@@ -1663,28 +1666,26 @@ private fun IllustratedState(
         bob = b
         ring = r
     } else { bob = 0f; ring = 0.2f }
-    Column(
-        Modifier.fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.matchParentSize()) {
-                val c = Offset(size.width / 2, size.height / 2)
-                for (k in 0 until 2) {
-                    val f = (ring + k * 0.5f) % 1f
-                    drawCircle(accent.copy(alpha = (1f - f) * 0.35f), radius = size.minDimension * (0.34f + 0.16f * f), center = c)
+    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.matchParentSize()) {
+                    val c = Offset(size.width / 2, size.height / 2)
+                    for (k in 0 until 2) {
+                        val f = (ring + k * 0.5f) % 1f
+                        drawCircle(accent.copy(alpha = (1f - f) * 0.35f), radius = size.minDimension * (0.34f + 0.16f * f), center = c)
+                    }
+                    drawCircle(accent.copy(alpha = 0.16f), radius = size.minDimension * 0.34f, center = c)
                 }
-                drawCircle(accent.copy(alpha = 0.16f), radius = size.minDimension * 0.34f, center = c)
+                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(44.dp).offset(y = bob.dp))
             }
-            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(44.dp).offset(y = bob.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            androidx.compose.material3.Button(onClick = onClick, shape = RoundedCornerShape(16.dp)) { Text(button) }
         }
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-        androidx.compose.material3.Button(onClick = onClick, shape = RoundedCornerShape(16.dp)) { Text(button) }
     }
 }
