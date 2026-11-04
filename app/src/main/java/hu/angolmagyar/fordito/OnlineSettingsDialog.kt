@@ -32,16 +32,27 @@ object OnlineSettingsDialog {
                 "deepl.com/pro-api → „DeepL API Free” – a kulcs végén :fx áll. Másold be ide, kapcsold be a tudomásulvételt, kész."))
         col.addView(label("Szolgáltató"))
         val provSpin = Spinner(ctx)
-        val provNames = listOf("Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
+        val provNames = listOf("Gemini (elsődleges)", "Mistral AI (tartalék)", "Anthropic (Claude)", "OpenAI-kompatibilis", "DeepL (kontextussal)")
         provSpin.adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, provNames)
-        provSpin.setSelection(when (OnlinePrefs.provider(ctx)) {
-            OnlineTranslator.Provider.OPENAI -> 1
-            OnlineTranslator.Provider.DEEPL -> 2
-            else -> 0
-        })
+        fun providerAt(pos: Int) = when (pos) {
+            1 -> OnlineTranslator.Provider.MISTRAL
+            2 -> OnlineTranslator.Provider.ANTHROPIC
+            3 -> OnlineTranslator.Provider.OPENAI
+            4 -> OnlineTranslator.Provider.DEEPL
+            else -> OnlineTranslator.Provider.GEMINI
+        }
+        fun positionOf(provider: OnlineTranslator.Provider) = when (provider) {
+            OnlineTranslator.Provider.GEMINI -> 0
+            OnlineTranslator.Provider.MISTRAL -> 1
+            OnlineTranslator.Provider.ANTHROPIC -> 2
+            OnlineTranslator.Provider.OPENAI -> 3
+            OnlineTranslator.Provider.DEEPL -> 4
+        }
+        var loadedProvider = OnlinePrefs.provider(ctx)
+        provSpin.setSelection(positionOf(loadedProvider))
         col.addView(provSpin)
         col.addView(label("API-kulcs"))
-        val key = field("sk-…", OnlinePrefs.apiKey(ctx), true)
+        val key = field("API-kulcs", OnlinePrefs.apiKeyFor(ctx, loadedProvider), true)
         col.addView(key)
         val advBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         advBox.addView(label("Modell"))
@@ -54,7 +65,17 @@ object OnlineSettingsDialog {
         fun syncAdv() { advBox.visibility = if (provSpin.selectedItemPosition == 2) View.GONE else View.VISIBLE }
         syncAdv()
         provSpin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = syncAdv()
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                val next = providerAt(pos)
+                if (next != loadedProvider) {
+                    OnlinePrefs.setApiKeyFor(ctx, loadedProvider, key.text.toString())
+                    loadedProvider = next
+                    key.setText(OnlinePrefs.apiKeyFor(ctx, loadedProvider))
+                    model.setText(OnlinePrefs.model(ctx))
+                    OnlinePrefs.setProvider(ctx, loadedProvider)
+                }
+                syncAdv()
+            }
             override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
         }
         col.addView(label("Háttér a fordítónak (téma, nevek – nem kötelező)"))
@@ -75,12 +96,9 @@ object OnlineSettingsDialog {
         val result = TextView(ctx).apply { textSize = 13f; gravity = Gravity.START }
         col.addView(result)
         fun saveAll(): Boolean {
-            OnlinePrefs.setProvider(ctx, when (provSpin.selectedItemPosition) {
-                1 -> OnlineTranslator.Provider.OPENAI
-                2 -> OnlineTranslator.Provider.DEEPL
-                else -> OnlineTranslator.Provider.ANTHROPIC
-            })
-            val keySaved = OnlinePrefs.setApiKey(ctx, key.text.toString())
+            val selectedProvider = providerAt(provSpin.selectedItemPosition)
+            OnlinePrefs.setProvider(ctx, selectedProvider)
+            val keySaved = OnlinePrefs.setApiKeyFor(ctx, selectedProvider, key.text.toString())
             OnlinePrefs.setModel(ctx, model.text.toString())
             OnlinePrefs.setBaseUrl(ctx, base.text.toString())
             OnlinePrefs.setHint(ctx, hint.text.toString())
