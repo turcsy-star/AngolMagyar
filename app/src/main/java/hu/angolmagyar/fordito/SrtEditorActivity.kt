@@ -135,9 +135,11 @@ class SrtEditorActivity : AppCompatActivity() {
         }
         column.addView(Ui.button(this, "← Vissza", false) { confirmLeave() })
         column.addView(Ui.title(this, "Felirat szerkesztése"))
+        column.addView(Ui.sectionLabel(this, "PROJEKT ÉS MINŐSÉG"))
         column.addView(Ui.small(this, qi.name))
         summary = Ui.small(this, "")
         column.addView(summary)
+        column.addView(Ui.sectionLabel(this, "SZERKESZTŐI ESZKÖZÖK"))
         toolsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         column.addView(toolsBox)
         column.addView(SwitchCompat(this).apply {
@@ -151,6 +153,7 @@ class SrtEditorActivity : AppCompatActivity() {
                 rebuild()
             }
         })
+        column.addView(Ui.sectionLabel(this, "FELIRATBLOKKOK"))
         val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         nav.addView(Ui.smallButton(this, "◀") { applyRows(); page--; rebuild() })
         pageLabel = TextView(this).apply {
@@ -162,6 +165,7 @@ class SrtEditorActivity : AppCompatActivity() {
         column.addView(nav)
         listBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         column.addView(listBox)
+        column.addView(Ui.sectionLabel(this, "MENTÉS ÉS EXPORT"))
         column.addView(Ui.button(this, "Mentés", true) { save() })
         column.addView(Ui.button(this, "Mentés másként…", false) {
             applyRows()
