@@ -119,6 +119,7 @@ A korábbi palettaazonosítók kompatibilitási okból megmaradnak, így a felha
 - [x] A Material 3 felületi rétegek (surface container szintek) egységes színértékeket kapnak sötét, világos és OLED Ultimate módban.
 - [x] A saját szótár/kifejezéstár listakártyái PremiumCard megjelenésre kerültek, a meglévő keresés, másolás, törlés és ismétlés logika megtartásával.
 - [x] A PremiumCard a globális prémium témakapcsolót is tiszteletben tartja.
+- [x] A főképernyő AI-állapotközpontja és feldolgozási állapotkártyái a kiválasztott Ultimate paletta színeit használják.
 - [ ] Minden további képernyő vizuális auditja és egységesítése.
 - [ ] Teljes regressziós teszt és sikeres CI build.
 - [ ] APK és teljes forráscsomag ellenőrzött kiadása.
