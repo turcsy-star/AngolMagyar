@@ -1,9 +1,9 @@
 package hu.angolmagyar.fordito
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.Card
@@ -34,8 +35,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -48,52 +47,46 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import hu.angolmagyar.fordito.ui.design.LuxuryPalettes
+import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
+
 class SettingsComposeActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = Prefs(this)
         setContent {
-            val ctx = LocalContext.current
             val dark = prefs.themeMode == 2 ||
                 (prefs.themeMode == 0 && (resources.configuration.uiMode and
                     android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                     android.content.res.Configuration.UI_MODE_NIGHT_YES)
-            val scheme = when {
-                dark -> darkColorScheme(
-                    primary = Color(0xFF60A5FA), secondary = Color(0xFF22D3EE),
-                    tertiary = Color(0xFF38BDF8),
-                    background = if (prefs.oledBlack) Color.Black else Color(0xFF070B16),
-                    surface = if (prefs.oledBlack) Color(0xFF080D18) else Color(0xFF111C30),
-                    surfaceVariant = Color(0xFF17243A),
-                    onBackground = Color(0xFFEEF5FF), onSurface = Color(0xFFEEF5FF),
-                    onSurfaceVariant = Color(0xFFA9BBD6), outline = Color(0xFF263650)
-                )
-                else -> lightColorScheme(
-                    primary = Color(0xFF2563EB), secondary = Color(0xFF0891B2),
-                    tertiary = Color(0xFF0EA5E9), background = Color(0xFFF3F6FC),
-                    surface = Color.White, surfaceVariant = Color(0xFFEAF0FA),
-                    onBackground = Color(0xFF101827), onSurface = Color(0xFF101827),
-                    onSurfaceVariant = Color(0xFF58677D), outline = Color(0xFFD7E1F2)
-                )
-            }
-            MaterialTheme(colorScheme = scheme) {
+            AngolMagyarTheme(darkTheme = dark, isTrueBlack = prefs.oledBlack) {
                 SettingsComposeScreen(
                     prefs = prefs,
-                    onBack = { NavTransitions.finishWithSlide(this) }
+                    onBack = { NavTransitions.finishWithSlide(this) },
+                    onThemeChanged = { recreate() }
                 )
             }
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
+private fun SettingsComposeScreen(
+    prefs: Prefs,
+    onBack: () -> Unit,
+    onThemeChanged: () -> Unit
+) {
     val ctx = LocalContext.current
     var themeMode by remember { mutableIntStateOf(prefs.themeMode) }
+    var selectedPalette by remember { mutableStateOf(prefs.luxuryThemeId) }
     var oled by remember { mutableStateOf(prefs.oledBlack) }
     var haptics by remember { mutableStateOf(prefs.haptics) }
     var keepScreen by remember { mutableStateOf(prefs.keepScreenOn) }
+    var balancedMotion by remember { mutableStateOf(prefs.motionProfile == "subtle" && !prefs.reduceMotion) }
+    var reduceMotion by remember { mutableStateOf(prefs.reduceMotion) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -103,64 +96,110 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Vissza")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { pad ->
         Column(
-            Modifier
-                .fillMaxSize()
-                .padding(pad)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+            Modifier.fillMaxSize().padding(pad).verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionCard(title = "Téma", icon = Icons.Default.DarkMode) {
-                ThemeOption("Rendszer", themeMode == 0) {
-                    themeMode = 0; prefs.themeMode = 0; App.applyTheme(0)
-                }
-                ThemeOption("Világos", themeMode == 1) {
-                    themeMode = 1; prefs.themeMode = 1; App.applyTheme(1)
-                }
-                ThemeOption("Sötét", themeMode == 2) {
-                    themeMode = 2; prefs.themeMode = 2; App.applyTheme(2)
-                }
+                ThemeOption("Rendszer", themeMode == 0) { themeMode = 0; prefs.themeMode = 0; App.applyTheme(0); onThemeChanged() }
+                ThemeOption("Világos", themeMode == 1) { themeMode = 1; prefs.themeMode = 1; App.applyTheme(1); onThemeChanged() }
+                ThemeOption("Sötét", themeMode == 2) { themeMode = 2; prefs.themeMode = 2; App.applyTheme(2); onThemeChanged() }
                 AnimatedVisibility(visible = themeMode != 1) {
-                    SwitchRow(
-                        title = "OLED pure black",
-                        subtitle = "True-black háttér OLED kijelzőkön",
-                        checked = oled
-                    ) {
-                        oled = it
-                        prefs.oledBlack = it
+                    SwitchRow("OLED pure black", "True-black háttér OLED kijelzőkön", oled) {
+                        oled = it; prefs.oledBlack = it; onThemeChanged()
                     }
                 }
             }
-            SectionCard(title = "Visszajelzés", icon = Icons.Default.Vibration) {
+
+            SectionCard(title = "Ultimate témák", icon = Icons.Default.Palette) {
+                Text(
+                    "A választott paletta az alkalmazás teljes prémium felületén érvényesül.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                LuxuryPalettes.ultimate.forEach { palette ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            selectedPalette = palette.id
+                            prefs.platinumTheme = true
+                            prefs.luxuryThemeId = palette.id
+                            onThemeChanged()
+                        }.padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedPalette == palette.id, onClick = {
+                            selectedPalette = palette.id
+                            prefs.platinumTheme = true
+                            prefs.luxuryThemeId = palette.id
+                            onThemeChanged()
+                        })
+                        Row(
+                            Modifier.weight(1f).padding(start = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                                listOf(palette.background, palette.accent, palette.glow).forEach { swatch ->
+                                    androidx.compose.foundation.layout.Box(
+                                        Modifier.size(17.dp).background(swatch, RoundedCornerShape(6.dp))
+                                    )
+                                }
+                            }
+                            Text(palette.title, modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            }
+
+            SectionCard(title = "Animáció", icon = Icons.Default.Palette) {
                 SwitchRow(
-                    title = "Haptikus rezgés",
-                    subtitle = "Gombok és gesztusok tapintása",
-                    checked = haptics
+                    title = "Balanced mozgás",
+                    subtitle = "Finom átmenetek, visszafogott fényhatások és animációk",
+                    checked = balancedMotion
                 ) {
-                    haptics = it
-                    prefs.haptics = it
+                    balancedMotion = it
+                    if (it) {
+                        reduceMotion = false
+                        prefs.reduceMotion = false
+                        prefs.motionProfile = "subtle"
+                    } else {
+                        prefs.motionProfile = "reduced"
+                    }
+                }
+                SwitchRow(
+                    title = "Animációk csökkentése",
+                    subtitle = "Kevesebb mozgás és alacsonyabb vizuális terhelés",
+                    checked = reduceMotion
+                ) {
+                    reduceMotion = it
+                    if (it) {
+                        balancedMotion = false
+                        prefs.reduceMotion = true
+                        prefs.motionProfile = "reduced"
+                    } else {
+                        prefs.reduceMotion = false
+                        prefs.motionProfile = "subtle"
+                        balancedMotion = true
+                    }
+                }
+            }
+
+            SectionCard(title = "Visszajelzés", icon = Icons.Default.Vibration) {
+                SwitchRow("Haptikus rezgés", "Gombok és gesztusok tapintása", haptics) {
+                    haptics = it; prefs.haptics = it
                     if (it) Haptics.click(ctx)
                 }
             }
             SectionCard(title = "Kijelző", icon = Icons.Default.PhoneAndroid) {
-                SwitchRow(
-                    title = "Képernyő ébren tartása",
-                    subtitle = "Futás közben ne aludjon el a kijelző",
-                    checked = keepScreen
-                ) {
-                    keepScreen = it
-                    prefs.keepScreenOn = it
+                SwitchRow("Képernyő ébren tartása", "Futás közben ne aludjon el a kijelző", keepScreen) {
+                    keepScreen = it; prefs.keepScreenOn = it
                 }
             }
             Text(
-                "A többi beállítás (felismerő, fordítás, szabályok) a klasszikus Beállításokban érhető el.",
+                "A felismerő, fordítási, modell- és adatkezelési beállítások változatlanul a klasszikus Beállításokban érhetők el.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp)
@@ -168,46 +207,40 @@ private fun SettingsComposeScreen(prefs: Prefs, onBack: () -> Unit) {
         }
     }
 }
+
 @Composable
 private fun SectionCard(title: String, icon: ImageVector, content: @Composable () -> Unit) {
     Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 10.dp)
-                )
+                Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 10.dp))
             }
             Spacer(Modifier.height(8.dp))
             content()
         }
     }
 }
+
 @Composable
 private fun ThemeOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(selected = selected, onClick = onClick)
         Text(label, style = MaterialTheme.typography.bodyLarge)
     }
 }
+
 @Composable
 private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
+        Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
