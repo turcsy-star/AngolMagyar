@@ -84,6 +84,7 @@ class TranslateService : Service(), Overlay.Callbacks {
     @Volatile private var translatorReady = false
     @Volatile private var paused = false
     @Volatile private var maxLevel = 0f
+    @Volatile private var lastAsrTextAt = 0L
     @Volatile private var pttActive = false
     @Volatile private var conversationHuToEn = false
     @Volatile private var previousTranslateDir: String? = null
@@ -621,6 +622,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         onPartial(text)
     }
     private fun onPartial(raw: String) {
+        if (raw.isNotBlank()) lastAsrTextAt = SystemClock.elapsedRealtime()
         main.post {
             if (!active || paused) return@post
             val now = SystemClock.uptimeMillis()
@@ -638,6 +640,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
     }
     private fun onFinal(raw: String) {
+        if (raw.isNotBlank()) lastAsrTextAt = SystemClock.elapsedRealtime()
         main.post {
             if (!active || paused) return@post
             if (TextPolish.isNoise(raw)) return@post
@@ -879,6 +882,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                 var lagOn = false
                 var silentSince = 0L
                 var silentWarned = false
+                var voiceSince = 0L
                 var wasPaused = false
                 while (active) {
                     val n = aud.read(buf, 0, buf.size)
@@ -936,6 +940,23 @@ class TranslateService : Service(), Overlay.Callbacks {
                         }
                     }
                     val voiceLikely = rms >= 35
+                    if (voiceLikely && !paused && pttActive) {
+                        if (voiceSince == 0L) voiceSince = now
+                        if (now - voiceSince >= 12_000L) {
+                            if (lastAsrTextAt < voiceSince) {
+                                main.post {
+                                    setWarning(
+                                        "asr",
+                                        "A mikrofon hangot érzékel, de 12 mp óta nincs felismert szöveg. Ellenőrizd a magyar/angol felismerőmodellt és a kiválasztott nyelvet."
+                                    )
+                                }
+                            } else {
+                                main.post { setWarning("asr", null) }
+                            }
+                        }
+                    } else {
+                        voiceSince = 0L
+                    }
                     val listening = !paused && pttActive
                     if (!listening) {
                         wasPaused = true
