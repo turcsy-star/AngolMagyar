@@ -484,6 +484,50 @@ class FileRecognizer(
                     val fs = failed.toHashSet()
                     for (i in idx) if (i !in fs) hu[i] = postTarget(hu[i], toHu)
                 }
+                // Ha az elsődleges szolgáltató hibázott vagy kvótába ütközött,
+                // csak a hibás sorokat adjuk át a külön beállított tartalék szolgáltatónak.
+                if (failed.isNotEmpty() && !cancel.get()) {
+                    val srcName = SrtJobService.langName(dir.substringBefore("_", "en"))
+                    val tgtName = SrtJobService.langName(dir.substringAfter("_", "hu"))
+                    val fallbackBase = OnlinePrefs.fallbackConfig(ctx, srcName, tgtName)
+                    val fallbackCfg = fallbackBase
+                        ?.takeIf { it.provider != cfg.provider }
+                        ?.copy(
+                            glossary = (sharedGlossary + fallbackBase.glossary)
+                                .distinctBy { it.first.trim().lowercase() },
+                            hint = listOf(fallbackBase.hint, cfg.hint)
+                                .filter { it.isNotBlank() }
+                                .distinct()
+                                .joinToString("\n")
+                        )
+                    if (fallbackCfg != null && netOk) {
+                        val fallbackTranslator = OnlineTranslator(fallbackCfg)
+                        val previousFailed = failed
+                        failed = fallbackTranslator.translate(
+                            en, hu, previousFailed,
+                            { d, t -> prog(d, t, "Tartalék online fordítás") },
+                            { cancel.get() }
+                        )
+                        val fallbackSucceeded = previousFailed.size - failed.size
+                        if (fallbackSucceeded > 0) {
+                            SrtJob.addEngine(
+                                when (fallbackCfg.provider) {
+                                    OnlineTranslator.Provider.GEMINI -> "Gemini"
+                                    OnlineTranslator.Provider.MISTRAL -> "Mistral"
+                                    OnlineTranslator.Provider.ANTHROPIC -> "Claude"
+                                    OnlineTranslator.Provider.DEEPL -> "DeepL"
+                                    OnlineTranslator.Provider.OPENAI -> "OpenAI-kompatibilis"
+                                }, fallbackSucceeded, 0
+                            )
+                        }
+                        if (failed.isNotEmpty()) {
+                            onNote?.invoke(
+                                "A tartalék online szolgáltatóval is ${failed.size} sor maradt sikertelen" +
+                                    (if (fallbackTranslator.lastError.isNotBlank()) " – ${fallbackTranslator.lastError}" else "")
+                            )
+                        }
+                    }
+                }
                 val failedSet = failed.toHashSet()
                 val sourceLanguage = dir.substringBefore("_").trim().lowercase()
                 val targetLanguage = dir.substringAfter("_").trim().lowercase()
