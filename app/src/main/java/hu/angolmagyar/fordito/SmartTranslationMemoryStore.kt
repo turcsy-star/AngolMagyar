@@ -28,9 +28,10 @@ class SmartTranslationMemoryStore(context: Context) {
         source: String,
         sourceLanguage: String,
         targetLanguage: String,
-        projectId: String? = null
+        projectId: String? = null,
+        context: String = ""
     ): SmartTranslationMemory.Match? = readEntries()?.let { entries ->
-        SmartTranslationMemory.lookup(source, sourceLanguage, targetLanguage, projectId, entries)
+        SmartTranslationMemory.lookup(source, sourceLanguage, targetLanguage, projectId, entries, context)
     }
     @Synchronized
     fun recordConfirmedUse(entry: SmartTranslationMemory.Entry, nowEpochMs: Long): Boolean =
@@ -89,6 +90,7 @@ class SmartTranslationMemoryStore(context: Context) {
         put("scope", scope.name); put("projectId", projectId ?: JSONObject.NULL)
         put("status", status.name); put("usageCount", usageCount)
         put("createdAtEpochMs", createdAtEpochMs); put("updatedAtEpochMs", updatedAtEpochMs)
+        put("context", context)
     }
     private fun JSONObject.toEntry(): SmartTranslationMemory.Entry? = try {
         SmartTranslationMemory.Entry(
@@ -99,7 +101,8 @@ class SmartTranslationMemoryStore(context: Context) {
             status = SmartTranslationMemory.Status.valueOf(getString("status")),
             usageCount = getInt("usageCount"),
             createdAtEpochMs = getLong("createdAtEpochMs"),
-            updatedAtEpochMs = getLong("updatedAtEpochMs")
+            updatedAtEpochMs = getLong("updatedAtEpochMs"),
+            context = optString("context", "")
         )
     } catch (_: Exception) { null }
     companion object {
