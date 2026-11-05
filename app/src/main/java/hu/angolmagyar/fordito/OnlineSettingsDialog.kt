@@ -170,19 +170,34 @@ object OnlineSettingsDialog {
                 result.text = if (miss.isEmpty()) "Az online fordítás jelenleg nem használható."
                 else "Hiányzik: ${miss.joinToString(", ")}.$keyHint"
             } else {
-                result.text = "Kapcsolat ellenőrzése…\nA szolgáltató legfeljebb 15 másodpercig válaszolhat."
-                // A próba külön, rövid időkorlátot kap: a normál fordítás 90 másodperces
-                // időkorlátja itt azt a látszatot keltheti, mintha a gomb nem működne.
+                result.text = "Kapcsolat ellenőrzése…\nA szolgáltató legfeljebb 40 másodpercig válaszolhat."
+                // A próba 40 másodpercet kap: a Gemini válaszgenerálása lassabb lehet,
+                // miközben a normál fordítás saját időkorlátja változatlan marad.
                 Thread({
                     val err = try {
-                        OnlineTranslator(cfg.copy(timeoutMs = 15_000)).test()
+                        OnlineTranslator(cfg.copy(timeoutMs = 40_000)).test()
                     } catch (e: Throwable) {
                         OnlineTranslator.netErrorText(e)
                     }
+                    val providerName = when (cfg.provider) {
+                        OnlineTranslator.Provider.GEMINI -> "Gemini"
+                        OnlineTranslator.Provider.MISTRAL -> "Mistral"
+                        OnlineTranslator.Provider.ANTHROPIC -> "Claude"
+                        OnlineTranslator.Provider.OPENAI -> "OpenAI-kompatibilis"
+                        OnlineTranslator.Provider.DEEPL -> "DeepL"
+                    }
+                    val modelName = cfg.model.ifBlank {
+                        when (cfg.provider) {
+                            OnlineTranslator.Provider.GEMINI -> OnlineTranslator.DEFAULT_GEMINI_MODEL
+                            OnlineTranslator.Provider.MISTRAL -> OnlineTranslator.DEFAULT_MISTRAL_MODEL
+                            OnlineTranslator.Provider.ANTHROPIC -> OnlineTranslator.DEFAULT_ANTHROPIC_MODEL
+                            else -> "alapértelmezett"
+                        }
+                    }
                     val providerResult = if (err == null) {
-                        "✓ Online fordítás: sikeres kapcsolat, a Gemini válaszolt."
+                        "✓ Online fordítás: sikeres kapcsolat ($providerName · $modelName)."
                     } else {
-                        "✗ Online fordítás: $err"
+                        "✗ Online fordítás ($providerName · $modelName): $err"
                     }
                     act.runOnUiThread {
                         result.text = providerResult
