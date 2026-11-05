@@ -159,7 +159,14 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         fun netErrorText(e: Throwable): String = when (e) {
             is java.net.UnknownHostException ->
                 "Nincs internetkapcsolat, vagy a szolgáltató neve nem oldható fel (${e.message ?: "DNS"})."
-            is java.net.SocketTimeoutException -> "Időtúllépés: lassú vagy megszakadó a hálózat."
+            is java.net.SocketTimeoutException -> {
+                val detail = e.message.orEmpty().lowercase()
+                when {
+                    "connect" in detail -> "Kapcsolódási időtúllépés: a telefon nem érte el a Gemini szerverét. Ellenőrizd a Wi-Fi/mobilnet kapcsolatot vagy a hálózati szűrést."
+                    "read" in detail -> "Válasz-időtúllépés: a Gemini szervere nem küldött időben választ. Ez nem bizonyítja, hogy hibás az API-kulcs."
+                    else -> "Időtúllépés: a Gemini-kérés nem fejeződött be időben."
+                }
+            }
             is javax.net.ssl.SSLException ->
                 "Biztonságos kapcsolat (TLS) hiba – ellenőrizd a telefon dátumát/óráját és a hálózatot (${e.message ?: "SSL"})."
             is java.net.ConnectException -> "Nem sikerült kapcsolódni a szolgáltatóhoz (${e.message ?: "kapcsolódási hiba"})."
@@ -218,7 +225,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     private fun call(system: String, user: String, cancel: () -> Boolean): String? {
         var attempt = 0
         var netError: Throwable? = null
-        val maxAttempts = if (testMode) 3 else 4
+        val maxAttempts = if (testMode) 1 else 4
         while (attempt < maxAttempts && !cancel()) {
             attempt++
             try {
@@ -280,7 +287,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             } catch (e: Exception) {
                 netError = e
                 lastError = netErrorText(e)
-                if (attempt < maxAttempts) {
+                if (!testMode && attempt < maxAttempts) {
                     try { Thread.sleep(1000L * attempt) } catch (_: InterruptedException) { return null }
                 }
             }
