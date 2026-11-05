@@ -254,7 +254,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         prefs.forcedEco = false
         enRules = Fixes.parse(prefs.enFixes)
         huRules = Fixes.parse(prefs.huFixes)
-        vocabExtra = TextPolish.parseVocab(prefs.customVocab)
+        vocabExtra = TextPolish.parseVocab(prefs.customVocab + "\n" + GlossaryStore(this).runtimeRules())
         partialIntervalMs = if (prefs.eco || prefs.forcedEco) 2500L else 1200L
         sentenceBuf = SentenceBuffer(flushMs = if (prefs.eco) 2800L else 2000L) { txt, isFinal ->
             main.post {
