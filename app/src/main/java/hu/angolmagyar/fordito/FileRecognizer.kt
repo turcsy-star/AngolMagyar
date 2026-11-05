@@ -500,7 +500,7 @@ class FileRecognizer(
                             entry.status == SmartTranslationMemory.Status.APPROVED &&
                                 SmartTranslationMemory.normalizeText(entry.source) == SmartTranslationMemory.normalizeText(en[i]) &&
                                 SmartTranslationMemory.normalizeText(entry.target) == SmartTranslationMemory.normalizeText(hu[i]) &&
-                                SmartTranslationMemory.normalizeText(entry.context) == SmartTranslationMemory.normalizeText(memoryContext) &&
+                                /* Az elfogadott forrás–cél pár kontextustól függetlenül elfogadottnak számít. */
                                 SmartTranslationMemory.normalizeLanguage(entry.sourceLanguage) == sourceLanguage &&
                                 SmartTranslationMemory.normalizeLanguage(entry.targetLanguage) == targetLanguage
                         }
