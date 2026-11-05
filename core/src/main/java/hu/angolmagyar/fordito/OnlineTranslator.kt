@@ -200,10 +200,14 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             "{\"model\":${MiniJson.quote(cfg.model)},\"temperature\":0.2,\"messages\":[" +
                 "{\"role\":\"system\",\"content\":${MiniJson.quote(system)}}," +
                 "{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
-        Provider.GEMINI ->
+        Provider.GEMINI -> {
+            // A thinkingBudget=0 csak a Gemini 2.5 Flash modelleknél támogatott.
+            // Más modellnél nem küldjük el, mert HTTP 400-at okozhat.
+            val thinking = if (cfg.model.lowercase().contains("2.5-flash")) ",\"thinkingConfig\":{\"thinkingBudget\":0}" else ""
             "{\"systemInstruction\":{\"parts\":[{\"text\":${MiniJson.quote(system)}}]}," +
                 "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":${MiniJson.quote(user)}}]}]," +
-                "\"generationConfig\":{\"temperature\":0.2,\"maxOutputTokens\":4096,\"responseMimeType\":\"application/json\"}}"
+                "\"generationConfig\":{\"temperature\":0.2,\"maxOutputTokens\":4096,\"responseMimeType\":\"application/json"$thinking}}"
+        }
     }
     private fun headers(): Map<String, String> = when (cfg.provider) {
         Provider.ANTHROPIC -> mapOf(
