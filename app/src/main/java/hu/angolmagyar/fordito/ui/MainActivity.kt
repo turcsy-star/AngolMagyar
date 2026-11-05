@@ -399,8 +399,11 @@ fun HomeScreen(
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         TextButton(onClick = onTranscripts) { Text("Mentett átiratok") }
+                        TextButton(onClick = onOpenJob) { Text("Médiafolyamatok") }
                         TextButton(onClick = onPhrasebook) { Text("Szókincstár") }
-                        TextButton(onClick = onIntelligence) { Text("Fordítási minőség") }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        TextButton(onClick = onIntelligence) { Text("Fordítási minőség és online modellek") }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         TextButton(onClick = onModels) { Text("Modellek") }
