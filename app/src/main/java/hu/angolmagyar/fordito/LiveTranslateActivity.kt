@@ -565,15 +565,28 @@ class LiveTranslateActivity : AppCompatActivity() {
                 marginEnd = dp(6)
             }
         })
+        row.addView(Ui.button(this, if (prefs.needsTranslation()) "Csak átirat" else "Fordítás be", false) {
+            startService(Intent(this, TranslateService::class.java).setAction(TranslateService.ACTION_TOGGLE_TRANSLATION))
+            handler.postDelayed({ rebuild(false) }, 250)
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = dp(6)
+                marginEnd = dp(6)
+            }
+        })
         row.addView(Ui.button(this, getString(R.string.m_stop), true) {
             startService(Intent(this, TranslateService::class.java).setAction(TranslateService.ACTION_STOP))
             handler.postDelayed({ rebuild(false) }, 300)
         }.apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                marginStart = dp(6)
-            }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
         card.addView(row)
+        if (prefs.isConversation()) {
+            card.addView(Ui.button(this, "⇄ Tolmács irányváltás", false) {
+                startService(Intent(this, TranslateService::class.java).setAction(TranslateService.ACTION_SWITCH_DIR))
+                handler.postDelayed({ rebuild(false) }, 200)
+            })
+        }
         column.addView(card)
     }
     private fun polyCard() {

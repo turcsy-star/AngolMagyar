@@ -60,6 +60,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         const val ACTION_PTT_DOWN = "hu.angolmagyar.fordito.PTT_DOWN"
         const val ACTION_PTT_UP = "hu.angolmagyar.fordito.PTT_UP"
         const val ACTION_SWITCH_DIR = "hu.angolmagyar.fordito.SWITCH_DIR"
+        const val ACTION_TOGGLE_TRANSLATION = "hu.angolmagyar.fordito.TOGGLE_TRANSLATION"
         private const val CHANNEL_ID = "translate"
         private const val NOTIFICATION_ID = 1
         private const val CLEAR_AFTER_MS = 8000L
@@ -83,8 +84,10 @@ class TranslateService : Service(), Overlay.Callbacks {
     @Volatile private var translatorReady = false
     @Volatile private var paused = false
     @Volatile private var maxLevel = 0f
+    @Volatile private var lastAsrTextAt = 0L
     @Volatile private var pttActive = false
     @Volatile private var conversationHuToEn = false
+    @Volatile private var previousTranslateDir: String? = null
     @Volatile private var autoDual = false
     private val asrExec = Executors.newSingleThreadExecutor()
     private val onlineExec = Executors.newSingleThreadExecutor()
@@ -154,6 +157,10 @@ class TranslateService : Service(), Overlay.Callbacks {
             ACTION_PTT_UP -> {
                 pttActive = false
                 main.post { overlay?.setPttActive(false) }
+                return START_NOT_STICKY
+            }
+            ACTION_TOGGLE_TRANSLATION -> {
+                toggleTranslationMode()
                 return START_NOT_STICKY
             }
             ACTION_SWITCH_DIR -> {
@@ -234,7 +241,9 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
         active = true
         paused = false
-        val usePtt = mode == MODE_PTT || (mode == MODE_MIC && prefs.pushToTalk)
+        // A hagyományos mikrofonmód mindig folyamatosan figyel.
+        // A PTT csak a külön Nyomva beszélés módban aktiválódik.
+        val usePtt = mode == MODE_PTT
         pttActive = !usePtt
         val sidesNow = Engines.sides(prefs)
         conversationHuToEn = if (prefs.isConversation()) prefs.convStartHu else sidesNow.hu
@@ -434,6 +443,10 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
     }
     private fun translate(en: String, isFinal: Boolean) {
+        if (!prefs.needsTranslation()) {
+            if (isFinal) pushFinal(en, "")
+            return
+        }
         // Az előző felismert forrásmondat ad rövid beszélgetési kontextust.
         val memoryContext = lastEn
         if (isFinal && en.isNotBlank()) {
@@ -500,6 +513,29 @@ class TranslateService : Service(), Overlay.Callbacks {
             return
         }
         translateOffline(en, isFinal, id, t)
+    }
+
+    private fun toggleTranslationMode() {
+        if (prefs.needsTranslation()) {
+            previousTranslateDir = prefs.translateDir
+            prefs.translateDir = Prefs.DIR_NONE
+            setWarning("translation-mode", "Csak átirat mód – a fordítás szünetel.")
+            showMessage("Csak átirat mód", 1800)
+        } else {
+            prefs.translateDir = previousTranslateDir ?: Prefs.DIR_EN_HU
+            previousTranslateDir = null
+            try { translator?.close() } catch (_: Exception) {}
+            translator = null
+            translatorReady = false
+            setWarning("translation-mode", null)
+            initTranslator()
+            showMessage("Fordítás bekapcsolva", 1800)
+        }
+        try {
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                .notify(NOTIFICATION_ID, buildNotification())
+        } catch (_: Exception) {}
+        AppState.notifyListeners()
     }
 
     private fun rememberLiveCandidate(source: String, target: String, context: String) {
@@ -588,6 +624,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         onPartial(text)
     }
     private fun onPartial(raw: String) {
+        if (raw.isNotBlank()) lastAsrTextAt = SystemClock.elapsedRealtime()
         main.post {
             if (!active || paused) return@post
             val now = SystemClock.uptimeMillis()
@@ -605,6 +642,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
     }
     private fun onFinal(raw: String) {
+        if (raw.isNotBlank()) lastAsrTextAt = SystemClock.elapsedRealtime()
         main.post {
             if (!active || paused) return@post
             if (TextPolish.isNoise(raw)) return@post
@@ -846,6 +884,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                 var lagOn = false
                 var silentSince = 0L
                 var silentWarned = false
+                var voiceSince = 0L
                 var wasPaused = false
                 while (active) {
                     val n = aud.read(buf, 0, buf.size)
@@ -903,6 +942,23 @@ class TranslateService : Service(), Overlay.Callbacks {
                         }
                     }
                     val voiceLikely = rms >= 35
+                    if (voiceLikely && !paused && pttActive) {
+                        if (voiceSince == 0L) voiceSince = now
+                        if (now - voiceSince >= 12_000L) {
+                            if (lastAsrTextAt < voiceSince) {
+                                main.post {
+                                    setWarning(
+                                        "asr",
+                                        "A mikrofon hangot érzékel, de 12 mp óta nincs felismert szöveg. Ellenőrizd a magyar/angol felismerőmodellt és a kiválasztott nyelvet."
+                                    )
+                                }
+                            } else {
+                                main.post { setWarning("asr", null) }
+                            }
+                        }
+                    } else {
+                        voiceSince = 0L
+                    }
                     val listening = !paused && pttActive
                     if (!listening) {
                         wasPaused = true
@@ -916,9 +972,8 @@ class TranslateService : Service(), Overlay.Callbacks {
                         sys?.feed(data, len)
                         liveWhisper?.feed(data, len)
                     }
-                    if (!voiceLikely) {
-                        continue
-                    }
+                    // A teljes PCM-folyamot továbbítjuk a felismerőnek, a csendes részeket is.
+                    // A Vosk a csendből zárja le a kimondott mondatot; a VAD itt nem dobhat el mintákat.
                     if (wasPaused) {
                         recOther?.reset()
                         recHu?.reset()
