@@ -81,6 +81,8 @@ class SmartTranslationMemoryStore(context: Context) {
         SmartTranslationMemory.normalizeText(e.source),
         SmartTranslationMemory.normalizeLanguage(e.sourceLanguage),
         SmartTranslationMemory.normalizeLanguage(e.targetLanguage),
+        SmartTranslationMemory.normalizeText(e.target),
+        SmartTranslationMemory.normalizeText(e.context),
         e.scope.name,
         e.projectId.orEmpty()
     ).joinToString("\u001f")
