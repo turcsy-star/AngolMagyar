@@ -434,12 +434,14 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
     }
     private fun translate(en: String, isFinal: Boolean) {
+        // Az előző felismert forrásmondat ad rövid beszélgetési kontextust.
+        val memoryContext = lastEn
         if (isFinal && en.isNotBlank()) {
             val sourceLanguage = if (conversationHuToEn) "hu" else "en"
             val targetLanguage = if (conversationHuToEn) "en" else "hu"
             try {
                 val match = SmartTranslationMemoryStore(this)
-                    .lookup(en, sourceLanguage, targetLanguage)
+                    .lookup(en, sourceLanguage, targetLanguage, context = memoryContext)
                 val preferred = match?.preferred
                 if (preferred != null && !match.ambiguous) {
                     SmartTranslationMemoryStore(this)
@@ -485,7 +487,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                             var polished = Fixes.apply(onlineResult!!, tgtRules)
                             polished = if (conversationHuToEn) TextPolish.polishEnglish(polished, vocabExtra)
                             else TextPolish.polishHungarian(polished, vocabExtra)
-                            rememberLiveCandidate(en, polished)
+                            rememberLiveCandidate(en, polished, memoryContext)
                             pushFinal(en, polished)
                         }
                     } else {
@@ -500,7 +502,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         translateOffline(en, isFinal, id, t)
     }
 
-    private fun rememberLiveCandidate(source: String, target: String) {
+    private fun rememberLiveCandidate(source: String, target: String, context: String) {
         if (source.isBlank() || target.isBlank() || source == target) return
         val sourceLanguage = if (conversationHuToEn) "hu" else "en"
         val targetLanguage = if (conversationHuToEn) "en" else "hu"
@@ -518,7 +520,8 @@ class TranslateService : Service(), Overlay.Callbacks {
                     source = source, target = target,
                     sourceLanguage = sourceLanguage, targetLanguage = targetLanguage,
                     status = SmartTranslationMemory.Status.PENDING,
-                    createdAtEpochMs = now, updatedAtEpochMs = now
+                    createdAtEpochMs = now, updatedAtEpochMs = now,
+                    context = context.take(1500)
                 ))
             }
         } catch (e: Exception) {
