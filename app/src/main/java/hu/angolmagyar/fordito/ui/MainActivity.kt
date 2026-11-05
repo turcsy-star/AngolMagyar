@@ -132,6 +132,7 @@ import hu.angolmagyar.fordito.ui.design.RollingText
 import hu.angolmagyar.fordito.ui.design.audioGlow
 import hu.angolmagyar.fordito.ui.design.rememberAudioGlow
 import hu.angolmagyar.fordito.TranscriptActivity
+import hu.angolmagyar.fordito.TaskSetupActivity
 import hu.angolmagyar.fordito.TranslateService
 import hu.angolmagyar.fordito.ui.theme.AngolMagyarTheme
 import hu.angolmagyar.fordito.ui.design.ProvidePremiumDesignSystem
@@ -227,6 +228,13 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
             AngolMagyarTheme(isTrueBlack = prefs.oledBlack) {
                 ProvidePremiumDesignSystem {
                 HomeScreen(
+                    onWorkflow = { source, translate ->
+                        val task = Intent(this, TaskSetupActivity::class.java)
+                            .putExtra(TaskSetupActivity.EXTRA_TASK, TaskSetupActivity.TASK_TRANSCRIBE)
+                            .putExtra(TaskSetupActivity.EXTRA_INPUT, source)
+                            .putExtra(TaskSetupActivity.EXTRA_TRANSLATE, translate)
+                        NavTransitions.open(this, task)
+                    },
                     onSubtitles = {
                         startActivity(Intent(this, FileSubtitleActivity::class.java)
                             .putExtra(FileSubtitleActivity.EXTRA_AUTOSTART, true))
@@ -285,6 +293,7 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
 }
 @Composable
 fun HomeScreen(
+    onWorkflow: (String, Boolean) -> Unit,
     onSubtitles: () -> Unit,
     onOpenJob: () -> Unit,
     onLive: () -> Unit,
@@ -352,14 +361,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Staggered(0, shown) { Header(running = snap.running || jobRunning, error = snap.lastError != null) }
-            Staggered(1, shown) {
-                FuturisticWelcomePanel(
-                    active = snap.running || jobRunning,
-                    onLive = onLive,
-                    onSubtitles = onSubtitles
-                )
-            }
-            Staggered(1, shown) { DiamondExperiencePanel(active = snap.running || jobRunning) }
+            Staggered(1, shown) { WorkflowStartPanel(onWorkflow = onWorkflow) }
             Staggered(2, shown) {
                 PlatinumUltraConsole(
                     active = snap.running,
@@ -370,22 +372,7 @@ fun HomeScreen(
                 )
             }
             DownloadBanner(onClick = onModels)
-            TranslationComfortCard()
-            HeroCard(
-                title = "Minőség",
-                subtitle = "Szövegjavítás online szótárral, automatikus szótár, online kapcsolat.",
-                icon = Icons.Rounded.CloudDownload,
-                onClick = onIntelligence
-            )
             StateCards(error = snap.lastError?.message, onDiagnostics = onDiagnostics, onModels = onModels)
-            Staggered(2, shown) {
-                HeroCard(
-                    title = "Indítás: felirat készítése",
-                    subtitle = "Válassz videót vagy hangfájlt: pontos magyar felirat, egy érintésre.",
-                    icon = Icons.Rounded.Movie,
-                    onClick = onSubtitles
-                )
-            }
             AnimatedVisibility(
                 visible = jobRunning,
                 enter = fadeIn(tween(300)) + slideInVertically(tween(400)) { it / 4 },
@@ -405,27 +392,23 @@ fun HomeScreen(
                 )
             }
             Staggered(3, shown) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     PremiumSectionTitle(
-                        title = "Gyors műveletek",
-                        subtitle = "A legfontosabb eszközök egyetlen érintésre"
+                        title = "Eszközök és beállítások",
+                        subtitle = "A fő munkafolyamattól elkülönítve"
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        TileCard(
-                            title = "Élő fordítás", subtitle = "Mikrofon, belső hang",
-                            icon = Icons.Rounded.Mic, onClick = onLive, modifier = Modifier.weight(1f)
-                        )
-                        TileCard(
-                            title = "Átiratok", subtitle = "Mentett beszélgetések",
-                            icon = Icons.Rounded.Description, onClick = onTranscripts, modifier = Modifier.weight(1f)
-                        )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        TextButton(onClick = onTranscripts) { Text("Mentett átiratok") }
+                        TextButton(onClick = onPhrasebook) { Text("Szókincstár") }
+                        TextButton(onClick = onIntelligence) { Text("Fordítási minőség") }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                        TileCard(
-                            title = "Saját szókincstár", subtitle = "Kézzel mentett fordítások",
-                            icon = Icons.Rounded.BookmarkBorder, onClick = onPhrasebook, modifier = Modifier.weight(1f)
-                        )
-                        Spacer(Modifier.weight(1f))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        TextButton(onClick = onModels) { Text("Modellek") }
+                        TextButton(onClick = onSettings) { Text("Beállítások") }
+                        TextButton(onClick = onDiagnostics) { Text("Diagnosztika") }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                        TextButton(onClick = onOverlay) { Text("Lebegő ablak engedélye") }
                     }
                 }
             }
@@ -465,6 +448,81 @@ fun HomeScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+@Composable
+private fun WorkflowStartPanel(onWorkflow: (String, Boolean) -> Unit) {
+    var source by remember { mutableStateOf<String?>(null) }
+    val accent = MaterialTheme.colorScheme.primary
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Mit szeretnél feldolgozni?", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                if (source == null) "Először válaszd ki a hang forrását."
+                else "Forrás: ${if (source == "live") "Élő beszéd" else "Média"}. Most válaszd ki a célt.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (source == null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(
+                        onClick = { source = "live" },
+                        modifier = Modifier.weight(1f).height(104.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Rounded.Mic, contentDescription = null)
+                            Text("Élő beszéd", fontWeight = FontWeight.SemiBold)
+                            Text("Mikrofon", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { source = "media" },
+                        modifier = Modifier.weight(1f).height(104.dp),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Rounded.Movie, contentDescription = null)
+                            Text("Média", fontWeight = FontWeight.SemiBold)
+                            Text("Hang- vagy videófájl", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(
+                        onClick = { onWorkflow(source!!, false) },
+                        modifier = Modifier.weight(1f).height(72.dp),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Rounded.Description, contentDescription = null)
+                            Text("Átirat")
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { onWorkflow(source!!, true) },
+                        modifier = Modifier.weight(1f).height(72.dp),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Rounded.CloudDownload, contentDescription = null)
+                            Text("Fordítás")
+                        }
+                    }
+                }
+                TextButton(onClick = { source = null }, modifier = Modifier.align(Alignment.Start)) {
+                    Text("← Másik forrás")
+                }
+            }
         }
     }
 }
