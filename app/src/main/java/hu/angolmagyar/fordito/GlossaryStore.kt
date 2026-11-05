@@ -25,6 +25,10 @@ class GlossaryStore(context: Context) {
         Entry(it.first, it.second, status = Status.APPROVED, note = "Importált személyes szótár")
     }
     fun exportText(): String = GlossaryGovernance.exportTsv(load())
+    /** Approved global entries shared by live speech and media recognition/translation. */
+    fun runtimeRules(): String = load()
+        .filter { it.status == Status.APPROVED && it.scope == Scope.GLOBAL }
+        .joinToString("\n") { it.source.trim() + "=" + it.target.trim() }
     private fun parseLegacy(text: String): List<Pair<String, String>> = text.lineSequence()
         .map { it.trim() }
         .filter { it.isNotBlank() && !it.startsWith("#") }
