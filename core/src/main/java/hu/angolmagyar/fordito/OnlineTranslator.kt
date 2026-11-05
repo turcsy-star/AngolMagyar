@@ -26,6 +26,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         const val DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5-5"
         const val DEFAULT_OPENAI_BASE = "https://api.openai.com/v1"
         const val DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
+        const val GEMINI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
         const val DEFAULT_MISTRAL_MODEL = "mistral-small-latest"
         const val DEFAULT_MISTRAL_BASE = "https://api.mistral.ai/v1"
         private const val CTX_BEFORE = 4
@@ -184,11 +185,13 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             }
         }
     }
+    @Volatile private var activeGeminiModel: String? = null
+    private fun effectiveModel(): String = activeGeminiModel ?: cfg.model.ifBlank { DEFAULT_GEMINI_MODEL }
     private fun endpoint(): String = when (cfg.provider) {
         Provider.ANTHROPIC -> (cfg.baseUrl.ifBlank { "https://api.anthropic.com" }).trimEnd('/') + "/v1/messages"
         Provider.OPENAI -> (cfg.baseUrl.ifBlank { DEFAULT_OPENAI_BASE }).trimEnd('/') + "/chat/completions"
         Provider.DEEPL -> deeplEndpoint(cfg.apiKey, cfg.baseUrl)
-        Provider.GEMINI -> "https://generativelanguage.googleapis.com/v1beta/models/${cfg.model.ifBlank { DEFAULT_GEMINI_MODEL }}:generateContent"
+        Provider.GEMINI -> "https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel()}:generateContent"
         Provider.MISTRAL -> (cfg.baseUrl.ifBlank { DEFAULT_MISTRAL_BASE }).trimEnd('/') + "/chat/completions"
     }
     private fun requestBody(system: String, user: String): String = when (cfg.provider) {
@@ -203,7 +206,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
         Provider.GEMINI -> {
             // Gemini 2.5 Flash: a gondolkodás kikapcsolható thinkingBudget=0 értékkel.
             // Gemini 3.x modelleknél a MINIMAL nem támogatott; LOW a legkisebb választható szint.
-            val modelId = cfg.model.lowercase()
+            val modelId = effectiveModel().lowercase()
             val thinking = when {
                 modelId.contains("2.5-flash") -> ",\"thinkingConfig\":{\"thinkingBudget\":0}"
                 modelId.startsWith("gemini-3.") -> ",\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}"
@@ -234,7 +237,8 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
     private fun call(system: String, user: String, cancel: () -> Boolean): String? {
         var attempt = 0
         var netError: Throwable? = null
-        val maxAttempts = if (testMode) 1 else 4
+        val canTryGeminiLite = cfg.provider == Provider.GEMINI && effectiveModel() != GEMINI_FALLBACK_MODEL
+        val maxAttempts = if (testMode) { if (canTryGeminiLite) 2 else 1 } else 4
         while (attempt < maxAttempts && !cancel()) {
             attempt++
             try {
@@ -270,8 +274,23 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                         return null
                     }
                     code >= 500 -> {
+                        // Gemini 503 esetén ugyanazzal a kulccsal próbáljuk a kisebb Flash-Lite modellt.
+                        if (cfg.provider == Provider.GEMINI && activeGeminiModel == null &&
+                            effectiveModel() != GEMINI_FALLBACK_MODEL && attempt < maxAttempts
+                        ) {
+                            activeGeminiModel = GEMINI_FALLBACK_MODEL
+                            lastError = "A Gemini ${cfg.model} túlterhelt (HTTP $code); automatikus váltás: $GEMINI_FALLBACK_MODEL."
+                            continue
+                        }
                         val detail = errorMessage(body).trim().take(240)
-                        lastError = "A Gemini/szolgáltató átmenetileg nem elérhető (HTTP $code)." +
+                        val providerLabel = when (cfg.provider) {
+                            Provider.GEMINI -> "Gemini"
+                            Provider.MISTRAL -> "Mistral"
+                            Provider.ANTHROPIC -> "Claude"
+                            Provider.OPENAI -> "OpenAI-kompatibilis szolgáltató"
+                            Provider.DEEPL -> "DeepL"
+                        }
+                        lastError = "$providerLabel átmenetileg nem elérhető (HTTP $code; modell: ${effectiveModel()})." +
                             if (detail.isNotBlank() && detail != body.take(160)) " Részlet: $detail" else ""
                         if (attempt < maxAttempts) {
                             // Exponenciális visszavárakozás: kapcsolatpróbánál rövidebb,
