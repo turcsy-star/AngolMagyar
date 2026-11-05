@@ -53,4 +53,33 @@ class OnlineTranslatorTest {
         assertNotNull(ctx)
         assertTrue(ctx.contains("one") && ctx.contains("four") && ctx.contains("hint"))
     }
+    @Test fun gemini503AutomaticallyFallsBackToFlashLite() {
+        val urls = mutableListOf<String>()
+        var calls = 0
+        val http = OnlineTranslator.Http { url, _, _, _ ->
+            urls.add(url)
+            calls++
+            if (calls == 1) {
+                503 to """{"error":{"message":"This model is currently experiencing high demand."}}"""
+            } else {
+                200 to """{"candidates":[{"content":{"parts":[{"text":"[\"Szia\"]"}]}}]}"""
+            }
+        }
+        val translator = OnlineTranslator(
+            OnlineTranslator.Config(
+                provider = OnlineTranslator.Provider.GEMINI,
+                apiKey = "test-key",
+                model = OnlineTranslator.DEFAULT_GEMINI_MODEL
+            ),
+            http
+        )
+        val output = mutableListOf("")
+        val failed = translator.translate(listOf("Hello"), output, listOf(0))
+        assertTrue(failed.isEmpty())
+        assertEquals("Szia", output[0])
+        assertEquals(2, calls)
+        assertTrue(urls[0].contains(OnlineTranslator.DEFAULT_GEMINI_MODEL))
+        assertTrue(urls[1].contains(OnlineTranslator.GEMINI_FALLBACK_MODEL))
+    }
+
 }
