@@ -464,7 +464,7 @@ class FileRecognizer(
             val netOk = Engines.online(ctx)
             if (cfg != null && netOk) {
                 val ot = OnlineTranslator(cfg)
-                val failed: List<Int>
+                var failed: List<Int>
                 if ((indices == null || groupSubset) && SubPrefs.contextTranslate(ctx)) {
                     val items = idx.map { SentenceGroups.Item(times[it].first, times[it].second, en[it]) }
                     val groups = SentenceGroups.group(items)
@@ -490,16 +490,16 @@ class FileRecognizer(
                     val srcName = SrtJobService.langName(dir.substringBefore("_", "en"))
                     val tgtName = SrtJobService.langName(dir.substringAfter("_", "hu"))
                     val fallbackBase = OnlinePrefs.fallbackConfig(ctx, srcName, tgtName)
-                    val fallbackCfg = fallbackBase
-                        ?.takeIf { it.provider != cfg.provider }
-                        ?.copy(
-                            glossary = (sharedGlossary + fallbackBase.glossary)
+                    val fallbackCfg = fallbackBase?.let { base ->
+                        base.takeIf { it.provider != cfg.provider }?.copy(
+                            glossary = (sharedGlossary + base.glossary)
                                 .distinctBy { it.first.trim().lowercase() },
-                            hint = listOf(fallbackBase.hint, cfg.hint)
+                            hint = listOf(base.hint, cfg.hint)
                                 .filter { it.isNotBlank() }
                                 .distinct()
                                 .joinToString("\n")
                         )
+                    }
                     if (fallbackCfg != null && netOk) {
                         val fallbackTranslator = OnlineTranslator(fallbackCfg)
                         val previousFailed = failed
