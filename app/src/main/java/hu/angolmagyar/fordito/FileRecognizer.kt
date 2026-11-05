@@ -429,9 +429,15 @@ class FileRecognizer(
             )
             val found = try { NameExtractor.extract(en) } catch (_: Exception) { emptyList() }
             if (found.isNotEmpty()) SrtJob.names = found
-            val cfg = if (cfg0 != null && found.isNotEmpty())
-                cfg0.copy(hint = (cfg0.hint + "\nNevek (ne fordítsd, magyarosan ragozhatók): " + found.joinToString(", ")).trim())
-            else cfg0
+            val sharedGlossary = TextPolish.parseVocab(GlossaryStore(ctx).runtimeRules())
+            val cfg = cfg0?.let { base ->
+                val glossary = (sharedGlossary + base.glossary)
+                    .distinctBy { it.first.trim().lowercase() }
+                val hint = if (found.isNotEmpty())
+                    (base.hint + "\nNevek (ne fordítsd, magyarosan ragozhatók): " + found.joinToString(", ")).trim()
+                else base.hint
+                base.copy(glossary = glossary, hint = hint)
+            }
             val netOk = Engines.online(ctx)
             if (cfg != null && netOk) {
                 val ot = OnlineTranslator(cfg)
