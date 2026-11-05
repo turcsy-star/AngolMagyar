@@ -17,6 +17,10 @@ class TaskSetupActivity : AppCompatActivity() {
         const val TASK_INTERPRETER = "interpreter"
         const val TASK_TRANSCRIBE = "transcribe"
         const val TASK_SUBTITLE = "subtitle"
+        const val EXTRA_INPUT = "workflow_input"
+        const val INPUT_LIVE = "live"
+        const val INPUT_MEDIA = "media"
+        const val EXTRA_TRANSLATE = "workflow_translate"
     }
     private lateinit var prefs: Prefs
     private lateinit var column: LinearLayout
@@ -180,9 +184,12 @@ class TaskSetupActivity : AppCompatActivity() {
         column.addView(Ui.sectionLabel(this, "HANGFORRÁS ÉS NYELV"))
         val c0 = Ui.card(this)
         c0.addView(Ui.title(this, "Honnan?", 16f))
-        val gSrc = radios(listOf("Fájlból (hang vagy videó)", "Élő felvétel (mikrofon)"), 0)
-        c0.addView(gSrc)
-        column.addView(c0)
+        val forcedInput = intent.getStringExtra(EXTRA_INPUT)
+        val gSrc = radios(listOf("Fájlból (hang vagy videó)", "Élő felvétel (mikrofon)"), if (forcedInput == INPUT_LIVE) 1 else 0)
+        if (forcedInput == null) {
+            c0.addView(gSrc)
+            column.addView(c0)
+        }
         val cLang = Ui.card(this)
         cLang.addView(Ui.title(this, "A beszéd nyelve", 16f))
         val gLang = radios(subtitleLangs.map { it.label }, subtitleLangs.indexOfFirst { it.code == "hu" })
@@ -191,7 +198,7 @@ class TaskSetupActivity : AppCompatActivity() {
         fun selectedLang(): LangOpt = subtitleLangs[gLang.index().coerceIn(0, subtitleLangs.lastIndex)]
         val cOut = Ui.card(this)
         cOut.addView(Ui.title(this, "Kimenet", 16f))
-        val tr = switchRow("Fordítás is (célnyelv)", false)
+        val tr = switchRow("Fordítás is (célnyelv)", intent.getBooleanExtra(EXTRA_TRANSLATE, false))
         cOut.addView(tr)
         val gTgt = radios(
             listOf("Magyar", "Angol", "Német", "Francia", "Spanyol"), 1
