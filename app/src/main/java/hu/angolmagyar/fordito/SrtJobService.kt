@@ -665,6 +665,7 @@ class SrtJobService : Service() {
                     chunkMs, overlapMs, AsrPrefs.beam(this), useDiarization, SubPrefs.contextTranslate(this),
                     SubPrefs.audioCondition(this), SubPrefs.huOrtho(this),
                     prefs.enFixes.hashCode(), prefs.customVocab.hashCode(),
+                    GlossaryStore(this).runtimeRules().hashCode(),
                     (prefs.raw().getString("autoRulesEn", "") ?: "").hashCode(), Projects.huRules(this).hashCode()
                 )
                 val c = Checkpoint.forJob(this, key)
