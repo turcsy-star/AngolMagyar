@@ -487,9 +487,15 @@ class FileRecognizer(
                     val existing = memoryStore.entries()
                     for (i in idx) {
                         if (i in failedSet || en[i].isBlank() || hu[i].isBlank()) continue
+                        val memoryContext = ((i - 2).coerceAtLeast(0)..(i + 2).coerceAtMost(en.lastIndex))
+                            .filter { it != i }
+                            .joinToString(" ") { en[it] }
+                            .take(1500)
                         val alreadyApproved = existing.any { entry ->
                             entry.status == SmartTranslationMemory.Status.APPROVED &&
                                 SmartTranslationMemory.normalizeText(entry.source) == SmartTranslationMemory.normalizeText(en[i]) &&
+                                SmartTranslationMemory.normalizeText(entry.target) == SmartTranslationMemory.normalizeText(hu[i]) &&
+                                SmartTranslationMemory.normalizeText(entry.context) == SmartTranslationMemory.normalizeText(memoryContext) &&
                                 SmartTranslationMemory.normalizeLanguage(entry.sourceLanguage) == sourceLanguage &&
                                 SmartTranslationMemory.normalizeLanguage(entry.targetLanguage) == targetLanguage
                         }
@@ -500,10 +506,7 @@ class FileRecognizer(
                                 status = SmartTranslationMemory.Status.PENDING,
                                 createdAtEpochMs = System.currentTimeMillis(),
                                 updatedAtEpochMs = System.currentTimeMillis(),
-                                context = ((i - 2).coerceAtLeast(0)..(i + 2).coerceAtMost(en.lastIndex))
-                                    .filter { it != i }
-                                    .joinToString(" ") { en[it] }
-                                    .take(1500)
+                                context = memoryContext
                             ))
                         }
                     }
