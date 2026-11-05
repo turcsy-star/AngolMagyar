@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -53,6 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hu.angolmagyar.fordito.AppState
+import hu.angolmagyar.fordito.TranslateService
+import android.content.Intent
 import hu.angolmagyar.fordito.Haptics
 import hu.angolmagyar.fordito.Prefs
 import hu.angolmagyar.fordito.ui.design.PlatinumColors
@@ -278,6 +281,16 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
                 }
             }
         }
+        DiamondControls(ctx)
+        if (!AppState.hint.isNullOrBlank()) {
+            Text(
+                AppState.hint.orEmpty(),
+                color = PlatinumColors.Amber,
+                fontSize = 10.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         DiamondLowerThird(
             visible = AppState.lastCaptionEn.isNotBlank() || AppState.lastCaptionHu.isNotBlank(),
             phaseLabel = phaseTitle(phase),
@@ -286,6 +299,44 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
             reduced = reducedMotion.value,
             cinema = cinema
         )
+    }
+}
+@Composable
+private fun DiamondControls(ctx: Context) {
+    val prefs = remember(ctx) { Prefs(ctx) }
+    fun action(name: String, action: String, modifier: Modifier = Modifier) {
+        Text(
+            name,
+            modifier = modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(PlatinumColors.GraphiteHigh)
+                .border(1.dp, PlatinumColors.SteelDark, RoundedCornerShape(10.dp))
+                .clickable {
+                    try {
+                        ctx.startService(Intent(ctx, TranslateService::class.java).setAction(action))
+                        Haptics.tick(ctx)
+                    } catch (e: Exception) {
+                        AppState.hint = "A vezérlés nem sikerült: ${e.message ?: "ismeretlen hiba"}"
+                    }
+                }
+                .padding(horizontal = 8.dp, vertical = 9.dp),
+            color = PlatinumColors.PlatinumHigh,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 1
+        )
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        action(
+            if (AppState.paused) "▶ Folytatás" else "Ⅱ Szünet",
+            TranslateService.ACTION_TOGGLE_PAUSE,
+            Modifier.weight(1f)
+        )
+        if (prefs.isConversation()) {
+            action("⇄ Irány", TranslateService.ACTION_SWITCH_DIR, Modifier.weight(1f))
+        }
+        action("■ Leállítás", TranslateService.ACTION_STOP, Modifier.weight(1f))
     }
 }
 private enum class LivePhase { IDLE, LISTENING, RECOGNIZING, TRANSLATING, PAUSED }
