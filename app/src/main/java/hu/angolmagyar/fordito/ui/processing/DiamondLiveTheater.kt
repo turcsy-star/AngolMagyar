@@ -304,6 +304,7 @@ fun DiamondLiveTheater(reduced: Boolean, modifier: Modifier = Modifier) {
 @Composable
 private fun DiamondControls(ctx: Context) {
     val prefs = remember(ctx) { Prefs(ctx) }
+    @Composable
     fun action(name: String, action: String, modifier: Modifier = Modifier) {
         Text(
             name,
