@@ -62,6 +62,8 @@ class SrtEditorActivity : AppCompatActivity() {
     private var playUntil = -1L
     private var seeking = false
     private var videoReady = false
+    // 0 = eredeti, 1 = fordítás, 2 = mindkettő
+    private var videoCaptionMode = 2
     private val poll = object : Runnable {
         override fun run() { pollPlayer(); ui.postDelayed(this, 250) }
     }
@@ -112,6 +114,7 @@ class SrtEditorActivity : AppCompatActivity() {
             return
         }
         item = qi
+        videoCaptionMode = getSharedPreferences("video_subtitle_preview", MODE_PRIVATE).getInt("mode", 2).coerceIn(0, 2)
         val rc = qi.cues
         if (rc != null && rc.isNotEmpty()) {
             rich = true
@@ -196,6 +199,24 @@ class SrtEditorActivity : AppCompatActivity() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM
         ))
         box.addView(frame)
+        val captionModes = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(5), dp(8), dp(5))
+        }
+        fun modeButton(label: String, mode: Int): android.widget.Button {
+            return Ui.smallButton(this, label) {
+                videoCaptionMode = mode
+                getSharedPreferences("video_subtitle_preview", MODE_PRIVATE).edit().putInt("mode", mode).apply()
+                refreshVideoCaption()
+                updateCaptionModeButtons(captionModes)
+            }.also { it.tag = mode }
+        }
+        captionModes.addView(modeButton("Eredeti", 0), LinearLayout.LayoutParams(0, dp(40), 1f))
+        captionModes.addView(modeButton("Fordítás", 1), LinearLayout.LayoutParams(0, dp(40), 1f))
+        captionModes.addView(modeButton("Mindkettő", 2), LinearLayout.LayoutParams(0, dp(40), 1f))
+        box.addView(captionModes)
+        updateCaptionModeButtons(captionModes)
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
         val pb = Ui.smallButton(this, "▶") { togglePlay() }
         playBtn = pb
@@ -235,6 +256,31 @@ class SrtEditorActivity : AppCompatActivity() {
         if (v.isPlaying) v.pause() else v.start()
         updatePlayBtn()
     }
+    private fun videoCaptionText(cue: SrtExporter.Cue): String {
+        val source = cue.source.trim()
+        val target = cue.target.trim()
+        if (!rich || !hasTarget) return source
+        return when (videoCaptionMode) {
+            0 -> source
+            1 -> target
+            else -> listOf(source, target).filter { it.isNotBlank() }.joinToString("\\n")
+        }
+    }
+    private fun refreshVideoCaption() {
+        val v = video ?: return
+        val pos = try { v.currentPosition.toLong() } catch (_: Exception) { return }
+        val cue = cues.firstOrNull { pos >= it.startMs && pos <= it.endMs }
+        caption?.text = cue?.let { videoCaptionText(it) } ?: ""
+    }
+    private fun updateCaptionModeButtons(container: LinearLayout) {
+        for (i in 0 until container.childCount) {
+            val button = container.getChildAt(i) as? android.widget.Button ?: continue
+            val selected = (button.tag as? Int) == videoCaptionMode
+            button.alpha = if (selected) 1f else 0.58f
+            button.isSelected = selected
+        }
+        container.visibility = if (rich && hasTarget) View.VISIBLE else View.GONE
+    }
     private fun updatePlayBtn() { playBtn?.text = if (video?.isPlaying == true) "⏸" else "▶" }
     private fun playSpan(startMs: Long, endMs: Long) {
         val v = video ?: return
@@ -251,7 +297,7 @@ class SrtEditorActivity : AppCompatActivity() {
         timeLabel?.text = " " + SrtExporter.formatTime(pos).take(8)
         if (playUntil in 0..pos && v.isPlaying) { v.pause(); playUntil = -1L; updatePlayBtn() }
         val cue = cues.firstOrNull { pos >= it.startMs && pos <= it.endMs }
-        caption?.text = if (cue == null) "" else if (rich && hasTarget) cue.target else cue.source
+        caption?.text = cue?.let { videoCaptionText(it) } ?: ""
         val ai = if (v.isPlaying && cue != null) cues.indexOf(cue) else -1
         if (ai != activeIdx) {
             cardOf[activeIdx]?.setBackgroundColor(0)
