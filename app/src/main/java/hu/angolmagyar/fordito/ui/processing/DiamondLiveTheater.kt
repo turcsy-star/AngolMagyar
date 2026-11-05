@@ -333,6 +333,11 @@ private fun DiamondControls(ctx: Context) {
             TranslateService.ACTION_TOGGLE_PAUSE,
             Modifier.weight(1f)
         )
+        action(
+            if (prefs.needsTranslation()) "Átirat" else "Fordítás",
+            TranslateService.ACTION_TOGGLE_TRANSLATION,
+            Modifier.weight(1f)
+        )
         if (prefs.isConversation()) {
             action("⇄ Irány", TranslateService.ACTION_SWITCH_DIR, Modifier.weight(1f))
         }
