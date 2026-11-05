@@ -48,6 +48,12 @@ class PhrasebookActivity : ComponentActivity() {
 private fun PhrasebookScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val store = remember { PhrasebookStore(context) }
+    val smartMemory = remember { SmartTranslationMemoryStore(context) }
+    var memoryEntries by remember { mutableStateOf(smartMemory.entries()) }
+    val pendingMemory = remember(memoryEntries) {
+        memoryEntries.filter { it.status == SmartTranslationMemory.Status.PENDING }
+            .sortedByDescending { it.updatedAtEpochMs }
+    }
     var entries by remember { mutableStateOf(store.all()) }
     var query by remember { mutableStateOf("") }
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -182,6 +188,70 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            if (pendingMemory.isNotEmpty()) {
+                item(key = "smart-memory-review-heading") {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            "FORDÍTÁSI MEMÓRIA · JÓVÁHAGYÁS",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            "${pendingMemory.size} új online javaslat vár ellenőrzésre. Jóváhagyás után élő beszédnél és médiafordításnál is felhasználható.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                items(
+                    pendingMemory,
+                    key = { "memory:${SmartTranslationMemory.normalizeText(it.source)}|${SmartTranslationMemory.normalizeText(it.target)}|${SmartTranslationMemory.normalizeText(it.context)}" }
+                ) { suggestion ->
+                    PremiumCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text(
+                                "${suggestion.sourceLanguage.uppercase()} → ${suggestion.targetLanguage.uppercase()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(suggestion.source, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            Text(suggestion.target, style = MaterialTheme.typography.bodyLarge)
+                            if (suggestion.context.isNotBlank()) {
+                                Text(
+                                    "Környezet: ${suggestion.context}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        smartMemory.approve(suggestion, System.currentTimeMillis())
+                                        memoryEntries = smartMemory.entries()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Jóváhagyás") }
+                                OutlinedButton(
+                                    onClick = {
+                                        smartMemory.retire(suggestion, System.currentTimeMillis())
+                                        memoryEntries = smartMemory.entries()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("Elutasítás") }
+                            }
+                        }
+                    }
+                }
+            }
+            item(key = "phrasebook-list-heading") {
+                Text(
+                    "SAJÁT KIFEJEZÉSTÁR · ${filtered.size}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             items(filtered, key = { it.id }) { entry ->
                 PremiumCard(modifier = Modifier.fillMaxWidth()) {
                     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
