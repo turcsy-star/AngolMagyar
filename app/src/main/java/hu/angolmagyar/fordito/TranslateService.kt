@@ -508,9 +508,12 @@ class TranslateService : Service(), Overlay.Callbacks {
         val targetLanguage = if (conversationHuToEn) "en" else "hu"
         try {
             val memory = SmartTranslationMemoryStore(this)
+            val normalizedContext = SmartTranslationMemory.normalizeText(context)
             val approved = memory.entries().any { entry ->
                 entry.status == SmartTranslationMemory.Status.APPROVED &&
                     SmartTranslationMemory.normalizeText(entry.source) == SmartTranslationMemory.normalizeText(source) &&
+                    SmartTranslationMemory.normalizeText(entry.target) == SmartTranslationMemory.normalizeText(target) &&
+                    SmartTranslationMemory.normalizeText(entry.context) == normalizedContext &&
                     SmartTranslationMemory.normalizeLanguage(entry.sourceLanguage) == sourceLanguage &&
                     SmartTranslationMemory.normalizeLanguage(entry.targetLanguage) == targetLanguage
             }
