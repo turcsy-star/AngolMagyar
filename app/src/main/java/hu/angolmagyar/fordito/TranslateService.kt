@@ -972,9 +972,8 @@ class TranslateService : Service(), Overlay.Callbacks {
                         sys?.feed(data, len)
                         liveWhisper?.feed(data, len)
                     }
-                    if (!voiceLikely) {
-                        continue
-                    }
+                    // A teljes PCM-folyamot továbbítjuk a felismerőnek, a csendes részeket is.
+                    // A Vosk a csendből zárja le a kimondott mondatot; a VAD itt nem dobhat el mintákat.
                     if (wasPaused) {
                         recOther?.reset()
                         recHu?.reset()
