@@ -56,13 +56,15 @@ class OnlineTranslatorTest {
     @Test fun gemini503AutomaticallyFallsBackToFlashLite() {
         val urls = mutableListOf<String>()
         var calls = 0
-        val http = OnlineTranslator.Http { url, _, _, _ ->
-            urls.add(url)
-            calls++
-            if (calls == 1) {
-                503 to """{"error":{"message":"This model is currently experiencing high demand."}}"""
-            } else {
-                200 to """{"candidates":[{"content":{"parts":[{"text":"[\"Szia\"]"}]}}]}"""
+        val http = object : OnlineTranslator.Http {
+            override fun post(url: String, headers: Map<String, String>, body: String, timeoutMs: Int): Pair<Int, String> {
+                urls.add(url)
+                calls++
+                return if (calls == 1) {
+                    503 to """{"error":{"message":"This model is currently experiencing high demand."}}"""
+                } else {
+                    200 to """{"candidates":[{"content":{"parts":[{"text":"[\"Szia\"]"}]}}]}"""
+                }
             }
         }
         val translator = OnlineTranslator(
