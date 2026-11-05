@@ -234,7 +234,12 @@ private fun PhrasebookScreen(onBack: () -> Unit) {
                                 ) { Text("Jóváhagyás") }
                                 OutlinedButton(
                                     onClick = {
-                                        smartMemory.retire(suggestion, System.currentTimeMillis())
+                                        smartMemory.save(
+                                            suggestion.copy(
+                                                status = SmartTranslationMemory.Status.REJECTED,
+                                                updatedAtEpochMs = System.currentTimeMillis()
+                                            )
+                                        )
                                         memoryEntries = smartMemory.entries()
                                     },
                                     modifier = Modifier.weight(1f)
