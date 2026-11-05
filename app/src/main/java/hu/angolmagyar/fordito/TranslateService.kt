@@ -524,7 +524,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                     sourceLanguage = sourceLanguage, targetLanguage = targetLanguage,
                     status = SmartTranslationMemory.Status.PENDING,
                     createdAtEpochMs = now, updatedAtEpochMs = now,
-                    context = context.take(1500)
+                    context = context.take(400)
                 ))
             }
         } catch (e: Exception) {
