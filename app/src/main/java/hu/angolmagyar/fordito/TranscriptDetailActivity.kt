@@ -365,7 +365,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
             return
         }
         val original = cues[idx]
-        Toast.makeText(this, "Online javítás folyamatban…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Online újrafordítás folyamatban…", Toast.LENGTH_SHORT).show()
         bg.execute {
             var candidate: String? = null
             var usedProvider = cfg.provider.name
@@ -423,7 +423,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         if (rawMode || cues.isEmpty()) return
         if (!OnlinePrefs.consent(this)) {
             AlertDialog.Builder(this)
-                .setTitle("Teljes átirat online javítása")
+                .setTitle("Teljes átirat újrafordítása online · kontextussal")
                 .setMessage("A teljes átirat forrásszövege elküldésre kerül a kiválasztott online szolgáltatónak (Gemini, szükség esetén Mistral). Az eredeti fordítások csak a javaslatok elfogadása után változnak meg.")
                 .setPositiveButton("Beállítások") { _, _ -> OnlineSettingsDialog.show(this) {} }
                 .setNegativeButton("Mégse", null)
@@ -438,7 +438,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Teljes átirat online javítása")
+            .setTitle("Teljes átirat újrafordítása online · kontextussal")
             .setMessage("A(z) ${indices.size} fordítható sor elküldése online szolgáltatónak. A javítás több csomagban történik. Az eredeti szöveg változatlan marad, amíg el nem fogadod az eredményt. Folytatod?")
             .setPositiveButton("Javítás indítása") { _, _ ->
                 val srcLang = if (prefs.isHuToEn()) "magyar" else "angol"
@@ -449,7 +449,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
                     OnlineSettingsDialog.show(this) {}
                     return@setPositiveButton
                 }
-                Toast.makeText(this, "Teljes átirat javítása folyamatban…", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Teljes átirat újrafordítása folyamatban…", Toast.LENGTH_LONG).show()
                 bg.execute {
                     val proposed = before.toMutableList()
                     var providerUsed = cfg.provider.name
@@ -738,7 +738,7 @@ class TranscriptDetailActivity : AppCompatActivity() {
         add(R.string.td_clean, !rawMode) { cleanAll() }
         add(R.string.td_speaker_rename_all, !rawMode) { renameSpeakerEverywhere() }
         add(R.string.td_edit_all) { editAll() }
-        pm.menu.add(0, id++, 0, "Teljes átirat online javítása").isEnabled = !rawMode
+        pm.menu.add(0, id++, 0, "Teljes átirat újrafordítása online · kontextussal").isEnabled = !rawMode
         actions.add { improveWholeTranscriptOnline() }
         add(R.string.tr_rename_tag) { renameDialog() }
         add(R.string.common_delete) { confirmDelete() }
