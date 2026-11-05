@@ -201,9 +201,14 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
                 "{\"role\":\"system\",\"content\":${MiniJson.quote(system)}}," +
                 "{\"role\":\"user\",\"content\":${MiniJson.quote(user)}}]}"
         Provider.GEMINI -> {
-            // A thinkingBudget=0 csak a Gemini 2.5 Flash modelleknél támogatott.
-            // Más modellnél nem küldjük el, mert HTTP 400-at okozhat.
-            val thinking = if (cfg.model.lowercase().contains("2.5-flash")) ",\"thinkingConfig\":{\"thinkingBudget\":0}" else ""
+            // Gemini 2.5 Flash: a gondolkodás kikapcsolható thinkingBudget=0 értékkel.
+            // Gemini 3.x modelleknél a MINIMAL nem támogatott; LOW a legkisebb választható szint.
+            val modelId = cfg.model.lowercase()
+            val thinking = when {
+                modelId.contains("2.5-flash") -> ",\"thinkingConfig\":{\"thinkingBudget\":0}"
+                modelId.startsWith("gemini-3.") -> ",\"thinkingConfig\":{\"thinkingLevel\":\"LOW\"}"
+                else -> ""
+            }
             "{\"systemInstruction\":{\"parts\":[{\"text\":${MiniJson.quote(system)}}]}," +
                 "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":${MiniJson.quote(user)}}]}]," +
                 "\"generationConfig\":{\"temperature\":0.2,\"maxOutputTokens\":4096,\"responseMimeType\":\"application/json"$thinking}}"
