@@ -84,9 +84,9 @@ object SmartTranslationMemory {
         // Ha van tárolt kontextus, azonos forrásmondat eltérő jelentéseit
         // a környező szöveg alapján rangsoroljuk. Kontextus nélkül a régi,
         // pontos egyezésű viselkedés marad érvényben.
-        val contextTokens = contextTokens(context)
-        val contextual = if (contextTokens.isNotEmpty()) {
-            selected.map { entry -> entry to contextSimilarity(contextTokens, contextTokens(entry.context)) }
+        val queryTokens = contextTokens(context)
+        val contextual = if (queryTokens.isNotEmpty()) {
+            selected.map { entry -> entry to contextSimilarity(queryTokens, contextTokens(entry.context)) }
                 .filter { it.second > 0.0 }
         } else emptyList()
         val ranked = if (contextual.isNotEmpty()) {
