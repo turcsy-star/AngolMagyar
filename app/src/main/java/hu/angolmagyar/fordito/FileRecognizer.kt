@@ -563,9 +563,11 @@ class FileRecognizer(
                 todo = failed
                 SrtJob.addEngine(
                     when (cfg.provider) {
+                        OnlineTranslator.Provider.GEMINI -> "Gemini"
+                        OnlineTranslator.Provider.MISTRAL -> "Mistral"
                         OnlineTranslator.Provider.DEEPL -> "DeepL"
                         OnlineTranslator.Provider.ANTHROPIC -> "Claude"
-                        else -> "OpenAI-kompatibilis"
+                        OnlineTranslator.Provider.OPENAI -> "OpenAI-kompatibilis"
                     }, idx.size - failed.size, 0
                 )
                 if (failed.isNotEmpty()) {
@@ -586,8 +588,14 @@ class FileRecognizer(
                 val miss = OnlinePrefs.missing(ctx)
                 onNote?.invoke(
                     "Az online fordítás nincs (teljesen) beállítva" +
-                        (if (miss.isEmpty()) "" else " (hiányzik: ${miss.joinToString(", ")})") + " – offline fordítás készül."
+                        (if (miss.isEmpty()) "" else " (hiányzik: ${miss.joinToString(", ")})") +
+                        if (mode == OnlinePrefs.ONLINE) " – az ONLINE mód nem vált át offline-ra."
+                        else " – AUTO módban offline fordítás következik."
                 )
+                if (mode == OnlinePrefs.ONLINE) {
+                    for (i in todo) if (hu[i].isBlank()) hu[i] = en[i]
+                    return hu
+                }
             }
         }
         if (todo.isNotEmpty() && !cancel.get()) {
