@@ -434,6 +434,23 @@ class TranslateService : Service(), Overlay.Callbacks {
             }
     }
     private fun translate(en: String, isFinal: Boolean) {
+        if (isFinal && en.isNotBlank()) {
+            val sourceLanguage = if (conversationHuToEn) "hu" else "en"
+            val targetLanguage = if (conversationHuToEn) "en" else "hu"
+            try {
+                val match = SmartTranslationMemoryStore(this)
+                    .lookup(en, sourceLanguage, targetLanguage)
+                val preferred = match?.preferred
+                if (preferred != null && !match.ambiguous) {
+                    SmartTranslationMemoryStore(this)
+                        .recordConfirmedUse(preferred, System.currentTimeMillis())
+                    pushFinal(en, preferred.target)
+                    return
+                }
+            } catch (e: Exception) {
+                DiagLog.swallow("TranslateService.smartMemoryLookup", e)
+            }
+        }
         val id = reqCounter.incrementAndGet()
         if (isFinal) lastFinalId = id
         val t = translator
@@ -468,6 +485,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                             var polished = Fixes.apply(onlineResult!!, tgtRules)
                             polished = if (conversationHuToEn) TextPolish.polishEnglish(polished, vocabExtra)
                             else TextPolish.polishHungarian(polished, vocabExtra)
+                            rememberLiveCandidate(en, polished)
                             pushFinal(en, polished)
                         }
                     } else {
@@ -480,6 +498,32 @@ class TranslateService : Service(), Overlay.Callbacks {
             return
         }
         translateOffline(en, isFinal, id, t)
+    }
+
+    private fun rememberLiveCandidate(source: String, target: String) {
+        if (source.isBlank() || target.isBlank() || source == target) return
+        val sourceLanguage = if (conversationHuToEn) "hu" else "en"
+        val targetLanguage = if (conversationHuToEn) "en" else "hu"
+        try {
+            val memory = SmartTranslationMemoryStore(this)
+            val approved = memory.entries().any { entry ->
+                entry.status == SmartTranslationMemory.Status.APPROVED &&
+                    SmartTranslationMemory.normalizeText(entry.source) == SmartTranslationMemory.normalizeText(source) &&
+                    SmartTranslationMemory.normalizeLanguage(entry.sourceLanguage) == sourceLanguage &&
+                    SmartTranslationMemory.normalizeLanguage(entry.targetLanguage) == targetLanguage
+            }
+            if (!approved) {
+                val now = System.currentTimeMillis()
+                memory.save(SmartTranslationMemory.Entry(
+                    source = source, target = target,
+                    sourceLanguage = sourceLanguage, targetLanguage = targetLanguage,
+                    status = SmartTranslationMemory.Status.PENDING,
+                    createdAtEpochMs = now, updatedAtEpochMs = now
+                ))
+            }
+        } catch (e: Exception) {
+            DiagLog.swallow("TranslateService.rememberLiveCandidate", e)
+        }
     }
 
     private fun translateOffline(en: String, isFinal: Boolean, id: Int, t: Translator?) {
