@@ -417,7 +417,11 @@ class FileRecognizer(
             val targetLanguage = dir.substringAfter("_").trim().lowercase()
             val smartStore = SmartTranslationMemoryStore(ctx)
             idx = idx.filter { i ->
-                val match = smartStore.lookup(en[i], sourceLanguage, targetLanguage)
+                val context = ((i - 2).coerceAtLeast(0)..(i + 2).coerceAtMost(en.lastIndex))
+                    .filter { it != i }
+                    .joinToString(" ") { en[it] }
+                    .take(1500)
+                val match = smartStore.lookup(en[i], sourceLanguage, targetLanguage, context = context)
                 val preferred = match?.preferred
                 if (preferred != null && !match.ambiguous && hu[i].isBlank()) {
                     hu[i] = preferred.target
@@ -495,7 +499,11 @@ class FileRecognizer(
                                 sourceLanguage = sourceLanguage, targetLanguage = targetLanguage,
                                 status = SmartTranslationMemory.Status.PENDING,
                                 createdAtEpochMs = System.currentTimeMillis(),
-                                updatedAtEpochMs = System.currentTimeMillis()
+                                updatedAtEpochMs = System.currentTimeMillis(),
+                                context = ((i - 2).coerceAtLeast(0)..(i + 2).coerceAtMost(en.lastIndex))
+                                    .filter { it != i }
+                                    .joinToString(" ") { en[it] }
+                                    .take(1500)
                             ))
                         }
                     }
