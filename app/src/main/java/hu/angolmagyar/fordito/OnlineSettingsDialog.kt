@@ -170,15 +170,35 @@ object OnlineSettingsDialog {
                 result.text = if (miss.isEmpty()) "Az online fordítás jelenleg nem használható."
                 else "Hiányzik: ${miss.joinToString(", ")}.$keyHint"
             } else {
-                result.text = "Próba…"
-                Thread {
-                    val err = try { OnlineTranslator(cfg).test() } catch (e: Throwable) { OnlineTranslator.netErrorText(e) }
-                    val dictErr = if (dict.isChecked) OnlineDictionary.selfTest() else "kikapcsolva"
-                    act.runOnUiThread {
-                        result.text = (if (err == null) "✓ Online fordítás: működik." else "✗ Online fordítás: $err") +
-                            "\n" + (if (dictErr == null) "✓ Online szótár: működik." else "Online szótár: $dictErr")
+                result.text = "Kapcsolat ellenőrzése…\nA szolgáltató legfeljebb 15 másodpercig válaszolhat."
+                // A próba külön, rövid időkorlátot kap: a normál fordítás 90 másodperces
+                // időkorlátja itt azt a látszatot keltheti, mintha a gomb nem működne.
+                Thread({
+                    val err = try {
+                        OnlineTranslator(cfg.copy(timeoutMs = 15_000)).test()
+                    } catch (e: Throwable) {
+                        OnlineTranslator.netErrorText(e)
                     }
-                }.start()
+                    val providerResult = if (err == null) {
+                        "✓ Online fordítás: sikeres kapcsolat, a Gemini válaszolt."
+                    } else {
+                        "✗ Online fordítás: $err"
+                    }
+                    act.runOnUiThread {
+                        result.text = providerResult
+                    }
+                    // A szótár ellenőrzése nem késleltetheti az elsődleges API eredményét.
+                    val dictEnabled = dict.isChecked
+                    if (dictEnabled) {
+                        val dictErr = try { OnlineDictionary.selfTest() }
+                        catch (e: Throwable) { OnlineTranslator.netErrorText(e) }
+                        act.runOnUiThread {
+                            result.text = providerResult + "\\n" +
+                                (if (dictErr == null) "✓ Online szótár: működik."
+                                else "⚠ Online szótár: $dictErr")
+                        }
+                    }
+                }, "OnlineApiConnectionTest").start()
             }
         })
         val sv = ScrollView(ctx).apply { addView(col) }
