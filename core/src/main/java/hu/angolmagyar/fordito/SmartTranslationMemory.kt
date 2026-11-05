@@ -13,7 +13,8 @@ object SmartTranslationMemory {
         val status: Status = Status.PENDING,
         val usageCount: Int = 0,
         val createdAtEpochMs: Long = 0L,
-        val updatedAtEpochMs: Long = createdAtEpochMs
+        val updatedAtEpochMs: Long = createdAtEpochMs,
+        val context: String = ""
     )
     data class Match(
         val source: String,
@@ -31,6 +32,14 @@ object SmartTranslationMemory {
         .trim()
         .replace(Regex("\\s+"), " ")
     fun normalizeLanguage(value: String): String = value.trim().lowercase().replace('_', '-')
+    private fun contextTokens(value: String): Set<String> = normalizeText(value)
+        .split(' ')
+        .filter { it.length >= 3 }
+        .toSet()
+    private fun contextSimilarity(left: Set<String>, right: Set<String>): Double {
+        if (left.isEmpty() || right.isEmpty()) return 0.0
+        return left.intersect(right).size.toDouble() / left.union(right).size.toDouble()
+    }
     fun validate(entry: Entry): Validation {
         val errors = buildList {
             if (entry.source.isBlank()) add("A forrásszöveg nem lehet üres.")
@@ -54,7 +63,8 @@ object SmartTranslationMemory {
         sourceLanguage: String,
         targetLanguage: String,
         projectId: String? = null,
-        entries: List<Entry>
+        entries: List<Entry>,
+        context: String = ""
     ): Match? {
         val key = normalizeText(source)
         if (key.isBlank()) return null
@@ -71,8 +81,20 @@ object SmartTranslationMemory {
         val projectMatches = eligible.filter { it.scope == Scope.PROJECT && it.projectId == projectId }
         val selectedScope = if (projectMatches.isNotEmpty()) Scope.PROJECT else Scope.GLOBAL
         val selected = eligible.filter { it.scope == selectedScope }
-        val distinctTargets = selected.map { normalizeText(it.target) }.distinct()
-        val ordered = selected.sortedWith(
+        // Ha van tárolt kontextus, azonos forrásmondat eltérő jelentéseit
+        // a környező szöveg alapján rangsoroljuk. Kontextus nélkül a régi,
+        // pontos egyezésű viselkedés marad érvényben.
+        val contextTokens = contextTokens(context)
+        val contextual = if (contextTokens.isNotEmpty()) {
+            selected.map { entry -> entry to contextSimilarity(contextTokens, contextTokens(entry.context)) }
+                .filter { it.second > 0.0 }
+        } else emptyList()
+        val ranked = if (contextual.isNotEmpty()) {
+            val best = contextual.maxOf { it.second }
+            contextual.filter { it.second == best }.map { it.first }
+        } else selected
+        val distinctTargets = ranked.map { normalizeText(it.target) }.distinct()
+        val ordered = ranked.sortedWith(
             compareByDescending<Entry> { it.usageCount }
                 .thenByDescending { it.updatedAtEpochMs }
                 .thenBy { normalizeText(it.target) }
