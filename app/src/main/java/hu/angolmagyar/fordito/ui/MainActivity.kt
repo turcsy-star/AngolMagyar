@@ -413,6 +413,7 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                         TextButton(onClick = onOverlay) { Text("Lebegő ablak engedélye") }
                     }
+                    ThemePicker()
                 }
             }
             AnimatedVisibility(
@@ -424,31 +425,6 @@ fun HomeScreen(
                     snap = snap, elapsed = elapsed, amplitudes = amplitudes.toList(),
                     onPause = onPause, onStop = onStop
                 )
-            }
-            if (!snap.running) {
-                Staggered(4, shown) {
-                    OutlinedButton(
-                        onClick = onMic,
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Icon(Icons.Rounded.Mic, contentDescription = null)
-                        Text("  Gyors indítás mikrofonnal")
-                    }
-                }
-            }
-            Staggered(5, shown) { ThemePicker() }
-            Staggered(5, shown) {
-                Column {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        TextButton(onClick = onModels) { Text("Modellek") }
-                        TextButton(onClick = onSettings) { Text("Beállítások") }
-                        TextButton(onClick = onDiagnostics) { Text("Diagnosztika") }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                        TextButton(onClick = onOverlay) { Text("Lebegő ablak engedélye") }
-                    }
-                }
             }
             Spacer(Modifier.height(8.dp))
         }
