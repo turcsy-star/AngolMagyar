@@ -234,7 +234,7 @@ class TranslateService : Service(), Overlay.Callbacks {
         }
         active = true
         paused = false
-        val usePtt = mode == MODE_PTT || (mode == MODE_MIC && prefs.pushToTalk)
+        // A hagyományos mikrofonmód mindig folyamatosan figyel.\n        // A PTT csak a külön Nyomva beszélés módban aktiválódik.\n        val usePtt = mode == MODE_PTT
         pttActive = !usePtt
         val sidesNow = Engines.sides(prefs)
         conversationHuToEn = if (prefs.isConversation()) prefs.convStartHu else sidesNow.hu
