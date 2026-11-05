@@ -416,12 +416,17 @@ class FileRecognizer(
             val sourceLanguage = dir.substringBefore("_").trim().lowercase()
             val targetLanguage = dir.substringAfter("_").trim().lowercase()
             val smartStore = SmartTranslationMemoryStore(ctx)
+            // A titkosított memóriát csak egyszer olvassuk be a teljes fájlhoz,
+            // ne minden feliratsornál újra dekódoljuk.
+            val smartEntries = smartStore.entries()
             idx = idx.filter { i ->
                 val context = ((i - 2).coerceAtLeast(0)..(i + 2).coerceAtMost(en.lastIndex))
                     .filter { it != i }
                     .joinToString(" ") { en[it] }
-                    .take(1500)
-                val match = smartStore.lookup(en[i], sourceLanguage, targetLanguage, context = context)
+                    .take(400)
+                val match = SmartTranslationMemory.lookup(
+                    en[i], sourceLanguage, targetLanguage, entries = smartEntries, context = context
+                )
                 val preferred = match?.preferred
                 if (preferred != null && !match.ambiguous && hu[i].isBlank()) {
                     hu[i] = preferred.target
