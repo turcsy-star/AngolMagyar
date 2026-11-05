@@ -412,6 +412,20 @@ class FileRecognizer(
         val n = en.size
         val hu = (huInit ?: List(n) { "" }).toMutableList()
         var idx = indices ?: (0 until n).toList()
+        if (indices == null && modeOverride == null && dir.contains("_")) {
+            val sourceLanguage = dir.substringBefore("_").trim().lowercase()
+            val targetLanguage = dir.substringAfter("_").trim().lowercase()
+            val smartStore = SmartTranslationMemoryStore(ctx)
+            idx = idx.filter { i ->
+                val match = smartStore.lookup(en[i], sourceLanguage, targetLanguage)
+                val preferred = match?.preferred
+                if (preferred != null && !match.ambiguous && hu[i].isBlank()) {
+                    hu[i] = preferred.target
+                    smartStore.recordConfirmedUse(preferred, System.currentTimeMillis())
+                    false
+                } else true
+            }
+        }
         if (indices == null && modeOverride == null && TranslationMemoryStore.enabled(ctx)) {
             val tm = TranslationMemoryStore.get(ctx)
             idx = idx.filter { i ->
@@ -460,6 +474,31 @@ class FileRecognizer(
                     failed = ot.translate(en, hu, idx, { d, t -> prog(d, t, "Fordítás (online)") }, { cancel.get() })
                     val fs = failed.toHashSet()
                     for (i in idx) if (i !in fs) hu[i] = postTarget(hu[i], toHu)
+                }
+                val failedSet = failed.toHashSet()
+                val sourceLanguage = dir.substringBefore("_").trim().lowercase()
+                val targetLanguage = dir.substringAfter("_").trim().lowercase()
+                if (sourceLanguage.isNotBlank() && targetLanguage.isNotBlank()) {
+                    val memoryStore = SmartTranslationMemoryStore(ctx)
+                    val existing = memoryStore.entries()
+                    for (i in idx) {
+                        if (i in failedSet || en[i].isBlank() || hu[i].isBlank()) continue
+                        val alreadyApproved = existing.any { entry ->
+                            entry.status == SmartTranslationMemory.Status.APPROVED &&
+                                SmartTranslationMemory.normalizeText(entry.source) == SmartTranslationMemory.normalizeText(en[i]) &&
+                                SmartTranslationMemory.normalizeLanguage(entry.sourceLanguage) == sourceLanguage &&
+                                SmartTranslationMemory.normalizeLanguage(entry.targetLanguage) == targetLanguage
+                        }
+                        if (!alreadyApproved) {
+                            memoryStore.save(SmartTranslationMemory.Entry(
+                                source = en[i], target = hu[i],
+                                sourceLanguage = sourceLanguage, targetLanguage = targetLanguage,
+                                status = SmartTranslationMemory.Status.PENDING,
+                                createdAtEpochMs = System.currentTimeMillis(),
+                                updatedAtEpochMs = System.currentTimeMillis()
+                            ))
+                        }
+                    }
                 }
                 todo = failed
                 SrtJob.addEngine(
