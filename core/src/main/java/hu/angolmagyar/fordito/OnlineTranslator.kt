@@ -211,7 +211,7 @@ class OnlineTranslator(private val cfg: Config, private val http: Http = UrlHttp
             }
             "{\"systemInstruction\":{\"parts\":[{\"text\":${MiniJson.quote(system)}}]}," +
                 "\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":${MiniJson.quote(user)}}]}]," +
-                "\"generationConfig\":{\"temperature\":0.2,\"maxOutputTokens\":4096,\"responseMimeType\":\"application/json"$thinking}}"
+                "\"generationConfig\":{\"temperature\":0.2,\"maxOutputTokens\":4096,\"responseMimeType\":\"application/json\"" + thinking + "}}"
         }
     }
     private fun headers(): Map<String, String> = when (cfg.provider) {
