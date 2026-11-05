@@ -134,7 +134,7 @@ class FileRecognizer(
             castNames = castNames,
             prevTail = if (Hallucination.looksLooped(prevTail)) "" else prevTail,
             domain = "subtitle",
-            terms = TextPolish.parseVocab(Prefs(ctx).customVocab).map { it.second }
+            terms = TextPolish.parseVocab(Prefs(ctx).customVocab + "\n" + GlossaryStore(ctx).runtimeRules()).map { it.second }
         )
         val cb = onProgress
         cb?.invoke(0, "Whisper: felismerés indul…")
