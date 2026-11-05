@@ -32,9 +32,15 @@ object SmartTranslationMemory {
         .trim()
         .replace(Regex("\\s+"), " ")
     fun normalizeLanguage(value: String): String = value.trim().lowercase().replace('_', '-')
+    private val contextStopWords = setOf(
+        "the", "and", "you", "that", "this", "with", "from", "for", "are", "was",
+        "have", "has", "not", "but", "can", "will", "your", "all", "his", "her",
+        "hogy", "mert", "vagy", "egy", "van", "volt", "lesz", "nem", "meg", "mar",
+        "csak", "ezt", "azt", "aki", "ami", "mint", "utan", "elott", "minden"
+    )
     private fun contextTokens(value: String): Set<String> = normalizeText(value)
         .split(' ')
-        .filter { it.length >= 3 }
+        .filter { it.length >= 3 && it !in contextStopWords }
         .toSet()
     private fun contextSimilarity(left: Set<String>, right: Set<String>): Double {
         if (left.isEmpty() || right.isEmpty()) return 0.0
@@ -87,7 +93,7 @@ object SmartTranslationMemory {
         val queryTokens = contextTokens(context)
         val contextual = if (queryTokens.isNotEmpty()) {
             selected.map { entry -> entry to contextSimilarity(queryTokens, contextTokens(entry.context)) }
-                .filter { it.second > 0.0 }
+                .filter { it.second >= 0.15 }
         } else emptyList()
         val ranked = if (contextual.isNotEmpty()) {
             val best = contextual.maxOf { it.second }
