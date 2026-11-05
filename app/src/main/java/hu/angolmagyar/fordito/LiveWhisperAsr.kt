@@ -35,7 +35,10 @@ class LiveWhisperAsr(
     private val minSpeechMs = 400
     private val endSilenceMs = 700
     private val maxSegMs = 12_000
-    private val energyThresh = 380f
+    private val energyThreshMax = 380f
+    private val energyThreshMin = 70f
+    private var noiseFloor = 40f
+    private var dbgFrames = 0
     fun start() {
         if (running.getAndSet(true)) return
         val spec = Engines.whisperSpec(ctx)
@@ -113,7 +116,12 @@ class LiveWhisperAsr(
             sum += v * v
         }
         val rms = sqrt(sum / frame.size).toFloat()
-        val speech = rms >= energyThresh
+        val thr = (noiseFloor * 2.2f + 25f).coerceIn(energyThreshMin, energyThreshMax)
+        val speech = rms >= thr
+        if (!speech && !inSpeech) noiseFloor = noiseFloor * 0.98f + rms * 0.02f
+        if (++dbgFrames % 100 == 0) {
+            android.util.Log.d("LiveWhisper", "rms=${rms.toInt()} thr=${thr.toInt()} floor=${noiseFloor.toInt()} inSpeech=$inSpeech speechMs=$speechMs")
+        }
         synchronized(acc) {
             if (speech) {
                 if (!inSpeech) {
@@ -194,7 +202,10 @@ class LiveWhisperAsr(
             val code = w.transcribe(
                 audio, lang, Perf.whisperThreads(), beam, prompt, null, null
             )
-            if (code != 0) return
+            if (code != 0) {
+                android.util.Log.w("LiveWhisper", "transcribe hibakód=$code ${WhisperNative.error()}")
+                return
+            }
             val segs = w.segments()
             val text = segs.joinToString(" ") { it.text }.trim()
             if (text.isNotBlank()) {
@@ -205,6 +216,7 @@ class LiveWhisperAsr(
                 }
             }
         } catch (t: Throwable) {
+            android.util.Log.w("LiveWhisper", "transcribe kivétel", t)
         }
     }
 }
