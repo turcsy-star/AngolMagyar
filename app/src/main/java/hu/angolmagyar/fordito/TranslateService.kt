@@ -513,7 +513,7 @@ class TranslateService : Service(), Overlay.Callbacks {
                 entry.status == SmartTranslationMemory.Status.APPROVED &&
                     SmartTranslationMemory.normalizeText(entry.source) == SmartTranslationMemory.normalizeText(source) &&
                     SmartTranslationMemory.normalizeText(entry.target) == SmartTranslationMemory.normalizeText(target) &&
-                    /* Az elfogadott forrás–cél pár kontextustól függetlenül elfogadottnak számít. */
+                    true && // A jóváhagyott forrás–cél pár kontextustól függetlenül elfogadott.
                     SmartTranslationMemory.normalizeLanguage(entry.sourceLanguage) == sourceLanguage &&
                     SmartTranslationMemory.normalizeLanguage(entry.targetLanguage) == targetLanguage
             }
